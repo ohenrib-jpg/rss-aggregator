@@ -1,0 +1,10 @@
+{
+  "feeds": [
+    "https://www.lemonde.fr/rss/une.xml",
+    "https://www.france24.com/en/rss",
+    "https://www.rfi.fr/en/france/rss",
+    "https://www.liberation.fr/rss/",
+    "https://feeds.thelocal.com/rss/fr",
+    "https://www.diplomatie.gouv.fr/spip.php?page=rss"
+  ]
+}

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agrégateur RSS Thématique</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Agrégateur RSS Thématique</h1>
+            <p>Analysez vos flux RSS par thèmes personnalisés - Détection avancée des tendances et analyse de sentiment</p>
+        </header>
+
+        <div id="messageContainer"></div>
+
+        <div class="status-bar">
+            <div class="last-update" id="lastUpdate">
+                Chargement...
+            </div>
+            <div class="refresh-controls">
+                <div class="auto-refresh-indicator">
+                    <span class="blink">🔄</span> Auto-actualisation
+                </div>
+                <button class="refresh" onclick="app.manualRefresh()" id="refreshBtn">
+                    🔄 Générer
+                </button>
+            </div>
+        </div>
+
+        <div class="export-bar">
+            <div class="export-controls">
+                <button class="export-btn json" onclick="app.exportData('json')">
+                    📥 Export JSON
+                </button>
+                <button class="export-btn csv" onclick="app.exportData('csv')">
+                    📥 Export CSV
+                </button>
+                <button class="export-btn stats" onclick="app.showLearningStats()">
+                    📊 Stats Apprentissage
+                </button>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="loading">Chargement des données...</div>
+        </div>
+
+        <div class="tab-container">
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('analysis', event)">📈 Analyse</div>
+                <div class="tab" onclick="showTab('trends', event)">📊 Tendances</div>
+                <div class="tab" onclick="showTab('metrics', event)">🎯 Métriques</div>
+                <div class="tab" onclick="showTab('sentiment', event)">😊 Sentiment</div>
+                <div class="tab" onclick="showTab('learning', event)">🧠 Apprentissage</div>
+                <div class="tab" onclick="showTab('feeds', event)">📰 Flux RSS</div>
+                <div class="tab" onclick="showTab('themes', event)">🎨 Thèmes</div>
+                <div class="tab" onclick="showTab('articles', event)">📄 Articles</div>
+            </div>
+
+            <!-- Onglet Analyse Principale -->
+            <div id="analysisTab" class="tab-content active">
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>
+                            Répartition par Thème 
+                            <span class="info-icon" title="Seuls les thèmes ayant au moins une correspondance sont affichés">ℹ️</span>
+                        </h3>
+                        <canvas id="themeChart" height="250"></canvas>
+                    </div>
+                    <div class="card">
+                        <h3>Évolution Temporelle</h3>
+                        <canvas id="timelineChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onglet Tendances -->
+            <div id="trendsTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📈 Évolution des Thèmes</h3>
+                        <div id="trendsTable" class="trends-table">
+                            <div class="loading">Calcul des tendances...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🔼 Thèmes en Croissance</h3>
+                        <div id="growthThemes" class="trends-list">
+                            <div class="loading">Analyse en cours...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>🔽 Thèmes en Baisse</h3>
+                        <div id="declineThemes" class="trends-list">
+                            <div class="loading">Analyse en cours...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onglet Métriques Avancées -->
+            <div id="metricsTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>🎯 Efficacité des Mots-Clés</h3>
+                        <div id="keywordMetrics" class="metrics-table">
+                            <div class="loading">Analyse des mots-clés...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🔄 Corrélations entre Thèmes</h3>
+                        <div id="correlationsMatrix" class="correlations-matrix">
+                            <div class="loading">Calcul des corrélations...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>📅 Analyse Saisonnière</h3>
+                        <div id="seasonalityAnalysis" class="seasonality-chart">
+                            <div class="loading">Analyse saisonnière...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onglet Analyse de Sentiment -->
+            <div id="sentimentTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📊 Aperçu du Sentiment Global</h3>
+                        <div id="sentimentOverview">
+                            <div class="loading">Analyse de sentiment en cours...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>🎨 Sentiment par Thème</h3>
+                        <div id="sentimentByTheme">
+                            <div class="loading">Calcul des sentiments par thème...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>😊 Articles Positifs</h3>
+                        <div id="positiveArticles" class="articles-list">
+                            <div class="loading">Chargement des articles positifs...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>😞 Articles Négatifs</h3>
+                        <div id="negativeArticles" class="articles-list">
+                            <div class="loading">Chargement des articles négatifs...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NOUVEL ONGLET : Apprentissage -->
+            <div id="learningTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🧠 Statistiques d'Apprentissage</h3>
+                        <div id="learningStats">
+                            <div class="loading">Chargement des statistiques...</div>
+                        </div>
+                        <div class="learning-actions">
+                            <button onclick="app.refreshLearningStats()" class="refresh">🔄 Actualiser</button>
+                            <button onclick="app.resetLearning()" class="delete">🗑️ Réinitialiser</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>🎓 Apprentissage Manuel</h3>
+                        <div class="learning-form">
+                            <textarea id="learningText" placeholder="Entrez le texte à analyser..." rows="4"></textarea>
+                            <div class="score-slider">
+                                <label>Score attendu: <span id="scoreValue">0.00</span></label>
+                                <input type="range" id="expectedScore" min="-1" max="1" step="0.1" value="0">
+                                <div class="score-labels">
+                                    <span>Négatif (-1)</span>
+                                    <span>Neutre (0)</span>
+                                    <span>Positif (+1)</span>
+                                </div>
+                            </div>
+                            <button onclick="app.learnFromCorrection()" class="learn-btn">🎓 Apprendre</button>
+                            <div id="learningResult" class="learning-result"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📈 Mots Appris Récemment</h3>
+                        <div id="learnedWords" class="learned-words">
+                            <div class="loading">Chargement des mots appris...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onglet Flux RSS -->
+            <div id="feedsTab" class="tab-content">
+                <div class="card">
+                    <h3>➕ Ajouter un Flux RSS</h3>
+                    <div class="form-group">
+                        <input type="url" id="feedUrl" placeholder="https://exemple.com/flux.rss" required>
+                        <button onclick="addFeed()">Ajouter le flux</button>
+                    </div>
+                    <small>Exemples: https://www.lemonde.fr/rss/une.xml, https://www.liberation.fr/arc/outboundfeeds/rss-all/collection/accueil-une/</small>
+                </div>
+                <div class="card">
+                    <h3>📋 Mes Flux RSS</h3>
+                    <div id="feedsList">
+                        <div class="loading">Chargement des flux...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onglet Thèmes -->
+            <div id="themesTab" class="tab-content">
+                <div class="card">
+                    <h3>🎨 Créer un Thème</h3>
+                    <div class="form-group">
+                        <input type="text" id="themeName" placeholder="Nom du thème (ex: Joie)" required>
+                        <textarea id="themeKeywords" placeholder="Mots-clés (séparés par des virgules): joie, bonheur, succès, réussite" rows="3" required></textarea>
+                        
+                        <div class="color-picker-section">
+                            <label for="themeColor">Couleur du thème :</label>
+                            <div class="color-picker-container">
+                                <input type="color" id="themeColor" value="#6366f1" class="color-input">
+                                <div class="color-presets">
+                                    <div class="color-preset" style="background-color: #6366f1;" data-color="#6366f1"></div>
+                                    <div class="color-preset" style="background-color: #10b981;" data-color="#10b981"></div>
+                                    <div class="color-preset" style="background-color: #f59e0b;" data-color="#f59e0b"></div>
+                                    <div class="color-preset" style="background-color: #ef4444;" data-color="#ef4444"></div>
+                                    <div class="color-preset" style="background-color: #8b5cf6;" data-color="#8b5cf6"></div>
+                                    <div class="color-preset" style="background-color: #06b6d4;" data-color="#06b6d4"></div>
+                                    <div class="color-preset" style="background-color: #84cc16;" data-color="#84cc16"></div>
+                                    <div class="color-preset" style="background-color: #f97316;" data-color="#f97316"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button onclick="addTheme()">Créer le thème</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>🎨 Mes Thèmes</h3>
+                    <div id="themesList">
+                        <div class="loading">Chargement des thèmes...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onglet Articles -->
+            <div id="articlesTab" class="tab-content">
+                <div class="card">
+                    <h3>📄 Derniers Articles</h3>
+                    <div class="articles-list" id="articlesList">
+                        <div class="loading">Chargement des articles...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pour les statistiques d'apprentissage -->
+    <div id="learningStatsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>📊 Statistiques d'Apprentissage</h3>
+            <div id="modalLearningStats">
+                <div class="loading">Chargement...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

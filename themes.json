@@ -1,0 +1,130 @@
+{
+  "themes": [
+    {
+      "id": "1760029157323",
+      "name": "Peur",
+      "keywords": [
+        "crainte",
+        "angoisse",
+        "appréhension",
+        "effroi",
+        "terreur",
+        "frayeur",
+        "panique",
+        "inquiétude",
+        "épouvante",
+        "phobie",
+        "trac",
+        "affolement",
+        "anxiété",
+        "tremblement",
+        "cauchemar"
+      ]
+    },
+    {
+      "id": "1760029194809",
+      "name": "Colère",
+      "keywords": [
+        "rage",
+        "fureur",
+        "exaspération",
+        "irritation",
+        "énervement",
+        "emportement",
+        "courroux",
+        "indignation",
+        "agacement",
+        "mécontentement",
+        "ressentiment",
+        "rancœur",
+        "animosité",
+        "hargne",
+        "acrimonie"
+      ]
+    },
+    {
+      "id": "1760029227274",
+      "name": "Joie",
+      "keywords": [
+        "bonheur",
+        "allégresse",
+        "euphorie",
+        "ravissement",
+        "félicité",
+        "jubilation",
+        "extase",
+        "gaieté",
+        "liesse",
+        "plaisir",
+        "satisfaction",
+        "béatitude",
+        "enthousiasme",
+        "contentement",
+        "exultation"
+      ]
+    },
+    {
+      "id": "1760029277911",
+      "name": "Tristesse",
+      "keywords": [
+        "chagrin",
+        "mélancolie",
+        "peine",
+        "douleur",
+        "affliction",
+        "désespoir",
+        "abattement",
+        "morosité",
+        "déprime",
+        "accablement",
+        "amertume",
+        "langueur",
+        "cafard",
+        "spleen",
+        "découragement"
+      ]
+    },
+    {
+      "id": "1760029324209",
+      "name": "Apathie",
+      "keywords": [
+        "indifférence",
+        "inertie",
+        "léthargie",
+        "mollesse",
+        "torpeur",
+        "nonchalance",
+        "aboulie",
+        "passivité",
+        "insensibilité",
+        "détachement",
+        "engourdissement",
+        "atonie",
+        "résignation",
+        "accablement",
+        "absence"
+      ]
+    },
+    {
+      "id": "1760030584853",
+      "name": "Folie",
+      "keywords": [
+        "démence",
+        "délire",
+        "aliénation",
+        "extravagance",
+        "frénésie",
+        "obsession",
+        "égarement",
+        "dérèglement",
+        "trouble mental",
+        "déséquilibre",
+        "hallucination",
+        "manie",
+        "psychose",
+        "impulsivité",
+        "irrationalité"
+      ]
+    }
+  ]
+}
