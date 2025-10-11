@@ -5,6 +5,24 @@
     "https://www.rfi.fr/en/france/rss",
     "https://www.liberation.fr/rss/",
     "https://feeds.thelocal.com/rss/fr",
-    "https://www.diplomatie.gouv.fr/spip.php?page=rss"
+    "https://www.diplomatie.gouv.fr/spip.php?page=rss",
+    "https://www.lemonde.fr/politique/rss_full.xml",
+    "https://www.francetvinfo.fr/politique.rss",
+    "https://www.liberation.fr/rss/politique/",
+    "https://www.lesechos.fr/rss/rss_une.xml",
+    "https://www.boursorama.com/rss/actualites_economie.xml",
+    "https://www.lefigaro.fr/rss/figaro_economie.xml",
+    "https://www.lemonde.fr/sante/rss_full.xml",
+    "https://www.inserm.fr/actualites/rss.xml",
+    "https://www.who.int/feeds/entity/mediacentre/news/fr/rss.xml",
+    "https://www.leparisien.fr/faits-divers/rss.xml",
+    "https://www.francetvinfo.fr/faits-divers.rss",
+    "https://www.nicematin.com/feeds/rss/faits-divers.xml",
+    "https://www.lepoint.fr/monde.rss",
+    "https://www.la-croix.com/rss/monde.xml",
+    "https://www.huffingtonpost.fr/feeds/verticals/monde/index.xml",
+    "https://www.20minutes.fr/rss/faits-divers.xml",
+    "https://www.sudouest.fr/feeds/rss/faits-divers.xml",
+    "https://www.leparisien.fr/hauts-de-seine-92/rss.xml"
   ]
 }
