@@ -26,13 +26,15 @@ const CONFIG_FILE = path.join(__dirname, 'config.json');
 const THEMES_FILE = path.join(__dirname, 'themes.json');
 const SENTIMENT_LEXICON_FILE = path.join(__dirname, 'sentiment-lexicon.json');
 
-// Ping Render
-const http = require("http");
+const https = require("https");
 
 setInterval(() => {
-  http.get("https://rss-aggregator-l7qj.onrender.com/");
-  console.log("Ping envoyé");
-}, 9 * 60 * 1000); // Toutes les 9 minutes
+  https.get("https://rss-aggregator-l7qj.onrender.com/", (res) => {
+    console.log(`Ping envoyé - statut: ${res.statusCode}`);
+  }).on("error", (err) => {
+    console.error("Erreur lors du ping :", err.message);
+  });
+}, 9 * 60 * 1000);
 
 // Cache pour les données analysées
 let cachedAnalysis = {
