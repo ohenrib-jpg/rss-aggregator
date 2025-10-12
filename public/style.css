@@ -921,123 +921,6 @@ button.refresh:hover {
     border-left: 4px solid #2980b9;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .container {
-        padding: 15px;
-    }
-    
-    header {
-        padding: 1.5rem;
-    }
-    
-    header h1 {
-        font-size: 2rem;
-    }
-    
-    .dashboard {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
-    
-    .tabs {
-        flex-direction: column;
-    }
-    
-    .tab {
-        margin: 0.25rem 0;
-        text-align: center;
-    }
-    
-    .status-bar, .export-bar {
-        flex-direction: column;
-        gap: 1rem;
-        text-align: center;
-    }
-    
-    .refresh-controls, .export-controls {
-        justify-content: center;
-    }
-    
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .feed-item, .theme-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-    }
-    
-    .feed-item button, .theme-item button {
-        align-self: flex-end;
-    }
-    
-    .color-picker-container {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .trends-table table,
-    .metrics-table table {
-        font-size: 0.8rem;
-    }
-    
-    .sentiment-stats {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-    }
-    
-    .themes-sentiment-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: 10px;
-    }
-    
-    header {
-        padding: 1rem;
-    }
-    
-    header h1 {
-        font-size: 1.5rem;
-    }
-    
-    .card {
-        padding: 1rem;
-    }
-    
-    button, .export-btn {
-        padding: 0.6rem 1.2rem;
-        font-size: 0.9rem;
-    }
-    
-    .export-controls {
-        flex-direction: column;
-    }
-    
-    .tabs {
-        font-size: 0.8rem;
-    }
-    
-    .tab {
-        padding: 0.5rem 1rem;
-    }
-    
-    .sentiment-item {
-        padding: 1rem;
-    }
-    
-    .sentiment-emoji {
-        font-size: 2rem;
-    }
-    
-    .sentiment-value {
-        font-size: 1.5rem;
-    }
 /* AJOUTS POUR L'ANALYSE DE SENTIMENT */
 
 /* Styles pour l'apprentissage */
@@ -1255,6 +1138,75 @@ button.refresh:hover {
 
 /* Responsive */
 @media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+    
+    header {
+        padding: 1.5rem;
+    }
+    
+    header h1 {
+        font-size: 2rem;
+    }
+    
+    .dashboard {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .tabs {
+        flex-direction: column;
+    }
+    
+    .tab {
+        margin: 0.25rem 0;
+        text-align: center;
+    }
+    
+    .status-bar, .export-bar {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .refresh-controls, .export-controls {
+        justify-content: center;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .feed-item, .theme-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .feed-item button, .theme-item button {
+        align-self: flex-end;
+    }
+    
+    .color-picker-container {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .trends-table table,
+    .metrics-table table {
+        font-size: 0.8rem;
+    }
+    
+    .sentiment-stats {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .themes-sentiment-grid {
+        grid-template-columns: 1fr;
+    }
+    
     .learning-stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -1268,5 +1220,52 @@ button.refresh:hover {
     .modal-content {
         width: 95%;
         margin: 5% auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 10px;
+    }
+    
+    header {
+        padding: 1rem;
+    }
+    
+    header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .card {
+        padding: 1rem;
+    }
+    
+    button, .export-btn {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+    }
+    
+    .export-controls {
+        flex-direction: column;
+    }
+    
+    .tabs {
+        font-size: 0.8rem;
+    }
+    
+    .tab {
+        padding: 0.5rem 1rem;
+    }
+    
+    .sentiment-item {
+        padding: 1rem;
+    }
+    
+    .sentiment-emoji {
+        font-size: 2rem;
+    }
+    
+    .sentiment-value {
+        font-size: 1.5rem;
     }
 }

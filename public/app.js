@@ -126,7 +126,13 @@ class RSSAggregator {
             this.showLoading();
             console.log('Chargement des données...');
             
-            const response = await fetch('/api/articles');
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/articles');
+            } catch (e) {
+                response = await fetch('./api/articles');
+            }
             
             if (!response.ok) {
                 throw new Error(`Erreur HTTP: ${response.status}`);
@@ -147,21 +153,45 @@ class RSSAggregator {
         } catch (error) {
             console.error('Erreur lors du chargement:', error);
             this.showMessage('❌ Erreur de chargement: ' + error.message, 'error');
+            
+            // CORRECTION : Afficher des données par défaut en cas d'erreur
+            this.currentAnalysis = {
+                themes: {},
+                timeline: {},
+                totalArticles: 0,
+                trends: {},
+                metrics: {
+                    keywordEffectiveness: {},
+                    correlations: {},
+                    seasonality: {},
+                    sentiment: {},
+                    learningStats: {}
+                }
+            };
+            this.updateStats(this.currentAnalysis);
+            this.updateCharts(this.currentAnalysis);
         }
     }
 
     // méthode deeplearning mots-cles
     async refreshLearningStats() {
-             await this.updateLearningStats();
-             await this.updateLearnedWords();
-        }
+        await this.updateLearningStats();
+        await this.updateLearnedWords();
+    }
 
     async manualRefresh() {
         try {
             this.updateRefreshButton(true);
             this.showMessage('🔄 Actualisation...', 'info');
             
-            const response = await fetch('/api/refresh', { method: 'POST' });
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/refresh', { method: 'POST' });
+            } catch (e) {
+                response = await fetch('./api/refresh', { method: 'POST' });
+            }
+            
             const result = await response.json();
 
             if (result.success) {
@@ -181,7 +211,13 @@ class RSSAggregator {
         try {
             this.showMessage(`📤 Préparation de l'export ${format.toUpperCase()}...`, 'info');
             
-            const response = await fetch(`/api/export/${format}`);
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch(`/api/export/${format}`);
+            } catch (e) {
+                response = await fetch(`./api/export/${format}`);
+            }
             
             if (!response.ok) {
                 throw new Error(`Erreur HTTP: ${response.status}`);
@@ -267,7 +303,7 @@ class RSSAggregator {
                 <div class="sentiment-stats">
                     <div class="sentiment-item positive">
                         <span class="sentiment-emoji">😊</span>
-                        <span class="sentiment-label">Positif</span>
+                        <span class="sentiment-label">Évolution positive</span>
                         <span class="sentiment-value">${positivePercent}%</span>
                         <small>${totalPositive} articles</small>
                     </div>
@@ -279,21 +315,21 @@ class RSSAggregator {
                     </div>
                     <div class="sentiment-item negative">
                         <span class="sentiment-emoji">😞</span>
-                        <span class="sentiment-label">Négatif</span>
+                        <span class="sentiment-label">Évolution Négative</span>
                         <span class="sentiment-value">${negativePercent}%</span>
                         <small>${totalNegative} articles</small>
                     </div>
                 </div>
                 <div class="sentiment-chart">
                     <div class="sentiment-bar">
-                        <div class="sentiment-fill positive" style="width: ${positivePercent}%" title="Positif: ${positivePercent}%"></div>
+                        <div class="sentiment-fill positive" style="width: ${positivePercent}%" title="Évolution positive: ${positivePercent}%"></div>
                         <div class="sentiment-fill neutral" style="width: ${neutralPercent}%" title="Neutre: ${neutralPercent}%"></div>
-                        <div class="sentiment-fill negative" style="width: ${negativePercent}%" title="Négatif: ${negativePercent}%"></div>
+                        <div class="sentiment-fill negative" style="width: ${negativePercent}%" title="Évolution Négative: ${negativePercent}%"></div>
                     </div>
                     <div class="sentiment-legend">
-                        <span>😊 Positif</span>
+                        <span>😊 Évolution positive</span>
                         <span>😐 Neutre</span>
-                        <span>😞 Négatif</span>
+                        <span>😞 Évolution Négative</span>
                     </div>
                 </div>
             </div>
@@ -339,8 +375,8 @@ class RSSAggregator {
             };
 
             const getSentimentLabel = (score) => {
-                if (score > 0.3) return 'Positif';
-                if (score < -0.3) return 'Négatif';
+                if (score > 0.3) return 'Évolution positive';
+                if (score < -0.3) return 'Évolution Négative';
                 return 'Neutre';
             };
 
@@ -354,7 +390,7 @@ class RSSAggregator {
                     <div class="sentiment-breakdown">
                         <div class="sentiment-detail">
                             <span class="sentiment-dot positive"></span>
-                            <span>Positif: ${positivePercent}% (${sentiment.positive})</span>
+                            <span>Évolution positive: ${positivePercent}% (${sentiment.positive})</span>
                         </div>
                         <div class="sentiment-detail">
                             <span class="sentiment-dot neutral"></span>
@@ -362,7 +398,7 @@ class RSSAggregator {
                         </div>
                         <div class="sentiment-detail">
                             <span class="sentiment-dot negative"></span>
-                            <span>Négatif: ${negativePercent}% (${sentiment.negative})</span>
+                            <span>Évolution Négative: ${negativePercent}% (${sentiment.negative})</span>
                         </div>
                     </div>
                     <div class="sentiment-score">
@@ -490,7 +526,14 @@ class RSSAggregator {
         if (!learningStats) return;
 
         try {
-            const response = await fetch('/api/sentiment/stats');
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/sentiment/stats');
+            } catch (e) {
+                response = await fetch('./api/sentiment/stats');
+            }
+            
             if (!response.ok) throw new Error('Erreur réseau');
             
             const data = await response.json();
@@ -537,7 +580,14 @@ class RSSAggregator {
         if (!learnedWords) return;
 
         try {
-            const response = await fetch('/api/sentiment/stats');
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/sentiment/stats');
+            } catch (e) {
+                response = await fetch('./api/sentiment/stats');
+            }
+            
             if (!response.ok) throw new Error('Erreur réseau');
             
             const data = await response.json();
@@ -578,58 +628,66 @@ class RSSAggregator {
         return Math.min(0.95, 0.3 + (Math.min(usageCount, 20) * 0.03) + (consistency * 0.4));
     }
 
-// Correction v2.16JENAIMARRE de la méthode learnFromCorrection :
-async learnFromCorrection() {
-    const textInput = document.getElementById('learningText');
-    const scoreInput = document.getElementById('expectedScore');
-    const resultDiv = document.getElementById('learningResult');
+    async learnFromCorrection() {
+        const textInput = document.getElementById('learningText');
+        const scoreInput = document.getElementById('expectedScore');
+        const resultDiv = document.getElementById('learningResult');
 
-    if (!textInput || !scoreInput || !resultDiv) return;
+        if (!textInput || !scoreInput || !resultDiv) return;
 
-    const text = textInput.value.trim();
-    const expectedScore = parseFloat(scoreInput.value);
+        const text = textInput.value.trim();
+        const expectedScore = parseFloat(scoreInput.value);
 
-    if (!text) {
-        this.showMessage('❌ Veuillez entrer un texte', 'error');
-        return;
-    }
-
-    try {
-        resultDiv.innerHTML = '<div class="loading">Apprentissage en cours...</div>';
-        
-        const response = await fetch('/api/sentiment/learn', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, expectedScore })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            // CORRECTION : Vérifier si result.error existe avant d'utiliser toFixed()
-            const errorDisplay = result.error ? result.error.toFixed(3) : 'N/A';
-            
-            resultDiv.innerHTML = `
-                <div class="success">
-                    ✅ Correction appliquée! 
-                    <br>Erreur: ${errorDisplay}
-                </div>
-            `;
-            this.showMessage('🎓 Apprentissage réussi!', 'success');
-            await this.updateLearningStats();
-            await this.updateLearnedWords();
-            
-            // Vider le champ de texte après apprentissage
-            textInput.value = '';
-        } else {
-            throw new Error(result.error || 'Erreur inconnue');
+        if (!text) {
+            this.showMessage('❌ Veuillez entrer un texte', 'error');
+            return;
         }
-    } catch (error) {
-        console.error('Erreur apprentissage:', error);
-        resultDiv.innerHTML = `<div class="error">❌ Erreur: ${error.message}</div>`;
-        this.showMessage('❌ Erreur lors de l\'apprentissage', 'error');
+
+        try {
+            resultDiv.innerHTML = '<div class="loading">Apprentissage en cours...</div>';
+            
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/sentiment/learn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, expectedScore })
+                });
+            } catch (e) {
+                response = await fetch('./api/sentiment/learn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, expectedScore })
+                });
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                const errorDisplay = result.error ? result.error.toFixed(3) : 'N/A';
+                
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        ✅ Correction appliquée! 
+                        <br>Erreur: ${errorDisplay}
+                    </div>
+                `;
+                this.showMessage('🎓 Apprentissage réussi!', 'success');
+                await this.updateLearningStats();
+                await this.updateLearnedWords();
+                
+                // Vider le champ de texte après apprentissage
+                textInput.value = '';
+            } else {
+                throw new Error(result.error || 'Erreur inconnue');
+            }
+        } catch (error) {
+            console.error('Erreur apprentissage:', error);
+            resultDiv.innerHTML = `<div class="error">❌ Erreur: ${error.message}</div>`;
+            this.showMessage('❌ Erreur lors de l\'apprentissage', 'error');
+        }
     }
-}
 
     async resetLearning() {
         if (!confirm('Êtes-vous sûr de vouloir réinitialiser l\'apprentissage ? Toutes les statistiques seront perdues.')) {
@@ -637,7 +695,14 @@ async learnFromCorrection() {
         }
 
         try {
-            const response = await fetch('/api/sentiment/reset', { method: 'POST' });
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/sentiment/reset', { method: 'POST' });
+            } catch (e) {
+                response = await fetch('./api/sentiment/reset', { method: 'POST' });
+            }
+            
             const result = await response.json();
 
             if (result.success) {
@@ -663,7 +728,14 @@ async learnFromCorrection() {
             modalContent.innerHTML = '<div class="loading">Chargement...</div>';
             modal.style.display = 'block';
 
-            const response = await fetch('/api/sentiment/stats');
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/sentiment/stats');
+            } catch (e) {
+                response = await fetch('./api/sentiment/stats');
+            }
+            
             const data = await response.json();
 
             if (data.success) {
@@ -700,7 +772,7 @@ async learnFromCorrection() {
         }
     }
 
-    // MÉTHODES EXISTANTES (conservées de votre version)
+    // MÉTHODES EXISTANTES
     showLoading() {
         const statsGrid = document.getElementById('statsGrid');
         const articlesList = document.getElementById('articlesList');
@@ -789,129 +861,149 @@ async learnFromCorrection() {
     }
 
     updateCharts(analysis) {
-        this.updateThemeChart(analysis.themes);
-        this.updateTimelineChart(analysis.timeline);
-    }
+  console.log('📈 Mise à jour des graphiques:', analysis);
+  
+  // CORRECTION : Vérifier que les données existent
+  if (!analysis || !analysis.themes) {
+    console.warn('❌ Aucune donnée pour les graphiques');
+    return;
+  }
+  
+  this.updateThemeChart(analysis.themes);
+  this.updateTimelineChart(analysis.timeline);
+}
 
-    updateThemeChart(themes) {
-        const ctx = document.getElementById('themeChart');
-        if (!ctx) return;
+updateThemeChart(themes) {
+  const ctx = document.getElementById('themeChart');
+  if (!ctx) {
+    console.log('❌ Canvas themeChart non trouvé');
+    return;
+  }
 
-        const themeNames = Object.keys(themes || {});
-        const themeCounts = themeNames.map(name => themes[name].count);
-        const themeColors = themeNames.map(name => themes[name].color || '#6366f1');
+  const themeNames = Object.keys(themes || {});
+  const themeCounts = themeNames.map(name => themes[name].count);
+  const themeColors = themeNames.map(name => themes[name].color || '#6366f1');
 
-        const validThemes = themeNames.filter((name, index) => themeCounts[index] > 0);
-        const validCounts = themeCounts.filter(count => count > 0);
-        const validColors = themeColors.filter((color, index) => themeCounts[index] > 0);
+  const validThemes = themeNames.filter((name, index) => themeCounts[index] > 0);
+  const validCounts = themeCounts.filter(count => count > 0);
+  const validColors = themeColors.filter((color, index) => themeCounts[index] > 0);
 
-        if (this.themeChart) this.themeChart.destroy();
+  if (this.themeChart) this.themeChart.destroy();
 
-        if (validThemes.length === 0) {
-            ctx.parentElement.innerHTML = '<p class="loading">Aucune donnée</p>';
-            return;
+  if (validThemes.length === 0) {
+    ctx.parentElement.innerHTML = '<p class="loading">Aucune donnée de thème disponible</p>';
+    console.log('📊 Aucun thème avec des données');
+    return;
+  }
+
+  console.log(`📊 Création du graphique thèmes: ${validThemes.length} thèmes valides`);
+
+  this.themeChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: validThemes,
+      datasets: [{
+        data: validCounts,
+        backgroundColor: validColors,
+        borderColor: 'white',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            padding: 20
+          }
         }
-
-        this.themeChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: validThemes,
-                datasets: [{
-                    data: validCounts,
-                    backgroundColor: validColors,
-                    borderColor: 'white',
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 20
-                        }
-                    }
-                }
-            }
-        });
+      }
     }
+  });
+}
 
-    updateTimelineChart(timeline) {
-        const ctx = document.getElementById('timelineChart');
-        if (!ctx) return;
+updateTimelineChart(timeline) {
+  const ctx = document.getElementById('timelineChart');
+  if (!ctx) {
+    console.log('❌ Canvas timelineChart non trouvé');
+    return;
+  }
 
-        const dates = Object.keys(timeline || {}).sort((a, b) => new Date(a) - new Date(b));
-        if (dates.length === 0) {
-            ctx.parentElement.innerHTML = '<p class="loading">Aucune donnée</p>';
-            return;
+  const dates = Object.keys(timeline || {}).sort((a, b) => new Date(a) - new Date(b));
+  if (dates.length === 0) {
+    ctx.parentElement.innerHTML = '<p class="loading">Aucune donnée temporelle disponible</p>';
+    console.log('📊 Aucune donnée de timeline');
+    return;
+  }
+
+  const themesWithData = new Set();
+  dates.forEach(date => {
+    Object.keys(timeline[date]).forEach(theme => {
+      if (timeline[date][theme] > 0) {
+        themesWithData.add(theme);
+      }
+    });
+  });
+
+  const themes = Array.from(themesWithData);
+  
+  if (this.timelineChart) this.timelineChart.destroy();
+
+  const formattedDates = dates.map(date => {
+    const d = new Date(date);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  });
+
+  const themeColors = themes.map(theme => 
+    this.currentAnalysis?.themes[theme]?.color || this.getRandomColor()
+  );
+
+  const datasets = themes.map((theme, index) => {
+    return {
+      label: theme,
+      data: dates.map(date => timeline[date][theme] || 0),
+      borderColor: themeColors[index],
+      backgroundColor: themeColors[index] + '20',
+      tension: 0.3,
+      fill: false,
+      borderWidth: 3
+    };
+  });
+
+  console.log(`📊 Création du graphique timeline: ${dates.length} dates, ${themes.length} thèmes`);
+
+  this.timelineChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: formattedDates, datasets: datasets },
+    options: {
+      responsive: true,
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: 'Nombre d\'articles'
+          },
+          ticks: {
+            stepSize: 1
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: 'Date'
+          }
         }
-
-        const themesWithData = new Set();
-        dates.forEach(date => {
-            Object.keys(timeline[date]).forEach(theme => {
-                if (timeline[date][theme] > 0) {
-                    themesWithData.add(theme);
-                }
-            });
-        });
-
-        const themes = Array.from(themesWithData);
-        
-        if (this.timelineChart) this.timelineChart.destroy();
-
-        const formattedDates = dates.map(date => {
-            const d = new Date(date);
-            return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-        });
-
-        const themeColors = themes.map(theme => 
-            this.currentAnalysis?.themes[theme]?.color || this.getRandomColor()
-        );
-
-        const datasets = themes.map((theme, index) => {
-            return {
-                label: theme,
-                data: dates.map(date => timeline[date][theme] || 0),
-                borderColor: themeColors[index],
-                backgroundColor: themeColors[index] + '20',
-                tension: 0.3,
-                fill: false,
-                borderWidth: 3
-            };
-        });
-
-        this.timelineChart = new Chart(ctx, {
-            type: 'line',
-            data: { labels: formattedDates, datasets: datasets },
-            options: {
-                responsive: true,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Nombre d\'articles'
-                        },
-                        ticks: {
-                            stepSize: 1
-                        }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Date'
-                        }
-                    }
-                }
-            }
-        });
+      }
     }
+  });
+}
 
     getRandomColor() {
         const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'];
@@ -964,7 +1056,14 @@ async learnFromCorrection() {
 
     async loadFeeds() {
         try {
-            const response = await fetch('/api/feeds');
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/feeds');
+            } catch (e) {
+                response = await fetch('./api/feeds');
+            }
+            
             if (!response.ok) throw new Error('Erreur réseau');
             
             const feeds = await response.json();
@@ -991,7 +1090,14 @@ async learnFromCorrection() {
 
     async loadThemes() {
         try {
-            const response = await fetch('/api/themes');
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/themes');
+            } catch (e) {
+                response = await fetch('./api/themes');
+            }
+            
             if (!response.ok) throw new Error('Erreur réseau');
             
             const themes = await response.json();
@@ -1034,11 +1140,21 @@ async learnFromCorrection() {
         }
 
         try {
-            const response = await fetch('/api/feeds', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/feeds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+            } catch (e) {
+                response = await fetch('./api/feeds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+            }
 
             const result = await response.json();
 
@@ -1060,11 +1176,21 @@ async learnFromCorrection() {
         if (!confirm('Supprimer ce flux?')) return;
 
         try {
-            const response = await fetch('/api/feeds', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/feeds', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+            } catch (e) {
+                response = await fetch('./api/feeds', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+            }
 
             if (!response.ok) throw new Error('Erreur réseau');
 
@@ -1098,11 +1224,21 @@ async learnFromCorrection() {
         }
 
         try {
-            const response = await fetch('/api/themes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, keywords, color })
-            });
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/themes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, keywords, color })
+                });
+            } catch (e) {
+                response = await fetch('./api/themes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, keywords, color })
+                });
+            }
 
             const result = await response.json();
 
@@ -1126,7 +1262,13 @@ async learnFromCorrection() {
         if (!confirm('Supprimer ce thème?')) return;
 
         try {
-            const response = await fetch('/api/themes/' + id, { method: 'DELETE' });
+            // CORRECTION : Essayer différents chemins d'API
+            let response;
+            try {
+                response = await fetch('/api/themes/' + id, { method: 'DELETE' });
+            } catch (e) {
+                response = await fetch('./api/themes/' + id, { method: 'DELETE' });
+            }
             
             if (!response.ok) throw new Error('Erreur réseau');
 
@@ -1164,7 +1306,7 @@ async learnFromCorrection() {
         });
     }
 
-    // MÉTHODES DES MÉTRIQUES AVANCÉES (conservées)
+    // MÉTHODES DES MÉTRIQUES AVANCÉES
     updateAdvancedMetrics() {
         if (!this.currentAnalysis) return;
 

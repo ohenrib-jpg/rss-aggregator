@@ -44,7 +44,7 @@
     "satisfaisant": 1.1,
     "confortable": 1,
     "correct": 0.5,
-    "acceptable": 0.5,
+    "acceptable": 0.007260338551432442,
     "convenable": 0.5,
     "passable": 0.3,
     "moyen": 0.2,
@@ -84,14 +84,14 @@
     "inquiétant": -1.2,
     "alarmant": -1.3,
     "préoccupant": -1.1,
-    "grave": -1.4,
+    "grave": -1.0059438933374936,
     "sérieux": -1.1,
     "critique": -1.5,
     "urgent": -1,
     "décevant": -0.7,
     "médiocre": -0.7,
     "insuffisant": -0.7,
-    "faible": -0.6,
+    "faible": -0.9940561066625052,
     "limité": -0.5,
     "incomplet": -0.5,
     "imparfait": -0.3,
@@ -102,40 +102,40 @@
   },
   "usageStats": {
     "crise": {
-      "usageCount": 123,
+      "usageCount": 1004,
       "totalScore": 0,
-      "consistency": 0.9996431416168461,
-      "lastUsed": "2025-10-12T18:55:37.404Z"
+      "consistency": 0.9999999999999994,
+      "lastUsed": "2025-10-12T21:10:13.943Z"
     },
     "bien": {
-      "usageCount": 24,
+      "usageCount": 305,
       "totalScore": 0,
-      "consistency": 0.885616037725195,
-      "lastUsed": "2025-10-12T18:55:37.409Z"
+      "consistency": 0.9999999999999842,
+      "lastUsed": "2025-10-12T21:10:13.984Z"
     },
     "risque": {
-      "usageCount": 19,
+      "usageCount": 166,
       "totalScore": 0,
-      "consistency": 0.7962370385664866,
-      "lastUsed": "2025-10-12T18:55:37.412Z"
+      "consistency": 0.9999999617374303,
+      "lastUsed": "2025-10-12T21:10:13.975Z"
     },
     "moyen": {
-      "usageCount": 22,
+      "usageCount": 223,
       "totalScore": 0,
-      "consistency": 0.8587852317595001,
-      "lastUsed": "2025-10-12T18:55:37.389Z"
+      "consistency": 0.9999999999103346,
+      "lastUsed": "2025-10-12T21:10:13.884Z"
     },
     "menace": {
-      "usageCount": 28,
+      "usageCount": 309,
       "totalScore": 0,
-      "consistency": 0.9163099286708076,
-      "lastUsed": "2025-10-12T18:55:37.377Z"
+      "consistency": 0.9999999999999885,
+      "lastUsed": "2025-10-12T21:10:13.980Z"
     },
     "terrible": {
-      "usageCount": 10,
+      "usageCount": 77,
       "totalScore": 0,
-      "consistency": 0.5,
-      "lastUsed": "2025-10-12T18:55:37.402Z"
+      "consistency": 0.9995702477721413,
+      "lastUsed": "2025-10-12T21:10:13.929Z"
     },
     "bon": {
       "usageCount": 4,
@@ -144,43 +144,49 @@
       "lastUsed": "2025-10-12T00:01:07.537Z"
     },
     "acceptable": {
-      "usageCount": 6,
+      "usageCount": 32,
       "totalScore": 0,
-      "consistency": 0.5,
-      "lastUsed": "2025-10-12T18:55:37.388Z"
+      "consistency": 0.9507614548908194,
+      "lastUsed": "2025-10-12T20:32:37.379Z"
     },
     "grave": {
-      "usageCount": 3,
+      "usageCount": 68,
       "totalScore": 0,
-      "consistency": 0.5,
-      "lastUsed": "2025-10-12T00:00:37.998Z"
+      "consistency": 0.9820357982370714,
+      "lastUsed": "2025-10-12T21:10:13.965Z"
     },
     "faible": {
-      "usageCount": 3,
+      "usageCount": 68,
       "totalScore": 0,
-      "consistency": 0.5,
-      "lastUsed": "2025-10-12T00:00:37.998Z"
+      "consistency": 0.9820357982370714,
+      "lastUsed": "2025-10-12T21:10:13.965Z"
     },
     "danger": {
-      "usageCount": 3,
+      "usageCount": 68,
       "totalScore": 0,
-      "consistency": 0.5,
-      "lastUsed": "2025-10-12T00:00:37.998Z"
+      "consistency": 0.9988907343827688,
+      "lastUsed": "2025-10-12T21:10:13.967Z"
     },
     "efficace": {
-      "usageCount": 2,
+      "usageCount": 69,
       "totalScore": 0,
-      "consistency": 0.5,
-      "lastUsed": "2025-10-12T18:55:37.323Z"
+      "consistency": 0.9990016609444918,
+      "lastUsed": "2025-10-12T21:10:13.769Z"
     },
     "catastrophe": {
-      "usageCount": 2,
+      "usageCount": 69,
       "totalScore": 0,
-      "consistency": 0.5,
-      "lastUsed": "2025-10-12T18:55:37.400Z"
+      "consistency": 0.9990016609444918,
+      "lastUsed": "2025-10-12T21:10:13.917Z"
+    },
+    "mauvais": {
+      "usageCount": 13,
+      "totalScore": 0,
+      "consistency": 0.6355000000000001,
+      "lastUsed": "2025-10-12T21:10:13.992Z"
     }
   },
   "learningRate": 0.1,
   "version": "2.0",
-  "lastUpdated": "2025-10-12T18:55:37.412Z"
+  "lastUpdated": "2025-10-12T21:10:13.992Z"
 }
