@@ -76,10 +76,10 @@
     "échec": -1.4,
     "difficile": -1,
     "compliqué": -1,
-    "crise": -1.4,
+    "crise": -1.3865830824978125,
     "danger": -1.3,
-    "risque": -1.1,
-    "menace": -1.3,
+    "risque": -1.1138449694207018,
+    "menace": -1.2926944480814857,
     "défaite": -1.3,
     "inquiétant": -1.2,
     "alarmant": -1.3,
@@ -102,19 +102,85 @@
   },
   "usageStats": {
     "crise": {
-      "usageCount": 61,
+      "usageCount": 123,
       "totalScore": 0,
-      "consistency": 0.997680801156706,
-      "lastUsed": "2025-10-10T11:28:45.324Z"
+      "consistency": 0.9996431416168461,
+      "lastUsed": "2025-10-12T18:55:37.404Z"
     },
     "bien": {
+      "usageCount": 24,
+      "totalScore": 0,
+      "consistency": 0.885616037725195,
+      "lastUsed": "2025-10-12T18:55:37.409Z"
+    },
+    "risque": {
+      "usageCount": 19,
+      "totalScore": 0,
+      "consistency": 0.7962370385664866,
+      "lastUsed": "2025-10-12T18:55:37.412Z"
+    },
+    "moyen": {
+      "usageCount": 22,
+      "totalScore": 0,
+      "consistency": 0.8587852317595001,
+      "lastUsed": "2025-10-12T18:55:37.389Z"
+    },
+    "menace": {
+      "usageCount": 28,
+      "totalScore": 0,
+      "consistency": 0.9163099286708076,
+      "lastUsed": "2025-10-12T18:55:37.377Z"
+    },
+    "terrible": {
+      "usageCount": 10,
+      "totalScore": 0,
+      "consistency": 0.5,
+      "lastUsed": "2025-10-12T18:55:37.402Z"
+    },
+    "bon": {
+      "usageCount": 4,
+      "totalScore": 0,
+      "consistency": 0.5,
+      "lastUsed": "2025-10-12T00:01:07.537Z"
+    },
+    "acceptable": {
+      "usageCount": 6,
+      "totalScore": 0,
+      "consistency": 0.5,
+      "lastUsed": "2025-10-12T18:55:37.388Z"
+    },
+    "grave": {
+      "usageCount": 3,
+      "totalScore": 0,
+      "consistency": 0.5,
+      "lastUsed": "2025-10-12T00:00:37.998Z"
+    },
+    "faible": {
+      "usageCount": 3,
+      "totalScore": 0,
+      "consistency": 0.5,
+      "lastUsed": "2025-10-12T00:00:37.998Z"
+    },
+    "danger": {
+      "usageCount": 3,
+      "totalScore": 0,
+      "consistency": 0.5,
+      "lastUsed": "2025-10-12T00:00:37.998Z"
+    },
+    "efficace": {
       "usageCount": 2,
       "totalScore": 0,
       "consistency": 0.5,
-      "lastUsed": "2025-10-10T11:27:11.949Z"
+      "lastUsed": "2025-10-12T18:55:37.323Z"
+    },
+    "catastrophe": {
+      "usageCount": 2,
+      "totalScore": 0,
+      "consistency": 0.5,
+      "lastUsed": "2025-10-12T18:55:37.400Z"
     }
   },
   "learningRate": 0.1,
   "version": "2.0",
-  "lastUpdated": "2025-10-10T11:28:45.324Z"
+  "lastUpdated": "2025-10-12T18:55:37.412Z"
 }
