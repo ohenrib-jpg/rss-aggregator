@@ -1075,7 +1075,7 @@ def analyze_full():
 
         # Génération du rapport avancé
         report_filename = generate_advanced_report(corrections, feed)
-        report_url = f'http://localhost:5051/reports/{report_filename}'
+        report_url = f'https://rss-aggregator-1-wx0b.onrender.com/reports/{report_filename}'
         
         print("✅ Analyse IA avancée terminée")
         
@@ -1114,7 +1114,7 @@ def health_check():
     })
 
 if __name__ == '__main__':
-    print("🚀 Service IA Avancé démarré sur http://localhost:5051")
+    print("🚀 Service IA Avancé démarré sur https://rss-aggregator-1-wx0b.onrender.com")
     print("🧠 Fonctionnalités activées:")
     print("   - Analyse contextuelle avancée")
     print("   - Recherche web contextuelle") 

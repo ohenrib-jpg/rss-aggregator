@@ -227,7 +227,7 @@ class IACorrectionManager {
       
       const articlesToCorrect = cachedAnalysis.articles.slice(0, 20);
       
-      const response = await axios.post('http://localhost:5051/correct_analysis', {
+      const response = await axios.post('https://rss-aggregator-1-wx0b.onrender.com/correct_analysis', {
         apiKey: this.iaApiKey,
         articles: articlesToCorrect,
         currentAnalysis: cachedAnalysis.analysis,
@@ -1169,7 +1169,7 @@ app.post('/api/ia/advanced_analyze', async (req, res) => {
     const articlesToAnalyze = cachedAnalysis.articles.slice(0, 8);
     const themes = loadThemes();
     
-    const response = await axios.post('http://localhost:5051/analyze_full', {
+    const response = await axios.post('https://rss-aggregator-1-wx0b.onrender.com/analyze_full', {
       apiKey: apiKey,
       feed: {
         source: 'rss_aggregator',
