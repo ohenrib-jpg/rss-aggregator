@@ -30,4 +30,3 @@ Système complet d'analyse de flux RSS avec intégration IA pour la correction d
 **Backend Node.js:**
 ```bash
 npm install
-pip install -r requirements.txt

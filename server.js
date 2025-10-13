@@ -1206,7 +1206,7 @@ app.post('/api/ia/analyze', async (req, res) => {
     const articlesToAnalyze = cachedAnalysis.articles.slice(0, 20);
     const themes = loadThemes();
     
-    const response = await axios.post('http://localhost:5051/analyze_full', {
+    const response = await axios.post('https://rss-aggregator-1-wx0b.onrender.com/analyze_full', {
       apiKey: apiKey,
       feed: {
         source: 'rss_aggregator',
