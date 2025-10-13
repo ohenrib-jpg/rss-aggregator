@@ -84,14 +84,14 @@
     "inquiétant": -1.2,
     "alarmant": -1.3,
     "préoccupant": -1.1,
-    "grave": -1.0059438933374936,
+    "grave": -1.0000883246700174,
     "sérieux": -1.1,
     "critique": -1.5,
     "urgent": -1,
     "décevant": -0.7,
     "médiocre": -0.7,
     "insuffisant": -0.7,
-    "faible": -0.9940561066625052,
+    "faible": -0.9999116753299799,
     "limité": -0.5,
     "incomplet": -0.5,
     "imparfait": -0.3,
@@ -102,40 +102,40 @@
   },
   "usageStats": {
     "crise": {
-      "usageCount": 1004,
+      "usageCount": 1669,
       "totalScore": 0,
       "consistency": 0.9999999999999994,
-      "lastUsed": "2025-10-12T21:10:13.943Z"
+      "lastUsed": "2025-10-13T01:18:40.921Z"
     },
     "bien": {
-      "usageCount": 305,
+      "usageCount": 595,
       "totalScore": 0,
-      "consistency": 0.9999999999999842,
-      "lastUsed": "2025-10-12T21:10:13.984Z"
+      "consistency": 0.9999999999999994,
+      "lastUsed": "2025-10-13T01:18:40.925Z"
     },
     "risque": {
-      "usageCount": 166,
+      "usageCount": 340,
       "totalScore": 0,
-      "consistency": 0.9999999617374303,
-      "lastUsed": "2025-10-12T21:10:13.975Z"
+      "consistency": 0.9999999999999994,
+      "lastUsed": "2025-10-13T01:18:40.942Z"
     },
     "moyen": {
-      "usageCount": 223,
+      "usageCount": 397,
       "totalScore": 0,
-      "consistency": 0.9999999999103346,
-      "lastUsed": "2025-10-12T21:10:13.884Z"
+      "consistency": 0.9999999999999994,
+      "lastUsed": "2025-10-13T01:18:40.896Z"
     },
     "menace": {
-      "usageCount": 309,
+      "usageCount": 631,
       "totalScore": 0,
-      "consistency": 0.9999999999999885,
-      "lastUsed": "2025-10-12T21:10:13.980Z"
+      "consistency": 0.9999999999999994,
+      "lastUsed": "2025-10-13T01:18:40.938Z"
     },
     "terrible": {
-      "usageCount": 77,
+      "usageCount": 135,
       "totalScore": 0,
-      "consistency": 0.9995702477721413,
-      "lastUsed": "2025-10-12T21:10:13.929Z"
+      "consistency": 0.9999990465812595,
+      "lastUsed": "2025-10-13T01:18:40.917Z"
     },
     "bon": {
       "usageCount": 4,
@@ -150,34 +150,34 @@
       "lastUsed": "2025-10-12T20:32:37.379Z"
     },
     "grave": {
-      "usageCount": 68,
+      "usageCount": 126,
       "totalScore": 0,
-      "consistency": 0.9820357982370714,
-      "lastUsed": "2025-10-12T21:10:13.965Z"
+      "consistency": 0.9997096860006364,
+      "lastUsed": "2025-10-13T01:18:40.931Z"
     },
     "faible": {
-      "usageCount": 68,
+      "usageCount": 126,
       "totalScore": 0,
-      "consistency": 0.9820357982370714,
-      "lastUsed": "2025-10-12T21:10:13.965Z"
+      "consistency": 0.9997096860006363,
+      "lastUsed": "2025-10-13T01:18:40.931Z"
     },
     "danger": {
-      "usageCount": 68,
+      "usageCount": 126,
       "totalScore": 0,
-      "consistency": 0.9988907343827688,
-      "lastUsed": "2025-10-12T21:10:13.967Z"
+      "consistency": 0.9999975390595809,
+      "lastUsed": "2025-10-13T01:18:40.934Z"
     },
     "efficace": {
-      "usageCount": 69,
+      "usageCount": 127,
       "totalScore": 0,
-      "consistency": 0.9990016609444918,
-      "lastUsed": "2025-10-12T21:10:13.769Z"
+      "consistency": 0.9999977851536228,
+      "lastUsed": "2025-10-13T01:18:40.836Z"
     },
     "catastrophe": {
-      "usageCount": 69,
+      "usageCount": 127,
       "totalScore": 0,
-      "consistency": 0.9990016609444918,
-      "lastUsed": "2025-10-12T21:10:13.917Z"
+      "consistency": 0.9999977851536228,
+      "lastUsed": "2025-10-13T01:18:40.913Z"
     },
     "mauvais": {
       "usageCount": 13,
@@ -188,5 +188,5 @@
   },
   "learningRate": 0.1,
   "version": "2.0",
-  "lastUpdated": "2025-10-12T21:10:13.992Z"
+  "lastUpdated": "2025-10-13T01:18:40.942Z"
 }

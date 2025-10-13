@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS Thématique</title>
+    <title>Agrégateur RSS Thématique + IA</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -11,7 +11,7 @@
     <div class="container">
         <header>
             <h1>📊 Agrégateur RSS Thématique - cr. Olivier H. B.</h1>
-            <p>Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances et analyse de sentiment - DeepLearning</p>
+            <p>Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances et analyse de sentiment - DeepLearning + IA</p>
         </header>
 
         <div id="messageContainer"></div>
@@ -38,8 +38,29 @@
                 <button class="export-btn csv" onclick="app.exportData('csv')">
                     📥 Export CSV
                 </button>
+                <!-- NOUVEAU : Boutons IA -->
+                <button class="export-btn ia" onclick="app.runAIAnalysis()" id="iaAnalyzeBtn">
+                    🧠 Analyse IA
+                </button>
+                <button class="export-btn ia-config" onclick="app.showIAApiKeyModal()" id="iaConfigBtn">
+                    ⚙️ Config IA
+                </button>
                 <button class="export-btn stats" onclick="app.showLearningStats()">
                     📊 Stats Apprentissage
+                </button>
+            </div>
+        </div>
+
+        <!-- Indicateur Corrections IA -->
+        <div id="iaStatusBar" class="status-bar" style="display: none; border-left-color: #8b5cf6;">
+            <div class="auto-refresh-indicator">
+                <span class="blink">🤖</span> 
+                <span id="iaStatusText">Corrections IA actives</span>
+            </div>
+            <div class="refresh-controls">
+                <span id="iaLastCorrection">Dernière correction: --</span>
+                <button class="refresh" onclick="app.manualIACorrection()" id="iaCorrectBtn">
+                    🔧 Corriger maintenant
                 </button>
             </div>
         </div>
@@ -55,6 +76,7 @@
                 <div class="tab" onclick="showTab('metrics', event)">🎯 Métriques</div>
                 <div class="tab" onclick="showTab('sentiment', event)">😊 Sentiment</div>
                 <div class="tab" onclick="showTab('learning', event)">🧠 Apprentissage</div>
+                <div class="tab" onclick="showTab('ia-corrections', event)">🤖 Corrections IA</div>
                 <div class="tab" onclick="showTab('feeds', event)">📰 Flux RSS</div>
                 <div class="tab" onclick="showTab('themes', event)">🎨 Thèmes</div>
                 <div class="tab" onclick="showTab('articles', event)">📄 Articles</div>
@@ -204,6 +226,36 @@
                 </div>
             </div>
 
+            <!-- NOUVEL ONGLET : Corrections IA -->
+            <div id="ia-correctionsTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🤖 État des Corrections IA</h3>
+                        <div id="iaStatusOverview">
+                            <div class="loading">Chargement des corrections IA...</div>
+                        </div>
+                        <div class="learning-actions">
+                            <button onclick="app.manualIACorrection()" class="refresh">🔧 Correction Manuelle</button>
+                            <button onclick="app.configureIA()" class="learn-btn">⚙️ Configuration IA</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>📈 Statistiques des Corrections</h3>
+                        <div id="iaCorrectionsStats">
+                            <div class="loading">Calcul des statistiques...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📋 Historique des Corrections</h3>
+                        <div id="iaCorrectionsHistory" class="articles-list">
+                            <div class="loading">Chargement de l'historique...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Onglet Flux RSS -->
             <div id="feedsTab" class="tab-content">
                 <div class="card">
@@ -277,6 +329,48 @@
             <h3>📊 Statistiques d'Apprentissage</h3>
             <div id="modalLearningStats">
                 <div class="loading">Chargement...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOUVEAU : Modal pour la configuration IA -->
+    <div id="iaApiKeyModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="app.closeIAApiKeyModal()">&times;</span>
+            <h3>🔑 Configuration de l'IA</h3>
+            <div class="api-key-form">
+                <div class="form-group">
+                    <label for="iaApiKey">Clé API IA :</label>
+                    <input type="password" id="iaApiKey" placeholder="sk-..." class="api-key-input">
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="iaAutoCorrection" checked>
+                        Corrections automatiques toutes les heures
+                    </label>
+                </div>
+                
+                <div class="api-key-info">
+                    <p><strong>Fonctionnalités activées :</strong></p>
+                    <ul>
+                        <li>✅ Correction des scores de sentiment</li>
+                        <li>✅ Détection des faux positifs/négatifs</li>
+                        <li>✅ Analyse contextuelle avancée</li>
+                        <li>✅ Vérification externe par scraping</li>
+                        <li>✅ Génération de rapports PDF</li>
+                    </ul>
+                </div>
+                
+                <div class="api-key-actions">
+                    <button onclick="app.saveIAApiKey()" class="save-btn">💾 Enregistrer</button>
+                    <button onclick="app.disableIA()" class="delete">🗑️ Désactiver IA</button>
+                    <button onclick="app.closeIAApiKeyModal()" class="cancel-btn">Annuler</button>
+                </div>
+                
+                <small class="api-key-note">
+                    La clé API est stockée localement dans votre navigateur et utilisée uniquement pour les corrections IA.
+                </small>
             </div>
         </div>
     </div>

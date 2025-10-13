@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const Parser = require('rss-parser');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 const app = express();
 const parser = new Parser({
@@ -17,14 +18,13 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-
-// Servir les fichiers statiques depuis le dossier public
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Fichiers de configuration
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const THEMES_FILE = path.join(__dirname, 'themes.json');
 const SENTIMENT_LEXICON_FILE = path.join(__dirname, 'sentiment-lexicon.json');
+const IA_CORRECTIONS_FILE = path.join(__dirname, 'ia-corrections.json');
 
 // Cache pour les données analysées
 let cachedAnalysis = {
@@ -57,26 +57,34 @@ function initializeConfigFiles() {
     initializeSentimentLexicon();
     console.log('📁 Fichier sentiment-lexicon.json créé');
   }
+  if (!fs.existsSync(IA_CORRECTIONS_FILE)) {
+    fs.writeFileSync(IA_CORRECTIONS_FILE, JSON.stringify({
+      corrections: [],
+      lastCorrection: null,
+      stats: {
+        totalCorrections: 0,
+        accuracyImprovement: 0,
+        falsePositivesCorrected: 0,
+        contextImprovements: 0
+      }
+    }, null, 2));
+    console.log('📁 Fichier ia-corrections.json créé');
+  }
 }
 
 // Initialiser le lexique de sentiment
 function initializeSentimentLexicon() {
   const initialLexicon = {
     words: {
-      // Mots positifs avec pondérations
       'excellent': 2.0, 'exceptionnel': 2.0, 'remarquable': 2.0, 'formidable': 2.0,
       'parfait': 2.0, 'idéal': 2.0, 'sublime': 2.0, 'magnifique': 2.0,
       'génial': 1.8, 'fantastique': 1.8, 'incroyable': 1.8, 'merveilleux': 1.8,
       'superbe': 1.8, 'prodige': 1.8, 'miracle': 1.8, 'phénoménal': 1.8,
-      
       'bon': 1.0, 'bien': 1.0, 'agréable': 1.0, 'positif': 1.0,
       'succès': 1.0, 'réussite': 1.0, 'progrès': 1.0, 'victoire': 1.0,
       'avancée': 1.0, 'amélioration': 1.0, 'innovation': 1.0, 'créatif': 1.0,
-     
       'correct': 0.5, 'acceptable': 0.5, 'satisfaisant': 0.5, 'convenable': 0.5,
       'passable': 0.3, 'moyen': 0.2, 'standard': 0.1,
-
-      // NOUVEAUX MOTS GÉOPOLITIQUES POSITIFS
       'paix': 1.8, 'accord': 1.5, 'traité': 1.5, 'alliance': 1.3,
       'coopération': 1.5, 'dialogue': 1.2, 'négociation': 1.0, 'diplomatie': 1.2,
       'réconciliation': 1.8, 'cessez-le-feu': 1.5, 'résolution': 1.3,
@@ -85,21 +93,15 @@ function initializeSentimentLexicon() {
       'libération': 1.5, 'démocratie': 1.2, 'liberté': 1.5, 'justice': 1.3,
       'développement': 1.0, 'reconstruction': 1.2, 'relance': 1.1,
       'croissance': 1.0, 'reprise': 1.1, 'investissement': 0.8,
-
-      // Mots négatifs avec pondérations
       'catastrophe': -2.0, 'désastre': -2.0, 'horrible': -2.0, 'épouvantable': -2.0,
       'terrible': -2.0, 'abominable': -2.0, 'exécrable': -2.0, 'atroce': -2.0,
       'affreux': -1.8, 'détestable': -1.8, 'ignoble': -1.8, 'infâme': -1.8,
       'odieux': -1.8, 'méprisable': -1.8, 'haïssable': -1.8, 'immonde': -1.8,
-      
       'mauvais': -1.0, 'négatif': -1.0, 'problème': -1.0, 'échec': -1.0,
       'difficile': -1.0, 'compliqué': -1.0, 'crise': -1.0, 'danger': -1.0,
       'risque': -1.0, 'menace': -1.0, 'défaite': -1.0,
-      
       'décevant': -0.7, 'médiocre': -0.7, 'insuffisant': -0.7, 'faible': -0.7,
       'limité': -0.5, 'incomplet': -0.5, 'imparfait': -0.3, 'perfectible': -0.2,
-
-      // NOUVEAUX MOTS GÉOPOLITIQUES NÉGATIFS
       'guerre': -2.0, 'conflit': -1.8, 'violence': -1.8, 'attaque': -1.8,
       'bombardement': -2.0, 'invasion': -2.0, 'occupation': -1.8,
       'tension': -1.3, 'escalade': -1.5, 'hostilité': -1.6, 'antagonisme': -1.4,
@@ -140,52 +142,142 @@ function saveSentimentLexicon(lexicon) {
   fs.writeFileSync(SENTIMENT_LEXICON_FILE, JSON.stringify(lexicon, null, 2));
 }
 
-// Charger la configuration
-function loadConfig() {
-  try {
-    initializeConfigFiles();
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-  } catch (error) {
-    console.error('Erreur chargement config:', error);
-    return { feeds: [] };
+// Gestionnaire des corrections IA
+class IACorrectionManager {
+  constructor() {
+    this.corrections = this.loadCorrections();
+    this.iaApiKey = null;
+    this.lastIACall = null;
+    this.iaInterval = null;
   }
-}
 
-function loadThemes() {
-  try {
-    initializeConfigFiles();
-    const themesData = JSON.parse(fs.readFileSync(THEMES_FILE, 'utf8'));
-    
-    // Assurer que chaque thème a une couleur
-    themesData.themes = themesData.themes.map((theme, index) => {
-      if (!theme.color) {
-        theme.color = DEFAULT_THEME_COLORS[index % DEFAULT_THEME_COLORS.length];
+  loadCorrections() {
+    try {
+      if (fs.existsSync(IA_CORRECTIONS_FILE)) {
+        return JSON.parse(fs.readFileSync(IA_CORRECTIONS_FILE, 'utf8'));
       }
-      return theme;
-    });
+      return {
+        corrections: [],
+        lastCorrection: null,
+        stats: {
+          totalCorrections: 0,
+          accuracyImprovement: 0,
+          falsePositivesCorrected: 0,
+          contextImprovements: 0
+        }
+      };
+    } catch (error) {
+      return {
+        corrections: [],
+        lastCorrection: null,
+        stats: {
+          totalCorrections: 0,
+          accuracyImprovement: 0,
+          falsePositivesCorrected: 0,
+          contextImprovements: 0
+        }
+      };
+    }
+  }
+
+  saveCorrections() {
+    try {
+      fs.writeFileSync(IA_CORRECTIONS_FILE, JSON.stringify(this.corrections, null, 2));
+    } catch (error) {
+      console.error('❌ Erreur sauvegarde corrections IA:', error);
+    }
+  }
+
+  setApiKey(apiKey) {
+    this.iaApiKey = apiKey;
+    if (apiKey) {
+      this.startAutoCorrection();
+    } else {
+      this.stopAutoCorrection();
+    }
+  }
+
+  startAutoCorrection() {
+    // Correction automatique toutes les heures
+    this.iaInterval = setInterval(async () => {
+      await this.performIACorrection();
+    }, 60 * 60 * 1000);
     
-    return themesData;
-  } catch (error) {
-    console.error('Erreur chargement thèmes:', error);
-    return { themes: [] };
+    console.log('🔄 Corrections IA automatiques activées (toutes les heures)');
+    
+    // Première correction immédiate
+    setTimeout(() => this.performIACorrection(), 10000);
+  }
+
+  stopAutoCorrection() {
+    if (this.iaInterval) {
+      clearInterval(this.iaInterval);
+      this.iaInterval = null;
+      console.log('🛑 Corrections IA automatiques désactivées');
+    }
+  }
+
+  async performIACorrection() {
+    if (!this.iaApiKey || !cachedAnalysis.articles.length) {
+      return;
+    }
+
+    try {
+      console.log('🧠 Début de la correction IA...');
+      
+      const articlesToCorrect = cachedAnalysis.articles.slice(0, 20);
+      
+      const response = await axios.post('http://localhost:5051/correct_analysis', {
+        apiKey: this.iaApiKey,
+        articles: articlesToCorrect,
+        currentAnalysis: cachedAnalysis.analysis,
+        themes: loadThemes().themes
+      }, { timeout: 120000 });
+
+      if (response.data.success) {
+        await this.applyIACorrections(response.data.corrections);
+        console.log('✅ Corrections IA appliquées avec succès');
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur correction IA:', error.message);
+    }
+  }
+
+  async applyIACorrections(corrections) {
+    corrections.forEach(correction => {
+      const article = cachedAnalysis.articles.find(a => a.id === correction.articleId);
+      if (article && article.sentiment) {
+        const originalScore = article.sentiment.score;
+        article.sentiment.score = correction.correctedScore;
+        article.sentiment.iaCorrected = true;
+        article.sentiment.correctionConfidence = correction.confidence;
+        article.sentiment.originalScore = originalScore;
+      }
+    });
+
+    const themes = loadThemes();
+    cachedAnalysis.analysis = analyzeArticlesByTheme(cachedAnalysis.articles, themes.themes);
+    
+    this.corrections.corrections.push(...corrections);
+    this.corrections.lastCorrection = new Date().toISOString();
+    this.corrections.stats.totalCorrections += corrections.length;
+    this.saveCorrections();
+  }
+
+  updateSentimentLexicon(correction) {
+    // À implémenter selon les besoins
   }
 }
 
-// Sauvegarder la configuration
-function saveConfig(config) {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-}
-
-function saveThemes(themes) {
-  fs.writeFileSync(THEMES_FILE, JSON.stringify(themes, null, 2));
-}
+// Initialiser le gestionnaire IA
+const iaCorrectionManager = new IACorrectionManager();
 
 // SYSTÈME D'ANALYSE DE SENTIMENT AMÉLIORÉ AVEC DÉTECTION D'IRONIE
 class SelfLearningSentiment {
   constructor() {
     this.lexicon = loadSentimentLexicon();
     
-    // MODIFICATEURS PLUS NUANCÉS
     this.negations = ['pas', 'non', 'ne', 'ni', 'aucun', 'rien', 'jamais', 'sans', 'guère'];
     this.intensifiers = {
       'très': 1.3, 'extrêmement': 1.5, 'vraiment': 1.2, 'particulièrement': 1.3,
@@ -198,7 +290,6 @@ class SelfLearningSentiment {
       'modestement': 0.5, 'faiblement': 0.4
     };
     
-    // MARQUEURS D'IRONIE ET CONTEXTE
     this.ironyMarkers = {
       'bien sûr': -0.8, 'évidemment': -0.7, 'super': -0.6, 'génial': -0.6,
       'formidable': -0.7, 'parfait': -0.6, 'excellent': -0.7, 'magnifique': -0.6,
@@ -214,18 +305,15 @@ class SelfLearningSentiment {
     this.negativeContexts = ['malheureusement', 'hélas', 'dommage', 'déception', 'probleme'];
   }
 
-  // DÉTECTION D'IRONIE AMÉLIORÉE
   detectIrony(text, words, currentIndex) {
     const textLower = text.toLowerCase();
     
-    // Vérifier les expressions ironiques complètes
     for (const [phrase, score] of Object.entries(this.ironyMarkers)) {
       if (textLower.includes(phrase)) {
         const phraseIndex = textLower.indexOf(phrase);
         const contextBefore = textLower.substring(Math.max(0, phraseIndex - 50), phraseIndex);
         const contextAfter = textLower.substring(phraseIndex + phrase.length, phraseIndex + phrase.length + 50);
         
-        // Renforcer l'ironie si contexte négatif autour
         const contextScore = this.analyzeContext(contextBefore + ' ' + contextAfter).score;
         const ironyStrength = score * (1 + Math.abs(contextScore));
         
@@ -238,7 +326,6 @@ class SelfLearningSentiment {
       }
     }
     
-    // Détection des contrastes ironiques
     if (currentIndex > 2) {
       const previousWords = words.slice(Math.max(0, currentIndex - 3), currentIndex);
       const hasContrast = previousWords.some(word => this.contrastMarkers.includes(word));
@@ -262,7 +349,6 @@ class SelfLearningSentiment {
     return { isIronic: false, score: 0, confidence: 0 };
   }
 
-  // ANALYSE DE CONTEXTE LOCAL AMÉLIORÉE
   analyzeLocalContext(words, currentIndex) {
     const contextWindow = 3;
     const start = Math.max(0, currentIndex - contextWindow);
@@ -295,7 +381,6 @@ class SelfLearningSentiment {
     };
   }
 
-  // ANALYSE DE CONTEXTE GLOBAL
   analyzeContext(text) {
     const words = this.preprocessText(text);
     let score = 0;
@@ -315,7 +400,6 @@ class SelfLearningSentiment {
     };
   }
 
-  // ANALYSE DE SENTIMENT POUR UN ENSEMBLE DE MOTS
   analyzeWordsSentiment(words) {
     let totalScore = 0;
     let count = 0;
@@ -331,7 +415,6 @@ class SelfLearningSentiment {
     return count > 0 ? totalScore / count : 0;
   }
 
-  // DÉTECTION D'EXAGÉRATION
   detectExaggeration(words, currentIndex, wordScore) {
     if (Math.abs(wordScore) < 1.5) return { isExaggerated: false, modifier: 1.0 };
     
@@ -349,7 +432,6 @@ class SelfLearningSentiment {
     return { isExaggerated: false, modifier: 1.0 };
   }
 
-  // MÉTHODE PRINCIPALE D'ANALYSE AMÉLIORÉE - VERSION CORRIGÉE
   analyze(text) {
     if (!text || text.length < 10) {
       return { score: 0, sentiment: 'neutral', confidence: 0.05 };
@@ -368,7 +450,6 @@ class SelfLearningSentiment {
       const word = words[i];
       let wordScore = this.getWordScore(word);
       
-      // Ignorer les mots insignifiants (MAIS garder les mots avec score)
       if (Math.abs(wordScore) < 0.1 && !this.isSignificantWord(word)) {
         continue;
       }
@@ -376,27 +457,22 @@ class SelfLearningSentiment {
       let modifier = 1.0;
       let wordConfidence = this.calculateWordConfidence(word);
 
-      // DÉTECTION D'IRONIE
       const ironyDetection = this.detectIrony(text, words, i);
       if (ironyDetection.isIronic) {
         wordScore = ironyDetection.score;
         wordConfidence = ironyDetection.confidence;
-        console.log(`🎭 Ironie détectée: "${ironyDetection.phrase || word}" -> score: ${wordScore}`);
       }
 
-      // ANALYSE DU CONTEXTE LOCAL
       const localContext = this.analyzeLocalContext(words, i);
       modifier *= localContext.modifier;
       wordConfidence *= localContext.confidence;
 
-      // DÉTECTION D'EXAGÉRATION
       const exaggeration = this.detectExaggeration(words, i, wordScore);
       if (exaggeration.isExaggerated) {
         modifier *= exaggeration.modifier;
         wordConfidence *= 0.8;
       }
 
-      // Vérifier les négations (2 mots avant maximum)
       for (let j = Math.max(0, i - 2); j < i; j++) {
         if (this.negations.includes(words[j])) {
           modifier *= -1.2;
@@ -404,7 +480,6 @@ class SelfLearningSentiment {
         }
       }
 
-      // Vérifier les intensificateurs (2 mots avant maximum)
       for (let j = Math.max(0, i - 2); j < i; j++) {
         if (this.intensifiers[words[j]]) {
           modifier *= this.intensifiers[words[j]];
@@ -412,7 +487,6 @@ class SelfLearningSentiment {
         }
       }
 
-      // Vérifier les atténuateurs (2 mots avant maximum)
       for (let j = Math.max(0, i - 2); j < i; j++) {
         if (this.attenuators[words[j]]) {
           modifier *= this.attenuators[words[j]];
@@ -422,7 +496,6 @@ class SelfLearningSentiment {
 
       const finalScore = wordScore * modifier;
       
-      // CORRECTION : TOUJOURS ajouter le mot s'il a un score non nul
       if (wordScore !== 0) {
         totalScore += finalScore;
         significantWords++;
@@ -441,30 +514,22 @@ class SelfLearningSentiment {
       }
     }
 
-    // CORRECTION : Score normalisé même avec peu de mots significatifs
     let normalizedScore = 0;
     if (significantWords > 0) {
       normalizedScore = totalScore / significantWords;
     } else {
-      // Si aucun mot significatif, utiliser le contexte global
       normalizedScore = contextScore.score;
       significantWords = contextScore.wordCount;
     }
     
-    // Ajustement basé sur le contexte global
     const adjustedScore = (normalizedScore * 0.7) + (contextScore.score * 0.3);
     
-    // Confiance moyenne
     const averageConfidence = significantWords > 0 ? 
       Math.max(0.1, Math.min(0.95, confidence / significantWords)) : 0.1;
 
-    // DÉTERMINATION DU SENTIMENT AVEC SEUILS AMÉLIORÉS
     const sentimentResult = this.determineSentiment(adjustedScore, wordScores);
 
-    // Mettre à jour les statistiques d'usage
     this.updateUsageStats(wordScores, adjustedScore);
-
-    console.log(`📊 Analyse: "${text.substring(0, 50)}..." → Score: ${adjustedScore.toFixed(2)}, Mots: ${significantWords}`);
 
     return {
       score: Math.round(adjustedScore * 100) / 100,
@@ -478,11 +543,9 @@ class SelfLearningSentiment {
     };
   }
 
-  // DÉTERMINATION AMÉLIORÉE DU SENTIMENT
   determineSentiment(normalizedScore, wordScores) {
     const emotionalIntensity = this.calculateEmotionalIntensity(wordScores);
     
-    // Seuils ajustés en fonction de l'intensité émotionnelle
     let positiveThreshold = 0.1;
     let negativeThreshold = -0.1;
     
@@ -504,7 +567,6 @@ class SelfLearningSentiment {
     };
   }
 
-  // CALCUL DE L'INTENSITÉ ÉMOTIONNELLE
   calculateEmotionalIntensity(wordScores) {
     if (wordScores.length === 0) return 0;
     
@@ -515,7 +577,6 @@ class SelfLearningSentiment {
     return Math.min(1, intensity / wordScores.length * 2);
   }
 
-  // PRÉTRAITEMENT DU TEXTE
   preprocessText(text) {
     return text.toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -526,12 +587,10 @@ class SelfLearningSentiment {
       .filter(word => word.length > 1);
   }
 
-  // OBTENIR LE SCORE D'UN MOT
   getWordScore(word) {
     return this.lexicon.words[word] || 0;
   }
 
-  // CALCULER LA CONFIANCE POUR UN MOT
   calculateWordConfidence(word) {
     const stats = this.lexicon.usageStats[word];
     if (!stats) return 0.5;
@@ -542,7 +601,6 @@ class SelfLearningSentiment {
     return Math.min(0.95, 0.5 + (usageCount * 0.05) + (consistency * 0.3));
   }
 
-  // VÉRIFIER SI UN MOT EST SIGNIFICATIF
   isSignificantWord(word) {
     return this.negations.includes(word) || 
            this.intensifiers[word] || 
@@ -550,7 +608,6 @@ class SelfLearningSentiment {
            this.contrastMarkers.includes(word);
   }
 
-  // METTRE À JOUR LES STATISTIQUES D'USAGE
   updateUsageStats(wordScores, overallScore) {
     let lexiconUpdated = false;
 
@@ -572,7 +629,6 @@ class SelfLearningSentiment {
         const learnedScore = overallScore * 0.3;
         this.lexicon.words[word] = Math.max(-1, Math.min(1, learnedScore));
         lexiconUpdated = true;
-        console.log(`📚 Nouveau mot appris: "${word}" -> ${this.lexicon.words[word]}`);
       }
 
       if (baseScore !== 0 && stats.usageCount > 10) {
@@ -591,7 +647,6 @@ class SelfLearningSentiment {
     }
   }
 
-  // APPRENTISSAGE MANUEL
   learnFromCorrection(text, expectedScore) {
     const analysis = this.analyze(text);
     const error = expectedScore - analysis.score;
@@ -607,11 +662,9 @@ class SelfLearningSentiment {
       });
       
       saveSentimentLexicon(this.lexicon);
-      console.log(`🎓 Correction appliquée: "${text.substring(0, 50)}..."`);
     }
   }
 
-  // OBTENIR LES STATISTIQUES D'APPRENTISSAGE
   getLearningStats() {
     const words = Object.keys(this.lexicon.words);
     const learnedWords = Object.keys(this.lexicon.usageStats).filter(word => 
@@ -636,6 +689,45 @@ class SelfLearningSentiment {
 
 // Initialiser l'analyseur de sentiment
 const sentimentAnalyzer = new SelfLearningSentiment();
+
+// Charger la configuration
+function loadConfig() {
+  try {
+    initializeConfigFiles();
+    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+  } catch (error) {
+    console.error('Erreur chargement config:', error);
+    return { feeds: [] };
+  }
+}
+
+function loadThemes() {
+  try {
+    initializeConfigFiles();
+    const themesData = JSON.parse(fs.readFileSync(THEMES_FILE, 'utf8'));
+    
+    themesData.themes = themesData.themes.map((theme, index) => {
+      if (!theme.color) {
+        theme.color = DEFAULT_THEME_COLORS[index % DEFAULT_THEME_COLORS.length];
+      }
+      return theme;
+    });
+    
+    return themesData;
+  } catch (error) {
+    console.error('Erreur chargement thèmes:', error);
+    return { themes: [] };
+  }
+}
+
+// Sauvegarder la configuration
+function saveConfig(config) {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+function saveThemes(themes) {
+  fs.writeFileSync(THEMES_FILE, JSON.stringify(themes, null, 2));
+}
 
 // Analyser l'efficacité des mots-clés
 function analyzeKeywordEffectiveness(articles, themes) {
@@ -665,7 +757,6 @@ function analyzeThemeCorrelations(articles, themes) {
   const correlations = {};
   const themeNames = themes.map(theme => theme.name);
   
-  // Initialiser la matrice de corrélation
   themeNames.forEach(theme1 => {
     correlations[theme1] = {};
     themeNames.forEach(theme2 => {
@@ -673,14 +764,12 @@ function analyzeThemeCorrelations(articles, themes) {
     });
   });
   
-  // Compter les co-occurrences
   articles.forEach(article => {
     const content = (article.title + ' ' + article.content).toLowerCase();
     const matchingThemes = themes.filter(theme => 
       theme.keywords.some(keyword => content.includes(keyword.toLowerCase()))
     ).map(theme => theme.name);
     
-    // Mettre à jour les corrélations pour chaque paire de thèmes
     matchingThemes.forEach(theme1 => {
       matchingThemes.forEach(theme2 => {
         if (theme1 !== theme2) {
@@ -707,7 +796,7 @@ function calculateTrends(currentAnalysis, previousAnalysis) {
     if (previousCount > 0) {
       growth = ((currentCount - previousCount) / previousCount * 100);
     } else if (currentCount > 0) {
-      growth = 100; // Nouveau thème apparu
+      growth = 100;
     }
     
     trends[themeName] = {
@@ -727,7 +816,7 @@ function analyzeSeasonality(timeline) {
   const dates = Object.keys(timeline).sort();
   
   dates.forEach(date => {
-    const month = date.substring(0, 7); // Format YYYY-MM
+    const month = date.substring(0, 7);
     if (!monthlyData[month]) {
       monthlyData[month] = {};
     }
@@ -759,7 +848,6 @@ function analyzeArticlesByTheme(articles, themes) {
     }
   };
 
-  // Initialiser les thèmes
   themes.forEach(theme => {
     analysis.themes[theme.name] = {
       count: 0,
@@ -778,7 +866,6 @@ function analyzeArticlesByTheme(articles, themes) {
     };
   });
 
-  // Analyser chaque article
   articles.forEach(article => {
     const content = (article.title + ' ' + (article.content || '')).toLowerCase();
     let articleDate;
@@ -799,12 +886,10 @@ function analyzeArticlesByTheme(articles, themes) {
       });
     }
 
-    // Analyse de sentiment POUR TOUS LES ARTICLES
     const fullText = article.title + ' ' + (article.content || '');
     const sentimentResult = sentimentAnalyzer.analyze(fullText);
     article.sentiment = sentimentResult;
 
-    // Ensuite, filtrer par thèmes
     themes.forEach(theme => {
       const hasKeyword = theme.keywords.some(keyword => 
         content.includes(keyword.toLowerCase())
@@ -815,7 +900,6 @@ function analyzeArticlesByTheme(articles, themes) {
         analysis.themes[theme.name].articles.push(article);
         analysis.timeline[dateKey][theme.name]++;
         
-        // Mettre à jour les statistiques de sentiment PAR THÈME
         const themeSentiment = analysis.themes[theme.name].sentiment;
         themeSentiment[sentimentResult.sentiment]++;
         themeSentiment.articles.push({
@@ -826,7 +910,6 @@ function analyzeArticlesByTheme(articles, themes) {
           content: article.content
         });
         
-        // Compter les matches par mot-clé
         theme.keywords.forEach(keyword => {
           if (content.includes(keyword.toLowerCase())) {
             if (!analysis.themes[theme.name].keywordMatches[keyword]) {
@@ -839,7 +922,6 @@ function analyzeArticlesByTheme(articles, themes) {
     });
   });
 
-  // Calculer les scores moyens de sentiment par thème
   Object.keys(analysis.themes).forEach(themeName => {
     const theme = analysis.themes[themeName];
     const sentiment = theme.sentiment;
@@ -856,12 +938,10 @@ function analyzeArticlesByTheme(articles, themes) {
       sentiment.averageScore = Math.round((totalScore / totalArticles) * 100) / 100;
       sentiment.averageConfidence = Math.round((totalConfidence / totalArticles) * 100) / 100;
       
-      // Utiliser les libellés demandés
       sentiment.positivePercent = Math.round((sentiment.positive / totalArticles) * 100);
       sentiment.negativePercent = Math.round((sentiment.negative / totalArticles) * 100);
       sentiment.neutralPercent = Math.round((sentiment.neutral / totalArticles) * 100);
       
-      // Ajouter les libellés pour l'interface
       sentiment.labels = {
         positive: 'Évolution positive',
         neutral: 'Neutre', 
@@ -870,12 +950,10 @@ function analyzeArticlesByTheme(articles, themes) {
     }
   });
 
-  // Calculer les métriques existantes
   analysis.metrics.keywordEffectiveness = analyzeKeywordEffectiveness(articles, themes);
   analysis.metrics.correlations = analyzeThemeCorrelations(articles, themes);
   analysis.metrics.seasonality = analyzeSeasonality(analysis.timeline);
   
-  // Calculer les tendances
   if (analysisHistory.length > 0) {
     const previousAnalysis = analysisHistory[analysisHistory.length - 1];
     analysis.trends = calculateTrends(analysis, previousAnalysis);
@@ -899,7 +977,6 @@ async function refreshData() {
     const themes = loadThemes();
     const allArticles = [];
 
-    // Si pas de flux configurés, retourner des données vides
     if (config.feeds.length === 0) {
       cachedAnalysis = {
         articles: [],
@@ -950,19 +1027,16 @@ async function refreshData() {
       }
     }
 
-    // Dédoublonner les articles par ID
     const uniqueArticles = allArticles.filter((article, index, self) =>
       index === self.findIndex(a => a.id === article.id)
     );
 
-    // Sauvegarder l'analyse précédente pour les tendances
     if (cachedAnalysis.analysis && cachedAnalysis.analysis.themes) {
       analysisHistory.push({
         ...cachedAnalysis.analysis,
         timestamp: cachedAnalysis.lastUpdate
       });
       
-      // Garder seulement les 10 dernières analyses
       if (analysisHistory.length > 10) {
         analysisHistory = analysisHistory.slice(-10);
       }
@@ -979,9 +1053,6 @@ async function refreshData() {
 
     const learningStats = sentimentAnalyzer.getLearningStats();
     console.log(`✅ Données rafraîchies: ${uniqueArticles.length} articles, ${Object.keys(analysis.themes).length} thèmes analysés`);
-    console.log(`📈 Tendances calculées pour ${Object.keys(analysis.trends).length} thèmes`);
-    console.log(`😊 Analyse de sentiment avec ${learningStats.learnedWords} mots appris`);
-    console.log(`🎭 Détection d'ironie activée`);
     
   } catch (error) {
     console.error('❌ Erreur lors du rafraîchissement:', error);
@@ -994,7 +1065,6 @@ async function refreshData() {
 // Récupérer tous les articles (avec cache)
 app.get('/api/articles', async (req, res) => {
   try {
-    // Si pas de données en cache ou premier démarrage, rafraîchir
     if (!cachedAnalysis.lastUpdate || cachedAnalysis.articles.length === 0) {
       await refreshData();
     }
@@ -1003,7 +1073,8 @@ app.get('/api/articles', async (req, res) => {
       articles: cachedAnalysis.articles,
       analysis: cachedAnalysis.analysis,
       lastUpdate: cachedAnalysis.lastUpdate,
-      isUpdating: cachedAnalysis.isUpdating
+      isUpdating: cachedAnalysis.isUpdating,
+      iaCorrections: iaCorrectionManager.corrections
     });
   } catch (error) {
     console.error('Erreur API articles:', error);
@@ -1042,6 +1113,120 @@ app.post('/api/refresh', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message 
+    });
+  }
+});
+
+// NOUVELLE ROUTE : Configuration de l'API IA
+app.post('/api/ia/config', (req, res) => {
+  try {
+    const { apiKey, enableAutoCorrection } = req.body;
+    
+    if (apiKey) {
+      iaCorrectionManager.setApiKey(apiKey);
+      console.log('🔑 Clé API IA configurée');
+    } else {
+      iaCorrectionManager.setApiKey(null);
+      console.log('🔑 Clé API IA désactivée');
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Configuration IA mise à jour',
+      autoCorrectionEnabled: !!apiKey
+    });
+    
+  } catch (error) {
+    console.error('Erreur configuration IA:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// NOUVELLE ROUTE : Correction IA manuelle
+app.post('/api/ia/correct', async (req, res) => {
+  try {
+    await iaCorrectionManager.performIACorrection();
+    res.json({ 
+      success: true, 
+      message: 'Correction IA effectuée',
+      corrections: iaCorrectionManager.corrections
+    });
+  } catch (error) {
+    console.error('Erreur correction IA manuelle:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// NOUVELLE ROUTE : Analyse IA avancée
+app.post('/api/ia/advanced_analyze', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Clé API requise' });
+    }
+
+    const articlesToAnalyze = cachedAnalysis.articles.slice(0, 8);
+    const themes = loadThemes();
+    
+    const response = await axios.post('http://localhost:5051/analyze_full', {
+      apiKey: apiKey,
+      feed: {
+        source: 'rss_aggregator',
+        articles: articlesToAnalyze,
+        currentAnalysis: cachedAnalysis.analysis,
+        themes: themes.themes
+      }
+    }, { timeout: 180000 }); // 3 minutes timeout
+
+    res.json({
+      success: true,
+      ...response.data
+    });
+    
+  } catch (error) {
+    console.error('Erreur analyse IA avancée:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      details: 'Le service IA avancé nécessite plus de temps de traitement'
+    });
+  }
+});
+
+// NOUVELLE ROUTE : Analyse IA complète avec rapport
+app.post('/api/ia/analyze', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Clé API requise' });
+    }
+
+    const articlesToAnalyze = cachedAnalysis.articles.slice(0, 20);
+    const themes = loadThemes();
+    
+    const response = await axios.post('http://localhost:5051/analyze_full', {
+      apiKey: apiKey,
+      feed: {
+        source: 'rss_aggregator',
+        articles: articlesToAnalyze,
+        currentAnalysis: cachedAnalysis.analysis,
+        themes: themes.themes
+      }
+    }, { timeout: 120000 });
+
+    res.json({
+      success: true,
+      ...response.data
+    });
+    
+  } catch (error) {
+    console.error('Erreur analyse IA complète:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      details: 'Assurez-vous que le microservice Flask est démarré sur le port 5051'
     });
   }
 });
@@ -1226,7 +1411,8 @@ app.get('/api/export/json', async (req, res) => {
         totalArticles: cachedAnalysis.articles.length,
         totalThemes: Object.keys(cachedAnalysis.analysis.themes).length,
         lastUpdate: cachedAnalysis.lastUpdate,
-        learningStats: sentimentAnalyzer.getLearningStats()
+        learningStats: sentimentAnalyzer.getLearningStats(),
+        iaCorrections: iaCorrectionManager.corrections
       },
       configuration: {
         feeds: loadConfig().feeds,
@@ -1259,14 +1445,11 @@ app.get('/api/export/csv', async (req, res) => {
       await refreshData();
     }
 
-    // En-têtes CSV
-    const headers = ['Titre', 'Source', 'Date', 'Lien', 'Thèmes correspondants', 'Score Sentiment', 'Confiance'];
+    const headers = ['Titre', 'Source', 'Date', 'Lien', 'Thèmes correspondants', 'Score Sentiment', 'Confiance', 'Corrigé IA'];
     
-    // Données CSV
     const csvData = cachedAnalysis.articles.map(article => {
       const matchingThemes = [];
       
-      // Trouver les thèmes correspondants pour cet article
       Object.keys(cachedAnalysis.analysis.themes).forEach(themeName => {
         const theme = cachedAnalysis.analysis.themes[themeName];
         if (theme.articles.some(a => a.id === article.id)) {
@@ -1281,16 +1464,16 @@ app.get('/api/export/csv', async (req, res) => {
         `"${(article.link || '').replace(/"/g, '""')}"`,
         `"${matchingThemes.join(', ')}"`,
         article.sentiment?.score || 0,
-        article.sentiment?.confidence || 0
+        article.sentiment?.confidence || 0,
+        article.sentiment?.iaCorrected ? 'Oui' : 'Non'
       ].join(',');
     });
 
-    // Construire le CSV complet
     const csvContent = [headers.join(','), ...csvData].join('\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="rss-export.csv"');
-    res.send('\uFEFF' + csvContent); // BOM pour Excel
+    res.send('\uFEFF' + csvContent);
     
   } catch (error) {
     console.error('Erreur API export CSV:', error);
@@ -1317,29 +1500,24 @@ app.listen(PORT, async () => {
   console.log(`📁 Dossier public: ${path.join(__dirname, 'public')}`);
   console.log(`📁 Dossier courant: ${__dirname}`);
   
-  // Initialiser les fichiers de configuration
   initializeConfigFiles();
   
-  // Premier rafraîchissement au démarrage
   console.log('🔄 Premier rafraîchissement des données...');
   await refreshData();
   
-  // Rafraîchissement automatique toutes les 30 secondes
   setInterval(async () => {
     await refreshData();
   }, 30000);
   
   console.log('🔄 Rafraîchissement automatique activé (30 secondes)');
+  console.log('🧠 Module IA intégré avec corrections automatiques (toutes les heures)');
   console.log('📤 Export disponible: /api/export/json et /api/export/csv');
   console.log('🎨 Personnalisation des couleurs par thème activée');
   console.log('📈 Analyse avancée des tendances activée');
   console.log('🧠 Analyse de sentiment avec apprentissage automatique activée');
   console.log('🎭 Détection d\'ironie et de contexte activée');
-  console.log('📚 Routes d\'apprentissage: /api/sentiment/learn et /api/sentiment/stats');
-  console.log('✅ CORRECTIONS APPLIQUÉES:');
-  console.log('   - Structure de dossiers corrigée (dossier public)');
-  console.log('   - Libellés de sentiment: "Évolution positive/Neutre/Évolution Négative"');
-  console.log('   - Détection d\'ironie et de sarcasme');
-  console.log('   - Analyse contextuelle améliorée');
-  console.log('   - Gestion des contrastes et oppositions');
+  console.log('🔧 Routes IA disponibles:');
+  console.log('   - POST /api/ia/config → Configuration clé API');
+  console.log('   - POST /api/ia/correct → Correction manuelle');
+  console.log('   - POST /api/ia/analyze → Analyse complète + rapport');
 });
