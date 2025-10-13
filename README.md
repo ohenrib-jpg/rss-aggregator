@@ -30,3 +30,19 @@ Système complet d'analyse de flux RSS avec intégration IA pour la correction d
 **Backend Node.js:**
 ```bash
 npm install
+
+MAJ du 12/10/2025
+=================
+Dans une autre CMD :
+**Backend IA**
+start_ia_service.sh (environnement iOS/Linux)
+
+ATTENTION!!!!! LES FICHIERS SONT CONFIGURES POUR POINTER VERS MON SERVEUR PUBLIC DE TEST SUR RENDER!! MODIFIER LES ROUTES DE APP.PY ET DE SERVER.JS (CHERCHER DANS LE CODE LES ROUTES POUR LE MODULE IA, ET REMPLACEZ PAR VOTRE LOCALHOST:5050)
+
+Ceci est un module "Standalone" de test pour une suite logiciel Open Source en cours de forgeage...
+
+Pour toute question ou suggestion:
+ohenri.b@gmail.com
+
+(clavier QWERTY=>bon pour programmer, une plaie pour le francais...)
+
