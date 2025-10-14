@@ -1,0 +1,10 @@
+flask
+requests
+beautifulsoup4
+reportlab
+gunicorn
+matplotlib
+pandas>=1.5.0
+pyarrow>=11.0.0
+rapidfuzz>=2.0.0
+python-snappy>=0.6.0
