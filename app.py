@@ -9,18 +9,16 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-import matplotlib
-matplotlib.use('Agg')  # ✅ Important pour Render (pas d'interface graphique)
 
 app = Flask(__name__)
-CORS(app)  # ✅ Activation CORS pour Render
+CORS(app)
 
 # ✅ Configuration Render
 PORT = int(os.environ.get('PORT', 5051))
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
-# ✅ Fonctions de compatibilité (pour éviter les erreurs d'import manquants)
+# ✅ Fonctions de compatibilité
 def ensure_deep_analysis_consistency(analysis, article):
     """Assure la cohérence de l'analyse"""
     if not analysis:
@@ -36,7 +34,6 @@ def ensure_deep_analysis_consistency(analysis, article):
             'recommandations_globales': ['Analyse de base']
         }
     
-    # S'assurer que tous les champs requis existent
     analysis.setdefault('score_original', article.get('sentiment', {}).get('score', 0))
     analysis.setdefault('score_corrected', analysis['score_original'])
     analysis.setdefault('confidence', 0.5)
@@ -50,13 +47,11 @@ def ensure_deep_analysis_consistency(analysis, article):
 
 def compute_confidence_from_features(analysis):
     """Calcule la confiance basée sur les features d'analyse"""
-    confidence = 0.5  # Base
+    confidence = 0.5
     
-    # Bonus pour la recherche web
     if analysis.get('recherche_web'):
         confidence += 0.2
     
-    # Bonus pour l'analyse contextuelle détaillée
     if analysis.get('analyse_contextuelle'):
         context = analysis['analyse_contextuelle']
         if context.get('urgence', 0) > 0:
@@ -64,7 +59,6 @@ def compute_confidence_from_features(analysis):
         if context.get('impact', 0) > 0:
             confidence += 0.1
     
-    # Bonus pour la crédibilité
     biases = analysis.get('analyse_biases', {})
     credibility = biases.get('score_credibilite', 0.5)
     confidence += (credibility - 0.5) * 0.3
@@ -76,7 +70,7 @@ def clamp01(value):
     return max(0, min(1, value))
 
 def save_analysis_batch(analyses, api_key, themes):
-    """Sauvegarde un lot d'analyses (simulé)"""
+    """Sauvegarde un lot d'analyses"""
     try:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"analysis_batch_{timestamp}.json"
@@ -96,22 +90,6 @@ def save_analysis_batch(analyses, api_key, themes):
     except Exception:
         return False
 
-def load_recent_analyses():
-    """Charge les analyses récentes (simulé)"""
-    return []
-
-def find_corroborations(article_title, article_content, themes, api_key):
-    """Recherche des corroborations (simulé)"""
-    # Simulation de corroborations basiques
-    return [
-        {
-            'source': 'Source simulée',
-            'confidence': 0.7,
-            'sentiment_score': 0.1,
-            'summary': 'Corroboration simulée pour test'
-        }
-    ]
-
 # Service de recherche web avancé
 class AdvancedWebResearch:
     def __init__(self):
@@ -123,7 +101,6 @@ class AdvancedWebResearch:
     def search_contextual_info(self, article_title, themes):
         """Recherche des informations contextuelles sur le web"""
         try:
-            # Recherche simulée pour l'instant
             search_terms = self.build_search_query(article_title, themes)
             
             contextual_data = []
@@ -284,28 +261,13 @@ class AdvancedIAAnalyzer:
                 else:
                     theme_names = [str(themes)]
             
-            # 1. Analyse contextuelle avancée
             contextual_analysis = self.analyze_advanced_context(article, theme_names)
-            
-            # 2. Recherche web pour vérification
-            web_research = self.web_research.search_contextual_info(
-                article.get('title', ''), 
-                theme_names
-            )
-            
-            # 3. Analyse thématique spécialisée
+            web_research = self.web_research.search_contextual_info(article.get('title', ''), theme_names)
             thematic_analysis = self.analyze_thematic_context(article, theme_names)
-            
-            # 4. Détection de biais et vérification
             bias_analysis = self.analyze_biases(article, contextual_analysis, web_research)
             
-            # 5. Synthèse et recommandations
             final_analysis = self.synthesize_analysis(
-                article, 
-                contextual_analysis, 
-                web_research, 
-                thematic_analysis, 
-                bias_analysis
+                article, contextual_analysis, web_research, thematic_analysis, bias_analysis
             )
             
             return final_analysis
@@ -922,10 +884,9 @@ def analyze_full():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-###  matplotlib fait tout planter, trop lourd :
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
-    """Génère un rapport PDF détaillé (sans matplotlib, non mais)"""
+    """Génère un rapport PDF détaillé (sans matplotlib)"""
     try:
         data = request.json or {}
         analyses = data.get('analyses', [])
@@ -1012,7 +973,7 @@ def generate_report():
             recommendations = analysis.get('recommandations_globales', [])
             if recommendations:
                 story.append(Paragraph("Recommandations:", styles['Normal']))
-                for rec in recommendations[:3]:  # Limiter à 3 recommandations
+                for rec in recommendations[:3]:
                     story.append(Paragraph(f"• {rec}", styles['Normal']))
             
             story.append(Spacer(1, 15))
@@ -1039,4 +1000,4 @@ def download_report(filename):
 if __name__ == '__main__':
     print(f"🚀 Démarrage du service IA sur le port {PORT}")
     print(f"📁 Dossier des rapports: {REPORTS_DIR}")
-    app.run(host='0.0.0.0', port=PORT, debug=False)  # ✅ debug=False pour la production
+    app.run(host='0.0.0.0', port=PORT, debug=False)
