@@ -488,6 +488,59 @@ async function refreshData() {
   }
 }
 
+// Dans la classe PostgreSQLManager du server.js
+async saveTheme(themeData) {
+  const { name, keywords, color, description } = themeData;
+  
+  try {
+    // Essayer d'abord avec ON CONFLICT
+    const result = await pool.query(`
+      INSERT INTO themes (name, keywords, color, description)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (name) 
+      DO UPDATE SET 
+        keywords = EXCLUDED.keywords,
+        color = EXCLUDED.color,
+        description = EXCLUDED.description
+      RETURNING *
+    `, [name, keywords, color || '#6366f1', description]);
+
+    return result.rows[0];
+  } catch (error) {
+    if (error.code === '42P10') { // code d'erreur pour contrainte manquante
+      console.log('⚠️  Contrainte UNIQUE manquante, tentative sans ON CONFLICT...');
+      
+      // Fallback: vérifier si le thème existe déjà
+      const existing = await pool.query(
+        'SELECT * FROM themes WHERE name = $1', 
+        [name]
+      );
+      
+      if (existing.rows.length > 0) {
+        // Mettre à jour le thème existant
+        const result = await pool.query(`
+          UPDATE themes 
+          SET keywords = $2, color = $3, description = $4 
+          WHERE name = $1 
+          RETURNING *
+        `, [name, keywords, color || '#6366f1', description]);
+        return result.rows[0];
+      } else {
+        // Créer un nouveau thème
+        const result = await pool.query(`
+          INSERT INTO themes (name, keywords, color, description)
+          VALUES ($1, $2, $3, $4)
+          RETURNING *
+        `, [name, keywords, color || '#6366f1', description]);
+        return result.rows[0];
+      }
+    } else {
+      console.error('❌ Erreur sauvegarde thème:', error);
+      throw error;
+    }
+  }
+}
+
 // ✅ ROUTES API
 
 // Middleware pour initialisation base de données
