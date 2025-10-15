@@ -4,7 +4,7 @@ const app = {
     config: {
         apiUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
             ? 'http://localhost:3000' 
-            : 'https://votre-app.render.com',
+            : 'https://rss-aggregator-l7qj.onrender.com',
         refreshInterval: 300000, // 5 minutes
         autoRefresh: true
     },
@@ -24,114 +24,73 @@ const app = {
         this.setupEventListeners();
         this.initializeCharts();
         this.startAutoRefresh();
-        
-        // Afficher le message de bienvenue
         this.showMessage('Application chargée avec succès!', 'success');
     },
     
-    // Chargement des données
+    // Chargement des données depuis l'API
     loadData: function() {
         this.loadThemes();
         this.loadFeeds();
         this.loadArticles();
-        this.loadStats();
     },
     
-    // Chargement des thèmes
+    // Chargement des thèmes depuis PostgreSQL
     loadThemes: function() {
-        const savedThemes = localStorage.getItem('themes');
-        if (savedThemes) {
-            this.themes = JSON.parse(savedThemes);
-            console.log(`📁 ${this.themes.length} thèmes chargés`);
-        } else {
-            // Thèmes par défaut
-            this.themes = [
-                { 
-                    name: 'Technologie', 
-                    keywords: ['ai', 'intelligence artificielle', 'chatgpt', 'robot', 'programmation', 'code', 'software', 'hardware', 'digital', 'innovation'],
-                    color: '#6366f1'
-                },
-                { 
-                    name: 'Science', 
-                    keywords: ['recherche', 'étude', 'scientifique', 'découverte', 'espace', 'nasa', 'physique', 'biologie', 'médecine'],
-                    color: '#10b981'
-                },
-                { 
-                    name: 'Économie', 
-                    keywords: ['économie', 'finance', 'bourse', 'investissement', 'crypto', 'bitcoin', 'market', 'trading', 'banque'],
-                    color: '#f59e0b'
-                },
-                { 
-                    name: 'Politique', 
-                    keywords: ['politique', 'gouvernement', 'élection', 'président', 'ministre', 'parlement', 'loi', 'réforme'],
-                    color: '#ef4444'
-                },
-                { 
-                    name: 'Environnement', 
-                    keywords: ['climat', 'écologie', 'environnement', 'réchauffement', 'pollution', 'durable', 'énergie', 'renouvelable'],
-                    color: '#84cc16'
+        fetch(`${this.config.apiUrl}/api/themes`)
+            .then(response => response.json())
+            .then(themes => {
+                this.themes = themes.map(theme => ({
+                    name: theme.name,
+                    keywords: theme.keywords,
+                    color: theme.color || '#6366f1',
+                    description: theme.description || ''
+                }));
+                console.log(`📚 ${this.themes.length} thèmes chargés depuis PostgreSQL`);
+                this.updateThemesList();
+                if (this.chartManager) {
+                    this.chartManager.updateThemeSelector();
                 }
-            ];
-            this.saveThemes();
-        }
-    },
-    
-    // Sauvegarde des thèmes
-    saveThemes: function() {
-        localStorage.setItem('themes', JSON.stringify(this.themes));
+            })
+            .catch(error => {
+                console.error('❌ Erreur chargement thèmes:', error);
+                this.showMessage('Erreur chargement thèmes', 'error');
+            });
     },
     
     // Chargement des flux RSS
     loadFeeds: function() {
-        const savedFeeds = localStorage.getItem('feeds');
-        if (savedFeeds) {
-            this.feeds = JSON.parse(savedFeeds);
-            console.log(`📰 ${this.feeds.length} flux chargés`);
-        } else {
-            // Flux par défaut
-            this.feeds = [
-                'https://www.lemonde.fr/rss/une.xml',
-                'https://www.liberation.fr/arc/outboundfeeds/rss-all/collection/accueil-une/',
-                'https://www.lefigaro.fr/rss/figaro_actualites.xml',
-                'https://feeds.bbci.co.uk/news/world/rss.xml',
-                'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'
-            ];
-            this.saveFeeds();
-        }
+        fetch(`${this.config.apiUrl}/api/feeds`)
+            .then(response => response.json())
+            .then(feeds => {
+                this.feeds = feeds;
+                console.log(`📰 ${this.feeds.length} flux RSS chargés`);
+                this.updateFeedsList();
+            })
+            .catch(error => {
+                console.error('❌ Erreur chargement flux:', error);
+                this.showMessage('Erreur chargement flux RSS', 'error');
+            });
     },
     
-    // Sauvegarde des flux
-    saveFeeds: function() {
-        localStorage.setItem('feeds', JSON.stringify(this.feeds));
-    },
-    
-    // Chargement des articles
+    // Chargement des articles depuis PostgreSQL
     loadArticles: function() {
-        const savedArticles = localStorage.getItem('articles');
-        if (savedArticles) {
-            this.articles = JSON.parse(savedArticles);
-            console.log(`📄 ${this.articles.length} articles chargés`);
-            this.updateLastUpdate();
-        }
-    },
-    
-    // Sauvegarde des articles
-    saveArticles: function() {
-        localStorage.setItem('articles', JSON.stringify(this.articles));
-        this.updateLastUpdate();
-    },
-    
-    // Chargement des statistiques
-    loadStats: function() {
-        const savedStats = localStorage.getItem('stats');
-        if (savedStats) {
-            this.stats = JSON.parse(savedStats);
-        }
-    },
-    
-    // Sauvegarde des statistiques
-    saveStats: function() {
-        localStorage.setItem('stats', JSON.stringify(this.stats));
+        fetch(`${this.config.apiUrl}/api/articles`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    this.articles = data.articles;
+                    this.stats = {
+                        totalArticles: data.totalArticles,
+                        lastUpdate: data.lastUpdate
+                    };
+                    console.log(`📄 ${this.articles.length} articles chargés depuis PostgreSQL`);
+                    this.updateDashboard();
+                }
+            })
+            .catch(error => {
+                console.error('❌ Erreur chargement articles:', error);
+                this.showMessage('Erreur chargement articles', 'error');
+            });
     },
     
     // Initialisation des graphiques
@@ -139,8 +98,8 @@ const app = {
         console.log("📊 Initialisation des graphiques avancés...");
         
         // Initialiser le gestionnaire de graphiques
-        if (typeof initializeChartManager === 'function') {
-            this.chartManager = initializeChartManager(this);
+        if (typeof ChartManager !== 'undefined') {
+            this.chartManager = new ChartManager(this);
             console.log("✅ Gestionnaire de graphiques initialisé");
         }
         
@@ -155,11 +114,11 @@ const app = {
         
         const themeData = this.getThemeDistribution();
         
-        if (this.themeChart) {
-            this.themeChart.destroy();
+        if (this.charts.themeChart) {
+            this.charts.themeChart.destroy();
         }
         
-        this.themeChart = new Chart(ctx, {
+        this.charts.themeChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: themeData.labels,
@@ -180,9 +139,7 @@ const app = {
                         labels: {
                             padding: 15,
                             usePointStyle: true,
-                            font: {
-                                size: 11
-                            }
+                            font: { size: 11 }
                         }
                     },
                     tooltip: {
@@ -202,19 +159,18 @@ const app = {
         });
     },
     
-    // Version améliorée du graphique d'évolution temporelle
+    // Graphique d'évolution temporelle
     createTimelineChart: function() {
         const ctx = document.getElementById('timelineChart');
         if (!ctx) return;
         
-        // Utiliser les données préparées par le ChartManager
         const chartData = this.chartManager ? this.chartManager.prepareChartData() : this.prepareBasicTimelineData();
         
-        if (this.timelineChart) {
-            this.timelineChart.destroy();
+        if (this.charts.timelineChart) {
+            this.charts.timelineChart.destroy();
         }
         
-        this.timelineChart = new Chart(ctx, {
+        this.charts.timelineChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: chartData.dates,
@@ -248,17 +204,7 @@ const app = {
                             usePointStyle: true,
                             boxWidth: 12,
                             padding: 15,
-                            font: {
-                                size: 11
-                            }
-                        },
-                        onClick: function(e, legendItem, legend) {
-                            const index = legendItem.datasetIndex;
-                            const chart = legend.chart;
-                            const meta = chart.getDatasetMeta(index);
-                            
-                            meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
-                            chart.update();
+                            font: { size: 11 }
                         }
                     },
                     tooltip: {
@@ -274,24 +220,6 @@ const app = {
                                 const value = context.parsed.y;
                                 return `${label}: ${value} article${value !== 1 ? 's' : ''}`;
                             }
-                        }
-                    },
-                    zoom: {
-                        zoom: {
-                            wheel: {
-                                enabled: true,
-                            },
-                            pinch: {
-                                enabled: true
-                            },
-                            mode: 'x',
-                        },
-                        pan: {
-                            enabled: true,
-                            mode: 'x',
-                        },
-                        limits: {
-                            x: { min: 'original', max: 'original' }
                         }
                     }
                 },
@@ -312,7 +240,7 @@ const app = {
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: this.getYAxisLabel(),
+                            text: "Nombre d'articles",
                             color: '#64748b',
                             font: { size: 12 }
                         },
@@ -328,15 +256,6 @@ const app = {
                             color: 'rgba(0, 0, 0, 0.1)'
                         }
                     }
-                },
-                elements: {
-                    line: {
-                        borderWidth: 2
-                    },
-                    point: {
-                        radius: 4,
-                        hoverRadius: 8
-                    }
                 }
             }
         });
@@ -344,13 +263,13 @@ const app = {
     
     // Mettre à jour le graphique avec de nouvelles données
     updateTimelineChart: function(chartData) {
-        if (!this.timelineChart) {
+        if (!this.charts.timelineChart) {
             this.createTimelineChart();
             return;
         }
         
-        this.timelineChart.data.labels = chartData.dates;
-        this.timelineChart.data.datasets = chartData.themes.map(theme => ({
+        this.charts.timelineChart.data.labels = chartData.dates;
+        this.charts.timelineChart.data.datasets = chartData.themes.map(theme => ({
             label: theme.name,
             data: theme.values,
             borderColor: theme.color,
@@ -365,10 +284,8 @@ const app = {
             pointBorderWidth: 2
         }));
         
-        this.timelineChart.options.scales.x.title.text = this.getTimeScaleLabel();
-        this.timelineChart.options.scales.y.title.text = this.getYAxisLabel();
-        
-        this.timelineChart.update('none');
+        this.charts.timelineChart.options.scales.x.title.text = this.getTimeScaleLabel();
+        this.charts.timelineChart.update('none');
     },
     
     // Méthodes utilitaires pour les graphiques
@@ -384,17 +301,6 @@ const app = {
         return scales[this.chartManager.timeScale] || 'Période';
     },
     
-    getYAxisLabel: function() {
-        if (!this.chartManager) return "Nombre d'articles";
-        
-        const aggregations = {
-            'count': "Nombre d'articles",
-            'percentage': 'Pourcentage (%)',
-            'movingAverage': 'Moyenne mobile'
-        };
-        return aggregations[this.chartManager.aggregation] || "Nombre d'articles";
-    },
-    
     hexToRgba: function(hex, alpha) {
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
@@ -408,7 +314,6 @@ const app = {
             return { dates: [], themes: [] };
         }
         
-        // Regrouper par date (simplifié)
         const dateGroups = {};
         this.articles.forEach(article => {
             const date = new Date(article.pubDate || article.date).toISOString().split('T')[0];
@@ -420,7 +325,7 @@ const app = {
         });
         
         const dates = Object.keys(dateGroups).sort();
-        const themes = this.getAvailableThemes().slice(0, 8); // Limiter à 8 thèmes
+        const themes = this.themes.slice(0, 8);
         
         return {
             dates: dates,
@@ -430,14 +335,6 @@ const app = {
                 values: dates.map(date => dateGroups[date]?.themes[theme.name] || 0)
             }))
         };
-    },
-    
-    getAvailableThemes: function() {
-        if (!this.themes) return [];
-        return this.themes.map(theme => ({
-            name: theme.name,
-            color: theme.color || '#6366f1'
-        }));
     },
     
     // Distribution des thèmes pour le graphique circulaire
@@ -468,37 +365,7 @@ const app = {
     
     // Configuration des écouteurs d'événements
     setupEventListeners: function() {
-        // Écouteur pour la sélection de couleurs
-        document.querySelectorAll('.color-preset').forEach(preset => {
-            preset.addEventListener('click', function() {
-                const color = this.getAttribute('data-color');
-                document.getElementById('themeColor').value = color;
-            });
-        });
-        
-        // Écouteur pour le slider de score
-        const scoreSlider = document.getElementById('expectedScore');
-        if (scoreSlider) {
-            scoreSlider.addEventListener('input', function() {
-                document.getElementById('scoreValue').textContent = parseFloat(this.value).toFixed(2);
-            });
-        }
-        
-        // Fermeture des modals
-        document.querySelectorAll('.modal .close').forEach(closeBtn => {
-            closeBtn.addEventListener('click', function() {
-                this.closest('.modal').style.display = 'none';
-            });
-        });
-        
-        // Fermeture des modals en cliquant à l'extérieur
-        window.addEventListener('click', function(event) {
-            document.querySelectorAll('.modal').forEach(modal => {
-                if (event.target === modal) {
-                    modal.style.display = 'none';
-                }
-            });
-        });
+        // Les écouteurs sont gérés par onclick dans le HTML
     },
     
     // Actualisation manuelle
@@ -512,173 +379,41 @@ const app = {
             refreshBtn.innerHTML = '⏳ Chargement...';
         }
         
-        // Simuler le chargement (remplacer par un appel API réel)
-        setTimeout(() => {
-            this.refreshData();
-            if (refreshBtn) {
-                refreshBtn.disabled = false;
-                refreshBtn.innerHTML = '🔄 Générer';
-            }
-        }, 1500);
-    },
-    
-    // Actualisation des données
-    refreshData: function() {
-        console.log('📥 Actualisation des données...');
-        
-        // Simulation de nouvelles données
-        const newArticles = this.generateSampleArticles(5);
-        this.articles = [...newArticles, ...this.articles].slice(0, 200); // Garder les 200 derniers
-        
-        this.analyzeArticles();
-        this.updateDashboard();
-        this.saveArticles();
-        
-        // Actualiser les graphiques via le ChartManager
-        if (this.chartManager) {
-            this.chartManager.refreshChart();
-        }
-        
-        this.showMessage('Données actualisées avec succès!', 'success');
-        return true;
-    },
-    
-    // Génération d'articles d'exemple
-    generateSampleArticles: function(count = 5) {
-        const sampleTitles = [
-            "Nouvelle avancée dans l'IA générative",
-            "Découverte scientifique majeure en astrophysique",
-            "Les marchés financiers en forte croissance",
-            "Accord international sur le climat",
-            "Innovation technologique révolutionnaire",
-            "Étude sur les énergies renouvelables",
-            "Réforme politique importante annoncée",
-            "Progrès en médecine et santé publique"
-        ];
-        
-        const articles = [];
-        const now = new Date();
-        
-        for (let i = 0; i < count; i++) {
-            const title = sampleTitles[Math.floor(Math.random() * sampleTitles.length)];
-            const daysAgo = Math.floor(Math.random() * 30);
-            const pubDate = new Date(now);
-            pubDate.setDate(now.getDate() - daysAgo);
-            
-            articles.push({
-                id: 'sample-' + Date.now() + '-' + i,
-                title: title,
-                link: '#',
-                pubDate: pubDate.toISOString(),
-                content: `Article de démonstration: ${title}`,
-                themes: this.detectThemes(title),
-                sentiment: (Math.random() * 2 - 1).toFixed(2) // Score entre -1 et 1
-            });
-        }
-        
-        return articles;
-    },
-    
-    // Analyse des articles pour détecter les thèmes
-    analyzeArticles: function() {
-        console.log('🔍 Analyse des articles...');
-        
-        this.articles.forEach(article => {
-            if (!article.themes) {
-                article.themes = this.detectThemes(article.title + ' ' + (article.content || ''));
-            }
-            
-            if (!article.sentiment) {
-                article.sentiment = this.analyzeSentiment(article.title + ' ' + (article.content || ''));
-            }
-        });
-        
-        this.updateStats();
-    },
-    
-    // Détection des thèmes
-    detectThemes: function(text) {
-        if (!text) return [];
-        
-        const themesFound = [];
-        const lowerText = text.toLowerCase();
-        
-        this.themes.forEach(theme => {
-            theme.keywords.forEach(keyword => {
-                if (lowerText.includes(keyword.toLowerCase())) {
-                    if (!themesFound.includes(theme.name)) {
-                        themesFound.push(theme.name);
-                    }
+        fetch(`${this.config.apiUrl}/api/refresh`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    this.showMessage('Données actualisées!', 'success');
+                    this.loadArticles();
+                }
+            })
+            .catch(error => {
+                this.showMessage('Erreur actualisation', 'error');
+                console.error('❌ Erreur:', error);
+            })
+            .finally(() => {
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 Actualiser';
                 }
             });
-        });
-        
-        return themesFound;
-    },
-    
-    // Analyse de sentiment basique
-    analyzeSentiment: function(text) {
-        if (!text) return 0;
-        
-        const positiveWords = ['bon', 'excellent', 'super', 'positif', 'réussite', 'succès', 'innovation', 'progrès', 'avancée', 'meilleur'];
-        const negativeWords = ['mauvais', 'négatif', 'échec', 'problème', 'crise', 'difficile', 'inquiétant', 'danger', 'risque', 'chute'];
-        
-        let score = 0;
-        const words = text.toLowerCase().split(/\s+/);
-        
-        words.forEach(word => {
-            if (positiveWords.includes(word)) score += 0.1;
-            if (negativeWords.includes(word)) score -= 0.1;
-        });
-        
-        // Limiter entre -1 et 1
-        return Math.max(-1, Math.min(1, score));
-    },
-    
-    // Mise à jour des statistiques
-    updateStats: function() {
-        this.stats = {
-            totalArticles: this.articles.length,
-            totalThemes: this.themes.length,
-            totalFeeds: this.feeds.length,
-            lastUpdate: new Date().toISOString(),
-            articlesByTheme: this.getArticlesByTheme(),
-            sentimentDistribution: this.getSentimentDistribution()
-        };
-        
-        this.saveStats();
-        this.updateStatsGrid();
-    },
-    
-    // Distribution des articles par thème
-    getArticlesByTheme: function() {
-        const distribution = {};
-        this.themes.forEach(theme => {
-            distribution[theme.name] = this.articles.filter(article => 
-                article.themes?.includes(theme.name)
-            ).length;
-        });
-        return distribution;
-    },
-    
-    // Distribution des sentiments
-    getSentimentDistribution: function() {
-        const sentiments = this.articles.map(article => parseFloat(article.sentiment) || 0);
-        return {
-            positive: sentiments.filter(s => s > 0.1).length,
-            neutral: sentiments.filter(s => s >= -0.1 && s <= 0.1).length,
-            negative: sentiments.filter(s => s < -0.1).length
-        };
     },
     
     // Mise à jour du tableau de bord
     updateDashboard: function() {
         this.updateStatsGrid();
-        this.updateThemeChart();
-        this.updateTimelineChart(this.prepareBasicTimelineData());
         this.updateArticlesList();
         this.updateFeedsList();
         this.updateThemesList();
+        
+        // Actualiser les graphiques
+        if (this.charts.themeChart) {
+            this.createThemeChart();
+        }
+        
+        if (this.chartManager) {
+            this.chartManager.refreshChart();
+        }
     },
     
     // Mise à jour de la grille de statistiques
@@ -714,17 +449,32 @@ const app = {
                 <div class="stat-label">Assignations de thèmes</div>
             </div>
         `;
+        
+        const lastUpdate = document.getElementById('lastUpdate');
+        if (lastUpdate) {
+            lastUpdate.textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
+        }
     },
     
-    // Mise à jour du graphique des thèmes
-    updateThemeChart: function() {
-        if (this.themeChart) {
-            const themeData = this.getThemeDistribution();
-            this.themeChart.data.labels = themeData.labels;
-            this.themeChart.data.datasets[0].data = themeData.values;
-            this.themeChart.data.datasets[0].backgroundColor = themeData.colors;
-            this.themeChart.update();
-        }
+    // Distribution des sentiments
+    getSentimentDistribution: function() {
+        const sentiments = this.articles.map(article => parseFloat(article.sentiment?.score) || 0);
+        return {
+            positive: sentiments.filter(s => s > 0.1).length,
+            neutral: sentiments.filter(s => s >= -0.1 && s <= 0.1).length,
+            negative: sentiments.filter(s => s < -0.1).length
+        };
+    },
+    
+    // Distribution des articles par thème
+    getArticlesByTheme: function() {
+        const distribution = {};
+        this.themes.forEach(theme => {
+            distribution[theme.name] = this.articles.filter(article => 
+                article.themes?.includes(theme.name)
+            ).length;
+        });
+        return distribution;
     },
     
     // Mise à jour de la liste des articles
@@ -732,7 +482,7 @@ const app = {
         const articlesList = document.getElementById('articlesList');
         if (!articlesList) return;
         
-        const recentArticles = this.articles.slice(0, 20); // 20 derniers articles
+        const recentArticles = this.articles.slice(0, 20);
         
         if (recentArticles.length === 0) {
             articlesList.innerHTML = '<div class="loading">Aucun article disponible</div>';
@@ -740,7 +490,7 @@ const app = {
         }
         
         articlesList.innerHTML = recentArticles.map(article => {
-            const sentimentClass = this.getSentimentClass(article.sentiment);
+            const sentimentClass = this.getSentimentClass(article.sentiment?.score);
             const sentimentBadge = this.getSentimentBadge(article.sentiment);
             const themesBadges = article.themes?.map(theme => 
                 `<span class="theme-tag">${theme}</span>`
@@ -753,7 +503,7 @@ const app = {
                         <small>📅 ${new Date(article.pubDate).toLocaleDateString()}</small>
                         ${sentimentBadge}
                     </div>
-                    <div class="article-themes">
+                    <div class="theme-tags">
                         ${themesBadges}
                     </div>
                 </div>
@@ -804,16 +554,16 @@ const app = {
     },
     
     // Gestion des classes de sentiment
-    getSentimentClass: function(sentiment) {
-        const score = parseFloat(sentiment);
-        if (score > 0.1) return 'positive';
-        if (score < -0.1) return 'negative';
+    getSentimentClass: function(score) {
+        const s = parseFloat(score) || 0;
+        if (s > 0.1) return 'positive';
+        if (s < -0.1) return 'negative';
         return 'neutral';
     },
     
     // Génération du badge de sentiment
     getSentimentBadge: function(sentiment) {
-        const score = parseFloat(sentiment);
+        const score = parseFloat(sentiment?.score) || 0;
         let text, emoji;
         
         if (score > 0.1) {
@@ -827,7 +577,7 @@ const app = {
             emoji = '😐';
         }
         
-        return `<span class="sentiment-badge ${this.getSentimentClass(sentiment)}">${emoji} ${text} (${score.toFixed(2)})</span>`;
+        return `<span class="sentiment-badge ${this.getSentimentClass(score)}">${emoji} ${text} (${score.toFixed(2)})</span>`;
     },
     
     // Ajout d'un flux RSS
@@ -843,19 +593,43 @@ const app = {
             return;
         }
         
-        this.feeds.push(feedUrl);
-        this.saveFeeds();
-        this.updateFeedsList();
-        document.getElementById('feedUrl').value = '';
-        this.showMessage('Flux ajouté avec succès', 'success');
+        fetch(`${this.config.apiUrl}/api/feeds`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: feedUrl })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showMessage('Flux ajouté avec succès', 'success');
+                document.getElementById('feedUrl').value = '';
+                this.loadFeeds();
+            }
+        })
+        .catch(error => {
+            this.showMessage('Erreur ajout flux', 'error');
+            console.error('❌ Erreur:', error);
+        });
     },
     
     // Suppression d'un flux RSS
     removeFeed: function(feedUrl) {
-        this.feeds = this.feeds.filter(f => f !== feedUrl);
-        this.saveFeeds();
-        this.updateFeedsList();
-        this.showMessage('Flux supprimé', 'success');
+        fetch(`${this.config.apiUrl}/api/feeds`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: feedUrl })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showMessage('Flux supprimé', 'success');
+                this.loadFeeds();
+            }
+        })
+        .catch(error => {
+            this.showMessage('Erreur suppression flux', 'error');
+            console.error('❌ Erreur:', error);
+        });
     },
     
     // Ajout d'un thème
@@ -874,34 +648,33 @@ const app = {
             return;
         }
         
-        this.themes.push({ name, keywords, color });
-        this.saveThemes();
-        this.updateThemesList();
-        
-        // Réinitialiser le formulaire
-        document.getElementById('themeName').value = '';
-        document.getElementById('themeKeywords').value = '';
-        
-        // Actualiser le sélecteur de thèmes
-        if (this.chartManager) {
-            this.chartManager.updateThemeSelector();
-        }
-        
-        this.showMessage('Thème créé avec succès', 'success');
+        fetch(`${this.config.apiUrl}/api/themes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, keywords, color })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showMessage('Thème créé avec succès', 'success');
+                document.getElementById('themeName').value = '';
+                document.getElementById('themeKeywords').value = '';
+                this.loadThemes();
+                
+                if (this.chartManager) {
+                    this.chartManager.updateThemeSelector();
+                }
+            }
+        })
+        .catch(error => {
+            this.showMessage('Erreur création thème', 'error');
+            console.error('❌ Erreur:', error);
+        });
     },
     
     // Suppression d'un thème
     removeTheme: function(themeName) {
-        this.themes = this.themes.filter(t => t.name !== themeName);
-        this.saveThemes();
-        this.updateThemesList();
-        
-        // Actualiser le sélecteur de thèmes
-        if (this.chartManager) {
-            this.chartManager.updateThemeSelector();
-        }
-        
-        this.showMessage('Thème supprimé', 'success');
+        this.showMessage('Fonction en développement', 'info');
     },
     
     // Export des données
@@ -946,7 +719,7 @@ const app = {
             `"${article.title.replace(/"/g, '""')}"`,
             article.pubDate,
             `"${(article.themes || []).join(', ')}"`,
-            article.sentiment,
+            article.sentiment?.score || 0,
             article.link
         ]);
         
@@ -968,7 +741,6 @@ const app = {
         
         container.appendChild(messageEl);
         
-        // Auto-suppression après 5 secondes
         setTimeout(() => {
             if (messageEl.parentElement) {
                 messageEl.remove();
@@ -987,82 +759,36 @@ const app = {
         return icons[type] || 'ℹ️';
     },
     
-    // Mise à jour de la date de dernière modification
-    updateLastUpdate: function() {
-        const lastUpdateEl = document.getElementById('lastUpdate');
-        if (lastUpdateEl) {
-            lastUpdateEl.textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
-        }
-    },
-    
     // Actualisation automatique
     startAutoRefresh: function() {
         if (this.config.autoRefresh) {
             setInterval(() => {
-                this.refreshData();
+                console.log('🔄 Actualisation automatique...');
+                this.loadArticles();
             }, this.config.refreshInterval);
         }
     },
     
-    // Fonctions IA (placeholder)
+    // Fonctions IA (placeholders)
     runAIAnalysis: function() {
         this.showMessage('Fonctionnalité IA en cours de développement', 'info');
     },
     
-    showIAApiKeyModal: function() {
-        this.showMessage('Configuration IA en cours de développement', 'info');
-    },
-    
-    closeIAApiKeyModal: function() {
-        this.showMessage('Modal IA fermé', 'info');
-    },
-    
-    saveIAApiKey: function() {
-        this.showMessage('Clé API IA sauvegardée', 'success');
-    },
-    
-    disableIA: function() {
-        this.showMessage('IA désactivée', 'success');
-    },
-    
-    manualIACorrection: function() {
-        this.showMessage('Correction IA manuelle en cours', 'info');
-    },
-    
-    configureIA: function() {
-        this.showMessage('Configuration IA ouverte', 'info');
-    },
-    
     showLearningStats: function() {
-        this.showMessage('Statistiques d\'apprentissage affichées', 'info');
-    },
-    
-    refreshLearningStats: function() {
-        this.showMessage('Statistiques d\'apprentissage actualisées', 'success');
-    },
-    
-    resetLearning: function() {
-        this.showMessage('Apprentissage réinitialisé', 'success');
-    },
-    
-    learnFromCorrection: function() {
-        this.showMessage('Correction apprise', 'success');
+        this.showMessage('Statistiques en cours de développement', 'info');
     }
 };
 
 // Fonctions globales
 function showTab(tabName, event) {
-    // Masquer tous les contenus d'onglets
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
     
-    // Désactiver tous les onglets
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
     });
     
-    // Activer l'onglet sélectionné
     const selectedTab = document.getElementById(tabName + 'Tab');
     if (selectedTab) {
         selectedTab.classList.add('active');
@@ -1097,19 +823,6 @@ function addTheme() {
 // Initialisation au chargement
 document.addEventListener('DOMContentLoaded', function() {
     app.init();
-    
-    // Redéfinir showTab pour gérer les graphiques
-    const originalShowTab = window.showTab;
-    window.showTab = function(tabName, event) {
-        originalShowTab(tabName, event);
-        
-        // Recalculer les graphiques quand on revient sur l'onglet Analyse
-        if (tabName === 'analysis' && app.chartManager) {
-            setTimeout(() => {
-                app.chartManager.refreshChart();
-            }, 100);
-        }
-    };
 });
 
 // Export global pour le debug

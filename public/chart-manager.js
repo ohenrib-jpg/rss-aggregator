@@ -1,4 +1,4 @@
-// Gestionnaire avancé des graphiques
+// Gestionnaire avancé des graphiques - AMÉLIORATION LISIBILITÉ
 class ChartManager {
     constructor(appInstance) {
         this.app = appInstance;
@@ -12,56 +12,8 @@ class ChartManager {
     }
     
     initialize() {
-        this.loadSettings();
         this.createThemeSelector();
         this.setupEventListeners();
-    }
-    
-    loadSettings() {
-        const savedSettings = localStorage.getItem('chartSettings');
-        if (savedSettings) {
-            try {
-                const settings = JSON.parse(savedSettings);
-                this.timeScale = settings.timeScale || 'week';
-                this.aggregation = settings.aggregation || 'count';
-                this.showMinorThemes = settings.showMinorThemes || false;
-                this.minorThreshold = settings.minorThreshold || 0.02;
-                
-                if (settings.selectedThemes) {
-                    this.selectedThemes = new Set(settings.selectedThemes);
-                }
-                
-                // Mettre à jour les contrôles UI
-                this.updateUIControls();
-            } catch (e) {
-                console.error('Erreur lors du chargement des paramètres:', e);
-            }
-        }
-    }
-    
-    saveSettings() {
-        const settings = {
-            timeScale: this.timeScale,
-            aggregation: this.aggregation,
-            showMinorThemes: this.showMinorThemes,
-            minorThreshold: this.minorThreshold,
-            selectedThemes: Array.from(this.selectedThemes)
-        };
-        localStorage.setItem('chartSettings', JSON.stringify(settings));
-    }
-    
-    updateUIControls() {
-        const timeScaleSelect = document.getElementById('timeScale');
-        const aggregationSelect = document.getElementById('aggregationType');
-        const toggleBtn = document.getElementById('toggleMinorBtn');
-        
-        if (timeScaleSelect) timeScaleSelect.value = this.timeScale;
-        if (aggregationSelect) aggregationSelect.value = this.aggregation;
-        if (toggleBtn) {
-            toggleBtn.textContent = this.showMinorThemes ? 
-                '👁️ Afficher thèmes mineurs' : 
-                '👁️ Masquer thèmes mineurs';
-        }
     }
     
     createThemeSelector() {
@@ -77,7 +29,6 @@ class ChartManager {
         // Si aucun thème n'est sélectionné, sélectionner les 5 premiers par défaut
         if (this.selectedThemes.size === 0) {
             themes.slice(0, 5).forEach(theme => this.selectedThemes.add(theme.name));
-            this.saveSettings();
         }
         
         const selectorHtml = `
@@ -116,6 +67,9 @@ class ChartManager {
         const checkboxesContainer = document.getElementById('themeCheckboxes');
         if (checkboxesContainer) {
             checkboxesContainer.innerHTML = this.generateThemeCheckboxes();
+        } else {
+            // Recréer le sélecteur complet si le conteneur n'existe pas
+            this.createThemeSelector();
         }
     }
     
@@ -149,7 +103,6 @@ class ChartManager {
         
         this.updateThemeSelector();
         this.refreshChart();
-        this.saveSettings();
     }
     
     selectAllThemes() {
@@ -157,14 +110,12 @@ class ChartManager {
         this.selectedThemes = new Set(themes.map(theme => theme.name));
         this.updateThemeSelector();
         this.refreshChart();
-        this.saveSettings();
     }
     
     deselectAllThemes() {
         this.selectedThemes.clear();
         this.updateThemeSelector();
         this.refreshChart();
-        this.saveSettings();
     }
     
     selectTopThemes(count) {
@@ -172,19 +123,16 @@ class ChartManager {
         this.selectedThemes = new Set(themes.slice(0, count).map(theme => theme.name));
         this.updateThemeSelector();
         this.refreshChart();
-        this.saveSettings();
     }
     
     changeTimeScale(scale) {
         this.timeScale = scale;
         this.refreshChart();
-        this.saveSettings();
     }
     
     changeAggregation(type) {
         this.aggregation = type;
         this.refreshChart();
-        this.saveSettings();
     }
     
     toggleMinorThemes() {
@@ -196,7 +144,6 @@ class ChartManager {
                 '👁️ Masquer thèmes mineurs';
         }
         this.refreshChart();
-        this.saveSettings();
     }
     
     refreshChart() {
@@ -276,7 +223,7 @@ class ChartManager {
             this.selectedThemes.has(theme.name)
         );
         
-        // Grouper les thèmes mineurs si nécessaire
+        // Grouper les thèmes mineurs si nécessaire (AMÉLIORATION LISIBILITÉ)
         if (!this.showMinorThemes && themesToShow.length > 8) {
             const majorThemes = [];
             const minorThemes = [];
@@ -289,6 +236,7 @@ class ChartManager {
                 }
             });
             
+            // Grouper les thèmes mineurs en une seule entrée "Autres"
             if (minorThemes.length > 0) {
                 majorThemes.push({
                     name: 'Autres thèmes',
