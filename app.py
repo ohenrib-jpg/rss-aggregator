@@ -11,9 +11,6 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 import matplotlib
 matplotlib.use('Agg')  # ✅ Important pour Render (pas d'interface graphique)
-import matplotlib.pyplot as plt
-import io
-import base64
 
 app = Flask(__name__)
 CORS(app)  # ✅ Activation CORS pour Render
@@ -925,9 +922,10 @@ def analyze_full():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+###  matplotlib fait tout planter, trop lourd :
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
-    """Génère un rapport PDF détaillé"""
+    """Génère un rapport PDF détaillé (sans matplotlib, non mais)"""
     try:
         data = request.json or {}
         analyses = data.get('analyses', [])
@@ -944,6 +942,7 @@ def generate_report():
         styles = getSampleStyleSheet()
         story = []
         
+        # Titre
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
@@ -953,12 +952,14 @@ def generate_report():
         )
         story.append(Paragraph("RAPPORT D'ANALYSE AVANCÉE", title_style))
         
+        # Métadonnées
         meta_style = styles['Normal']
         story.append(Paragraph(f"Date de génération: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", meta_style))
         story.append(Paragraph(f"Nombre d'articles analysés: {len(analyses)}", meta_style))
         story.append(Paragraph(f"Thèmes: {', '.join(str(t) for t in themes)}", meta_style))
         story.append(Spacer(1, 20))
         
+        # Résumé statistique
         story.append(Paragraph("RÉSUMÉ STATISTIQUE", styles['Heading2']))
         
         original_scores = [a.get('score_original', 0) for a in analyses]
@@ -985,7 +986,38 @@ def generate_report():
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
         story.append(stats_table)
+        story.append(Spacer(1, 20))
         
+        # Détails par article (limité à 5 pour le rapport)
+        story.append(Paragraph("DÉTAILS PAR ARTICLE", styles['Heading2']))
+        
+        for i, analysis in enumerate(analyses[:5]):
+            story.append(Paragraph(f"Article {i+1}", styles['Heading3']))
+            
+            article_data = [
+                ['Score original', f"{analysis.get('score_original', 0):.3f}"],
+                ['Score corrigé', f"{analysis.get('score_corrected', 0):.3f}"],
+                ['Confiance', f"{analysis.get('confidence', 0):.3f}"],
+                ['Biais détectés', f"{len(analysis.get('analyse_biases', {}).get('biais_détectés', []))}"]
+            ]
+            
+            article_table = Table(article_data, colWidths=[150, 100])
+            article_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(article_table)
+            
+            # Recommandations
+            recommendations = analysis.get('recommandations_globales', [])
+            if recommendations:
+                story.append(Paragraph("Recommandations:", styles['Normal']))
+                for rec in recommendations[:3]:  # Limiter à 3 recommandations
+                    story.append(Paragraph(f"• {rec}", styles['Normal']))
+            
+            story.append(Spacer(1, 15))
+        
+        # Générer le PDF
         doc.build(story)
         
         return jsonify({
