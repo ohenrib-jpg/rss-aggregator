@@ -1,50 +1,40 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://rssaggregator_postgresql_olivier_user:jexuBogPqTuplOcud708PuSuIVWBWwi0@dpg-d3nnodm3jp1c73c3302g-a.frankfurt-postgres.render.com/rssaggregator_postgresql_olivier",
-  ssl: {
-    rejectUnauthorized: false
-  },
+const poolConfig = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+  connectionTimeoutMillis: 10000,
+};
 
-// Test de connexion
-pool.on('connect', () => {
-  console.log('✅ Connecté à PostgreSQL sur Render');
-});
+const pool = new Pool(poolConfig);
 
-pool.on('error', (err) => {
-  console.error('❌ Erreur de connexion PostgreSQL:', err);
-});
-
-// Initialiser la base de données
 async function initializeDatabase() {
   try {
     console.log('🔄 Initialisation de la base de données...');
     
-    // Table des flux RSS
+    // Table des thèmes AVEC CONTRAINTE UNIQUE
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS feeds (
+      CREATE TABLE IF NOT EXISTS themes (
         id SERIAL PRIMARY KEY,
-        url TEXT UNIQUE NOT NULL,
-        title TEXT,
-        last_fetched TIMESTAMP DEFAULT NULL,
-        is_active BOOLEAN DEFAULT TRUE,
+        name TEXT UNIQUE NOT NULL,  -- ✅ AJOUT DE UNIQUE ICI
+        keywords TEXT[] NOT NULL,
+        color TEXT DEFAULT '#6366f1',
+        description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Table des thèmes
+    // Table des flux RSS
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS themes (
+      CREATE TABLE IF NOT EXISTS feeds (
         id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        keywords TEXT[] NOT NULL,
-        color TEXT DEFAULT '#6366f1',
-        description TEXT,
+        url TEXT UNIQUE NOT NULL,   -- ✅ UNIQUE ICI AUSSI
+        title TEXT,
+        last_fetched TIMESTAMP DEFAULT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -55,7 +45,7 @@ async function initializeDatabase() {
         id SERIAL PRIMARY KEY,
         title TEXT NOT NULL,
         content TEXT,
-        link TEXT UNIQUE NOT NULL,
+        link TEXT UNIQUE NOT NULL,  -- ✅ UNIQUE ICI AUSSI
         pub_date TIMESTAMP NOT NULL,
         feed_url TEXT,
         sentiment_score DECIMAL(3,2) DEFAULT 0,
@@ -77,7 +67,7 @@ async function initializeDatabase() {
         article_id INTEGER REFERENCES articles(id),
         match_count INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(theme_id, article_id)
+        UNIQUE(theme_id, article_id)  -- ✅ CONTRAINTE UNIQUE COMPOSITE
       )
     `);
 
@@ -90,7 +80,7 @@ async function initializeDatabase() {
         article_count INTEGER DEFAULT 0,
         avg_sentiment DECIMAL(3,2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(date, theme_name)
+        UNIQUE(date, theme_name)  -- ✅ CONTRAINTE UNIQUE COMPOSITE
       )
     `);
 
@@ -111,24 +101,12 @@ async function initializeDatabase() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sentiment_lexicon (
         id SERIAL PRIMARY KEY,
-        word TEXT UNIQUE NOT NULL,
+        word TEXT UNIQUE NOT NULL,  -- ✅ UNIQUE ICI AUSSI
         score DECIMAL(3,2) NOT NULL,
         usage_count INTEGER DEFAULT 0,
         total_score DECIMAL(10,4) DEFAULT 0,
         consistency DECIMAL(4,3) DEFAULT 0.5,
         last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Table des statistiques d'usage
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS usage_stats (
-        id SERIAL PRIMARY KEY,
-        endpoint TEXT NOT NULL,
-        call_count INTEGER DEFAULT 0,
-        last_called TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        avg_response_time DECIMAL(8,2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
