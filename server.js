@@ -455,7 +455,9 @@ class PostgreSQLManager {
 const dbManager = new PostgreSQLManager();
 
 // ✅ FONCTION DE RAFRAÎCHISSEMENT DES DONNÉES
+// ✅ FONCTION DE RAFRAÎCHISSEMENT OPTIMISÉE POUR RENDER
 async function refreshData() {
+  let client;
   try {
     console.log('🔄 Rafraîchissement des données depuis les flux RSS...');
     
@@ -464,15 +466,27 @@ async function refreshData() {
 
     if (feeds.length === 0) {
       console.log('⚠️ Aucun flux RSS configuré');
-      return;
+      return [];
     }
 
-    for (const feedUrl of feeds) {
+    // Obtenir une connexion dédiée pour cette session
+    client = await pool.connect();
+    
+    // Limiter à 5 flux pour éviter les timeouts
+    const limitedFeeds = feeds.slice(0, 5);
+    
+    console.log(`📥 Traitement de ${limitedFeeds.length} flux...`);
+
+    for (const feedUrl of limitedFeeds) {
       try {
         console.log(`📥 Récupération: ${feedUrl}`);
         const feed = await parser.parseURL(feedUrl);
+        
+        // Limiter à 10 articles par flux
+        const limitedItems = feed.items.slice(0, 10);
+        
         const articles = await Promise.all(
-          feed.items.map(async (item) => {
+          limitedItems.map(async (item) => {
             try {
               const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
               const fullText = (item.title || '') + ' ' + (item.contentSnippet || item.content || '');
@@ -480,21 +494,43 @@ async function refreshData() {
 
               const articleData = {
                 title: item.title || 'Sans titre',
-                content: (item.contentSnippet || item.content || item['content:encoded'] || '').substring(0, 1000),
+                content: (item.contentSnippet || item.content || item['content:encoded'] || '').substring(0, 500), // Limiter la taille
                 link: item.link || `#${Date.now()}`,
                 pubDate: pubDate.toISOString(),
                 feedUrl: feedUrl,
                 sentiment: sentimentResult
               };
 
-              // Sauvegarder dans PostgreSQL
-              const savedArticle = await dbManager.saveArticle(articleData);
+              // Sauvegarder avec la connexion dédiée
+              const result = await client.query(`
+                INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (link) 
+                DO UPDATE SET 
+                  title = EXCLUDED.title,
+                  content = EXCLUDED.content,
+                  pub_date = EXCLUDED.pub_date,
+                  sentiment_score = EXCLUDED.sentiment_score,
+                  sentiment_type = EXCLUDED.sentiment_type,
+                  sentiment_confidence = EXCLUDED.sentiment_confidence
+                RETURNING id
+              `, [
+                articleData.title, 
+                articleData.content, 
+                articleData.link, 
+                articleData.pubDate, 
+                articleData.feedUrl, 
+                articleData.sentiment?.score || 0, 
+                articleData.sentiment?.sentiment || 'neutral', 
+                articleData.sentiment?.confidence || 0
+              ]);
+
               return {
                 ...articleData,
-                id: savedArticle.id
+                id: result.rows[0].id
               };
             } catch (error) {
-              console.error('❌ Erreur traitement article:', error);
+              console.error('❌ Erreur traitement article:', error.message);
               return null;
             }
           })
@@ -504,6 +540,9 @@ async function refreshData() {
         allArticles.push(...validArticles);
         console.log(`✅ ${validArticles.length} articles de ${feed.title || feedUrl}`);
 
+        // Pause entre les flux pour éviter les timeouts
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
       } catch (error) {
         console.error(`❌ Erreur flux ${feedUrl}:`, error.message);
       }
@@ -515,6 +554,11 @@ async function refreshData() {
   } catch (error) {
     console.error('❌ Erreur rafraîchissement données:', error);
     return [];
+  } finally {
+    // Toujours libérer la connexion
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -652,11 +696,11 @@ app.post('/api/themes', async (req, res) => {
   }
 });
 
-// Santé
+// Santé - version bifidus actif
 app.get('/health', async (req, res) => {
   try {
-    // Tester la connexion à la base de données
-    await pool.query('SELECT 1');
+    // Test de connexion simple et rapide
+    const result = await pool.query('SELECT 1 as test');
     
     res.json({ 
       status: 'OK', 
@@ -665,10 +709,11 @@ app.get('/health', async (req, res) => {
       environment: NODE_ENV
     });
   } catch (error) {
+    console.error('❌ Health check failed:', error.message);
     res.status(500).json({ 
       status: 'ERROR', 
       database: 'disconnected',
-      error: error.message 
+      error: 'Database connection failed'
     });
   }
 });
@@ -723,7 +768,7 @@ async function startServer() {
     // Rafraîchissement automatique
     setInterval(async () => {
       await refreshData();
-    }, 15 * 60 * 1000);
+    }, 30 * 60 * 1000);
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Serveur démarré sur le port ${PORT}`);

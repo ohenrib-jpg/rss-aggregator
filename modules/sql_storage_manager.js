@@ -7,10 +7,21 @@ class SQLStorageManager {
 
   // ARTICLES
   async saveArticle(article) {
+    const {
+      title,
+      content,
+      link,
+      pubDate,
+      feedUrl,
+      sentiment = {},
+      themes = []
+    } = article;
+
     try {
-      const query = `
-        INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence, sentiment_words, irony_detected)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      // Sauvegarder l'article
+      const articleResult = await this.pool.query(`
+        INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (link) 
         DO UPDATE SET 
           title = EXCLUDED.title,
@@ -18,71 +29,98 @@ class SQLStorageManager {
           pub_date = EXCLUDED.pub_date,
           sentiment_score = EXCLUDED.sentiment_score,
           sentiment_type = EXCLUDED.sentiment_type,
-          sentiment_confidence = EXCLUDED.sentiment_confidence,
-          sentiment_words = EXCLUDED.sentiment_words,
-          irony_detected = EXCLUDED.irony_detected,
-          created_at = CURRENT_TIMESTAMP
+          sentiment_confidence = EXCLUDED.sentiment_confidence
         RETURNING id
-      `;
+      `, [
+        title,
+        content?.substring(0, 5000) || '',
+        link,
+        pubDate,
+        feedUrl,
+        sentiment.score || 0,
+        sentiment.sentiment || 'neutral',
+        sentiment.confidence || 0
+      ]);
 
-      const values = [
-        article.title,
-        article.content,
-        article.link,
-        article.pubDate,
-        article.feed,
-        article.sentiment?.score || 0,
-        article.sentiment?.sentiment || 'neutral',
-        article.sentiment?.confidence || 0,
-        JSON.stringify(article.sentiment?.words || []),
-        article.sentiment?.ironyDetected || false
-      ];
+      const articleId = articleResult.rows[0].id;
 
-      const result = await this.pool.query(query, values);
-      return result.rows[0].id;
+      // Sauvegarder les associations de thèmes
+      if (themes.length > 0) {
+        for (const themeName of themes) {
+          const themeResult = await this.pool.query(
+            'SELECT id FROM themes WHERE name = $1',
+            [themeName]
+          );
+
+          if (themeResult.rows.length > 0) {
+            const themeId = themeResult.rows[0].id;
+            
+            await this.pool.query(`
+              INSERT INTO theme_analyses (theme_id, article_id, match_count)
+              VALUES ($1, $2, 1)
+              ON CONFLICT (theme_id, article_id) 
+              DO UPDATE SET match_count = theme_analyses.match_count + 1
+            `, [themeId, articleId]);
+          }
+        }
+      }
+
+      return articleId;
     } catch (error) {
-      console.error('❌ Erreur sauvegarde article:', error);
+      console.error('❌ Erreur sauvegarde article SQL:', error);
       throw error;
     }
   }
 
-  async getRecentArticles(limit = 100) {
+  async getArticles(limit = 50, offset = 0) {
     try {
-      const query = `
+      const result = await this.pool.query(`
         SELECT 
-          id, title, content, link, pub_date as "pubDate", 
-          feed_url as "feed", sentiment_score as "sentimentScore",
-          sentiment_type as "sentimentType", sentiment_confidence as "confidence",
-          sentiment_words as "sentimentWords", irony_detected as "ironyDetected",
-          ia_corrected as "iaCorrected", correction_confidence as "correctionConfidence",
-          created_at as "createdAt"
-        FROM articles 
-        ORDER BY pub_date DESC 
-        LIMIT $1
-      `;
-      
-      const result = await this.pool.query(query, [limit]);
-      return result.rows.map(row => ({
-        ...row,
-        sentiment: {
-          score: parseFloat(row.sentimentScore) || 0,
-          sentiment: row.sentimentType || 'neutral',
-          confidence: parseFloat(row.confidence) || 0,
-          words: row.sentimentWords || [],
-          ironyDetected: row.ironyDetected || false
-        },
-        id: row.link // Pour compatibilité avec l'ancien système
-      }));
+          a.*,
+          COALESCE(
+            ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL),
+            '{}'
+          ) as themes
+        FROM articles a
+        LEFT JOIN theme_analyses ta ON a.id = ta.article_id
+        LEFT JOIN themes t ON ta.theme_id = t.id
+        GROUP BY a.id
+        ORDER BY a.pub_date DESC
+        LIMIT $1 OFFSET $2
+      `, [limit, offset]);
+
+      return result.rows.map(row => this.formatArticle(row));
     } catch (error) {
-      console.error('❌ Erreur récupération articles:', error);
+      console.error('❌ Erreur récupération articles SQL:', error);
       return [];
     }
   }
 
+  formatArticle(row) {
+    return {
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      link: row.link,
+      pubDate: row.pub_date,
+      feed: row.feed_url,
+      sentiment: {
+        score: parseFloat(row.sentiment_score),
+        sentiment: row.sentiment_type,
+        confidence: parseFloat(row.sentiment_confidence)
+      },
+      themes: row.themes || [],
+      iaCorrected: row.ia_corrected || false,
+      ironyDetected: row.irony_detected || false
+    };
+  }
+
   // THÈMES
   async saveTheme(theme) {
+    const { name, keywords, color, description } = theme;
+
     try {
-      const query = `
+      const result = await this.pool.query(`
         INSERT INTO themes (name, keywords, color, description)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (name) 
@@ -90,292 +128,78 @@ class SQLStorageManager {
           keywords = EXCLUDED.keywords,
           color = EXCLUDED.color,
           description = EXCLUDED.description
-        RETURNING id
-      `;
+        RETURNING *
+      `, [name, keywords, color || '#6366f1', description || '']);
 
-      const values = [
-        theme.name,
-        theme.keywords,
-        theme.color,
-        theme.description
-      ];
-
-      const result = await this.pool.query(query, values);
-      return result.rows[0].id;
+      return result.rows[0];
     } catch (error) {
-      console.error('❌ Erreur sauvegarde thème:', error);
+      console.error('❌ Erreur sauvegarde thème SQL:', error);
       throw error;
     }
   }
 
-  async getAllThemes() {
+  async getThemes() {
     try {
-      const query = `SELECT id, name, keywords, color, description FROM themes ORDER BY name`;
-      const result = await this.pool.query(query);
+      const result = await this.pool.query('SELECT * FROM themes ORDER BY name');
       return result.rows;
     } catch (error) {
-      console.error('❌ Erreur récupération thèmes:', error);
+      console.error('❌ Erreur récupération thèmes SQL:', error);
       return [];
-    }
-  }
-
-  async deleteTheme(themeId) {
-    try {
-      // Supprimer d'abord les analyses liées
-      await this.pool.query('DELETE FROM theme_analyses WHERE theme_id = $1', [themeId]);
-      // Puis supprimer le thème
-      await this.pool.query('DELETE FROM themes WHERE id = $1', [themeId]);
-      return true;
-    } catch (error) {
-      console.error('❌ Erreur suppression thème:', error);
-      throw error;
-    }
-  }
-
-  // ANALYSES THÉMATIQUES
-  async saveThemeAnalysis(themeId, articleId, matchCount = 1) {
-    try {
-      const query = `
-        INSERT INTO theme_analyses (theme_id, article_id, match_count)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (theme_id, article_id) 
-        DO UPDATE SET match_count = EXCLUDED.match_count
-      `;
-
-      await this.pool.query(query, [themeId, articleId, matchCount]);
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde analyse thème:', error);
-      throw error;
-    }
-  }
-
-  async getArticlesByTheme(themeName) {
-    try {
-      const query = `
-        SELECT a.* 
-        FROM articles a
-        JOIN theme_analyses ta ON a.id = ta.article_id
-        JOIN themes t ON ta.theme_id = t.id
-        WHERE t.name = $1
-        ORDER BY a.pub_date DESC
-      `;
-      
-      const result = await this.pool.query(query, [themeName]);
-      return result.rows;
-    } catch (error) {
-      console.error('❌ Erreur récupération articles par thème:', error);
-      return [];
-    }
-  }
-
-  // TIMELINE ANALYSES
-  async saveTimelineAnalysis(date, themeName, articleCount, avgSentiment = 0) {
-    try {
-      const query = `
-        INSERT INTO timeline_analyses (date, theme_name, article_count, avg_sentiment)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (date, theme_name) 
-        DO UPDATE SET 
-          article_count = EXCLUDED.article_count,
-          avg_sentiment = EXCLUDED.avg_sentiment
-      `;
-
-      await this.pool.query(query, [date, themeName, articleCount, avgSentiment]);
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde timeline:', error);
-      throw error;
-    }
-  }
-
-  async getTimelineData(days = 7) {
-    try {
-      const query = `
-        SELECT date, theme_name, article_count, avg_sentiment
-        FROM timeline_analyses 
-        WHERE date >= CURRENT_DATE - INTERVAL '${days} days'
-        ORDER BY date ASC, theme_name ASC
-      `;
-      
-      const result = await this.pool.query(query);
-      return result.rows;
-    } catch (error) {
-      console.error('❌ Erreur récupération timeline:', error);
-      return [];
-    }
-  }
-
-  // CORRECTIONS IA
-  async saveIACorrection(articleId, originalScore, correctedScore, confidence, analysisData) {
-    try {
-      const query = `
-        INSERT INTO ia_corrections (article_id, original_score, corrected_score, confidence, analysis_data)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id
-      `;
-
-      const values = [
-        articleId,
-        originalScore,
-        correctedScore,
-        confidence,
-        JSON.stringify(analysisData)
-      ];
-
-      const result = await this.pool.query(query, values);
-      
-      // Mettre à jour l'article avec la correction
-      await this.pool.query(`
-        UPDATE articles 
-        SET sentiment_score = $1, ia_corrected = TRUE, correction_confidence = $2
-        WHERE id = $3
-      `, [correctedScore, confidence, articleId]);
-
-      return result.rows[0].id;
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde correction IA:', error);
-      throw error;
-    }
-  }
-
-  async getIACorrections(limit = 50) {
-    try {
-      const query = `
-        SELECT 
-          ic.*,
-          a.title,
-          a.link as "articleId"
-        FROM ia_corrections ic
-        JOIN articles a ON ic.article_id = a.id
-        ORDER BY ic.created_at DESC
-        LIMIT $1
-      `;
-      
-      const result = await this.pool.query(query, [limit]);
-      return result.rows;
-    } catch (error) {
-      console.error('❌ Erreur récupération corrections IA:', error);
-      return [];
-    }
-  }
-
-  // LEXIQUE DE SENTIMENT
-  async saveSentimentWord(word, score) {
-    try {
-      const query = `
-        INSERT INTO sentiment_lexicon (word, score)
-        VALUES ($1, $2)
-        ON CONFLICT (word) 
-        DO UPDATE SET 
-          score = EXCLUDED.score,
-          last_used = CURRENT_TIMESTAMP
-      `;
-
-      await this.pool.query(query, [word, score]);
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde mot lexique:', error);
-      throw error;
-    }
-  }
-
-  async getSentimentLexicon() {
-    try {
-      const query = `SELECT word, score FROM sentiment_lexicon ORDER BY word`;
-      const result = await this.pool.query(query);
-      
-      const lexicon = {
-        words: {},
-        usageStats: {},
-        learningRate: 0.1,
-        version: '2.0',
-        lastUpdated: new Date().toISOString()
-      };
-
-      result.rows.forEach(row => {
-        lexicon.words[row.word] = parseFloat(row.score);
-      });
-
-      return lexicon;
-    } catch (error) {
-      console.error('❌ Erreur récupération lexique:', error);
-      return { words: {}, usageStats: {}, learningRate: 0.1, version: '2.0' };
-    }
-  }
-
-  async updateWordUsage(word, score) {
-    try {
-      const query = `
-        UPDATE sentiment_lexicon 
-        SET 
-          usage_count = usage_count + 1,
-          total_score = total_score + $1,
-          consistency = 0.9 * consistency + 0.1 * (1 - ABS($1 - score)),
-          last_used = CURRENT_TIMESTAMP
-        WHERE word = $2
-      `;
-
-      await this.pool.query(query, [score, word]);
-    } catch (error) {
-      console.error('❌ Erreur mise à jour usage mot:', error);
     }
   }
 
   // STATISTIQUES
-  async getAnalysisStats() {
+  async getStats() {
     try {
-      const statsQuery = `
-        SELECT 
-          COUNT(*) as total_articles,
-          COUNT(DISTINCT feed_url) as total_feeds,
-          AVG(sentiment_score) as avg_sentiment,
-          AVG(sentiment_confidence) as avg_confidence,
-          COUNT(CASE WHEN ia_corrected THEN 1 END) as corrected_articles
-        FROM articles
-        WHERE pub_date >= CURRENT_DATE - INTERVAL '7 days'
-      `;
-
-      const themesQuery = `
-        SELECT 
-          t.name as theme_name,
-          COUNT(ta.article_id) as article_count,
-          AVG(a.sentiment_score) as avg_sentiment
-        FROM themes t
-        LEFT JOIN theme_analyses ta ON t.id = ta.theme_id
-        LEFT JOIN articles a ON ta.article_id = a.id
-        GROUP BY t.id, t.name
-        ORDER BY article_count DESC
-      `;
-
-      const [statsResult, themesResult] = await Promise.all([
-        this.pool.query(statsQuery),
-        this.pool.query(themesQuery)
-      ]);
+      const articlesCount = await this.pool.query('SELECT COUNT(*) FROM articles');
+      const themesCount = await this.pool.query('SELECT COUNT(*) FROM themes');
+      const feedsCount = await this.pool.query('SELECT COUNT(*) FROM feeds WHERE is_active = true');
 
       return {
-        totalArticles: parseInt(statsResult.rows[0]?.total_articles) || 0,
-        totalFeeds: parseInt(statsResult.rows[0]?.total_feeds) || 0,
-        avgSentiment: parseFloat(statsResult.rows[0]?.avg_sentiment) || 0,
-        avgConfidence: parseFloat(statsResult.rows[0]?.avg_confidence) || 0,
-        correctedArticles: parseInt(statsResult.rows[0]?.corrected_articles) || 0,
-        themes: themesResult.rows
+        articles: parseInt(articlesCount.rows[0].count),
+        themes: parseInt(themesCount.rows[0].count),
+        feeds: parseInt(feedsCount.rows[0].count),
+        lastUpdate: new Date().toISOString()
       };
     } catch (error) {
-      console.error('❌ Erreur récupération statistiques:', error);
-      return {};
+      console.error('❌ Erreur statistiques SQL:', error);
+      return { articles: 0, themes: 0, feeds: 0, lastUpdate: null };
     }
   }
 
-  // MIGRATION depuis l'ancien système
-  async migrateFromJSON() {
+  // ANALYSE AVANCÉE
+  async getThemeAnalysis() {
     try {
-      console.log('🔄 Début de la migration depuis JSON...');
-      
-      // Cette fonction serait appelée une fois pour migrer les données existantes
-      // Implémentation dépendante de la structure des anciens fichiers
-      
-      console.log('✅ Migration terminée');
+      const result = await this.pool.query(`
+        SELECT 
+          t.name as theme_name,
+          t.color,
+          COUNT(ta.article_id) as article_count,
+          AVG(a.sentiment_score) as avg_sentiment,
+          COUNT(CASE WHEN a.sentiment_type = 'positive' THEN 1 END) as positive_count,
+          COUNT(CASE WHEN a.sentiment_type = 'negative' THEN 1 END) as negative_count,
+          COUNT(CASE WHEN a.sentiment_type = 'neutral' THEN 1 END) as neutral_count
+        FROM themes t
+        LEFT JOIN theme_analyses ta ON t.id = ta.theme_id
+        LEFT JOIN articles a ON ta.article_id = a.id
+        GROUP BY t.id, t.name, t.color
+        ORDER BY article_count DESC
+      `);
+
+      return result.rows.map(row => ({
+        name: row.theme_name,
+        color: row.color,
+        count: parseInt(row.article_count),
+        sentiment: {
+          averageScore: parseFloat(row.avg_sentiment) || 0,
+          positive: parseInt(row.positive_count) || 0,
+          negative: parseInt(row.negative_count) || 0,
+          neutral: parseInt(row.neutral_count) || 0
+        }
+      }));
     } catch (error) {
-      console.error('❌ Erreur migration:', error);
-      throw error;
+      console.error('❌ Erreur analyse thèmes SQL:', error);
+      return [];
     }
   }
 }
