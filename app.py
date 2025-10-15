@@ -9,6 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +18,9 @@ CORS(app)
 PORT = int(os.environ.get('PORT', 5051))
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
+
+print(f"🚀 Initialisation du service IA d'analyse RSS")
+print(f"📁 Dossier des rapports: {REPORTS_DIR}")
 
 # ✅ Fonctions de compatibilité
 def ensure_deep_analysis_consistency(analysis, article):
@@ -87,7 +91,8 @@ def save_analysis_batch(analyses, api_key, themes):
             json.dump(data, f, indent=2, ensure_ascii=False)
         
         return True
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Erreur sauvegarde: {e}")
         return False
 
 # Service de recherche web avancé
@@ -110,7 +115,7 @@ class AdvancedWebResearch:
                     if data:
                         contextual_data.append(data)
                 except Exception as e:
-                    print(f"❌ Erreur recherche {source}: {e}")
+                    print(f"⚠️ Erreur recherche {source}: {e}")
             
             return self.analyze_contextual_data(contextual_data, article_title)
             
@@ -154,14 +159,14 @@ class AdvancedWebResearch:
         """Recherche sur une source spécifique (simulée)"""
         return {
             'source': source,
-            'title': f"Article contextuel sur {query}",
-            'content': f"Informations contextuelles récupérées de {source} concernant {query}",
+            'title': f"Article contextuel sur {query[:50]}",
+            'content': f"Informations contextuelles récupérées de {source}",
             'sentiment': 'neutral',
             'date': datetime.datetime.now().isoformat()
         }
     
     def analyze_contextual_data(self, contextual_data, article_title):
-        """Analyse les données contextuelles pour détecter les divergences"""
+        """Analyse les données contextuelles"""
         if not contextual_data:
             return None
         
@@ -220,25 +225,26 @@ class AdvancedWebResearch:
         if len(sentiment_scores) < 2:
             return 1.0
         
-        variance = sum((score - sum(sentiment_scores)/len(sentiment_scores))**2 for score in sentiment_scores)
+        avg = sum(sentiment_scores) / len(sentiment_scores)
+        variance = sum((score - avg)**2 for score in sentiment_scores) / len(sentiment_scores)
         return max(0, 1 - variance)
     
     def generate_recommendations(self, sentiment, key_facts):
-        """Génère des recommandations basées sur l'analyse"""
+        """Génère des recommandations"""
         recommendations = []
         
         if abs(sentiment) > 0.3:
             recommendations.append("Écart sentiment détecté - vérification recommandée")
         
         if key_facts:
-            recommendations.append(f"Faits contextuels identifiés: {', '.join(key_facts[:3])}")
+            recommendations.append(f"Faits contextuels: {', '.join(key_facts[:3])}")
         
-        if len(recommendations) == 0:
+        if not recommendations:
             recommendations.append("Cohérence générale avec le contexte médiatique")
         
         return recommendations
 
-# Analyseur IA avancé avec raisonnement
+# Analyseur IA avancé
 class AdvancedIAAnalyzer:
     def __init__(self):
         self.web_research = AdvancedWebResearch()
@@ -251,7 +257,7 @@ class AdvancedIAAnalyzer:
     
     def perform_deep_analysis(self, article, themes):
         """Analyse approfondie avec raisonnement"""
-        print(f"🧠 Analyse approfondie: {article.get('title', '')[:50]}...")
+        print(f"🧠 Analyse: {article.get('title', '')[:50]}...")
         
         try:
             theme_names = []
@@ -273,10 +279,7 @@ class AdvancedIAAnalyzer:
             return final_analysis
             
         except Exception as e:
-            print(f"❌ Erreur analyse approfondie: {e}")
-            import traceback
-            traceback.print_exc()
-            
+            print(f"❌ Erreur analyse: {e}")
             sentiment = article.get('sentiment', {})
             return {
                 'score_original': sentiment.get('score', 0),
@@ -286,7 +289,7 @@ class AdvancedIAAnalyzer:
                 'recherche_web': None,
                 'analyse_thematique': {},
                 'analyse_biases': {'biais_détectés': [], 'score_credibilite': 0.5},
-                'recommandations_globales': ['Erreur lors de l\'analyse approfondie']
+                'recommandations_globales': ['Erreur analyse']
             }
     
     def analyze_advanced_context(self, article, themes):
@@ -295,21 +298,18 @@ class AdvancedIAAnalyzer:
         content = article.get('content', '')
         full_text = f"{title} {content}"
         
-        analysis = {
+        return {
             'urgence': self.assess_urgency(full_text),
             'portée': self.assess_scope(full_text),
             'impact': self.assess_impact(full_text, themes),
             'nouveauté': self.assess_novelty(full_text),
             'controverses': self.detect_controversies(full_text)
         }
-        
-        return analysis
     
     def assess_urgency(self, text):
-        """Évalue l'urgence de l'information"""
+        """Évalue l'urgence"""
         urgent_indicators = ['urgence', 'crise', 'immédiat', 'drame', 'catastrophe', 'attaque']
         text_lower = text.lower()
-        
         urgency_score = sum(1 for indicator in urgent_indicators if indicator in text_lower)
         return min(1.0, urgency_score / 3)
     
@@ -354,7 +354,7 @@ class AdvancedIAAnalyzer:
         return min(1.0, (impact_score / 5) * theme_weight)
     
     def assess_novelty(self, text):
-        """Évalue la nouveauté de l'information"""
+        """Évalue la nouveauté"""
         novel_indicators = [
             'nouveau', 'premier', 'historique', 'inaugural', 'innovation',
             'révolutionnaire', 'changement', 'réforme'
@@ -365,10 +365,10 @@ class AdvancedIAAnalyzer:
         return min(1.0, novelty_score / 4)
     
     def detect_controversies(self, text):
-        """Détecte les controverses potentielles"""
+        """Détecte les controverses"""
         controversy_indicators = [
             'polémique', 'controversé', 'débat', 'opposition', 'critique',
-            'protestation', 'manifestation', 'conflit d\'intérêt'
+            'protestation', 'manifestation', "conflit d'intérêt"
         ]
         
         text_lower = text.lower()
@@ -376,23 +376,21 @@ class AdvancedIAAnalyzer:
         
         for indicator in controversy_indicators:
             if indicator in text_lower:
-                start = max(0, text_lower.find(indicator) - 50)
-                end = min(len(text), text_lower.find(indicator) + len(indicator) + 50)
+                idx = text_lower.find(indicator)
+                start = max(0, idx - 50)
+                end = min(len(text), idx + len(indicator) + 50)
                 context = text[start:end].strip()
                 controversies.append(f"{indicator}: {context}")
         
         return controversies
     
     def analyze_thematic_context(self, article, themes):
-        """Analyse contextuelle par thème"""
+        """Analyse par thème"""
         thematic_analysis = {}
         
         theme_list = []
         if themes:
-            if isinstance(themes, list):
-                theme_list = [str(t) for t in themes]
-            else:
-                theme_list = [str(themes)]
+            theme_list = [str(t) for t in themes] if isinstance(themes, list) else [str(themes)]
         
         for theme in theme_list:
             theme_lower = theme.lower() if theme else ''
@@ -402,60 +400,45 @@ class AdvancedIAAnalyzer:
                     analysis = self.analysis_framework[theme_lower](article)
                     thematic_analysis[theme] = analysis
                 except Exception as e:
-                    print(f"❌ Erreur analyse thème {theme}: {e}")
+                    print(f"⚠️ Erreur thème {theme}: {e}")
         
         return thematic_analysis
 
     def analyze_economic_context(self, article):
-        """Analyse contextuelle économique"""
+        """Analyse économique"""
         text = f"{article.get('title', '')} {article.get('content', '')}"
         
         return {
             'indicateurs': self.extract_economic_indicators(text),
             'secteurs': self.identify_economic_sectors(text),
             'impact_economique': self.assess_economic_impact(text),
-            'tendances': self.detect_economic_trends(text),
-            'recommandations': self.generate_economic_recommendations(text)
+            'tendances': self.detect_economic_trends(text)
         }
 
     def extract_economic_indicators(self, text):
-        """Extrait les indicateurs économiques mentionnés"""
-        indicators = {
-            'macroéconomiques': {'patterns': [
-                r'PIB\s*(?:de|du|\s)([^.,;]+)',
-                r'croissance\s+économique\s+de\s+([\d,]+)%',
-                r'inflation\s+de\s+([\d,]+)%',
-                r'chômage\s+de\s+([\d,]+)%'
-            ], 'matches': []},
-            'financiers': {'patterns': [
-                r'marchés?\s+boursiers?\s+([^.,;]+)',
-                r'indice\s+([A-Z]+)\s+([\d,]+)',
-                r'euro\s+([\d,]+)\s+dollars?'
-            ], 'matches': []}
-        }
+        """Extrait indicateurs économiques"""
+        indicators = {}
         
-        text_lower = text.lower()
+        patterns = [
+            (r'PIB\s*(?:de|du|\s)([^.,;]+)', 'PIB'),
+            (r'croissance\s+(?:de\s+)?([\d,]+)%', 'croissance'),
+            (r'inflation\s+(?:de\s+)?([\d,]+)%', 'inflation')
+        ]
         
-        for category, data in indicators.items():
-            for pattern in data['patterns']:
-                matches = re.findall(pattern, text_lower, re.IGNORECASE)
-                if matches:
-                    data['matches'].extend(matches)
+        for pattern, name in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                indicators[name] = matches[:2]
         
-        result = {}
-        for category, data in indicators.items():
-            if data['matches']:
-                result[category] = list(set(data['matches']))[:3]
-        
-        return result
+        return indicators
 
     def identify_economic_sectors(self, text):
-        """Identifie les secteurs économiques concernés"""
+        """Identifie les secteurs économiques"""
         sectors = {
-            'énergie': ['pétrole', 'gaz', 'électricité', 'énergie', 'renouvelable', 'nucléaire'],
-            'finance': ['banque', 'bourse', 'finance', 'investissement', 'crédit'],
-            'industrie': ['industrie', 'manufacturier', 'production', 'usine', 'automobile'],
-            'technologie': ['technologie', 'digital', 'numérique', 'IA', 'intelligence artificielle']
+            'énergie': ['pétrole', 'gaz', 'électricité', 'énergie'],
+            'finance': ['banque', 'bourse', 'finance', 'investissement'],
+            'industrie': ['industrie', 'production', 'usine', 'automobile'],
+            'technologie': ['technologie', 'digital', 'numérique', 'IA']
         }
         
         detected_sectors = []
@@ -468,93 +451,53 @@ class AdvancedIAAnalyzer:
         return detected_sectors
 
     def assess_economic_impact(self, text):
-        """Évalue l'impact économique potentiel"""
+        """Évalue l'impact économique"""
         impact_indicators = {
-            'fort_positif': ['croissance record', 'hausse historique', 'rebond économique', 'reprise vigoureuse'],
-            'positif': ['amélioration', 'progrès', 'augmentation', 'hausse', 'expansion'],
-            'négatif': ['récession', 'crise économique', 'chute', 'baisse', 'déclin'],
-            'fort_négatif': ['effondrement', 'krach', 'dépression', 'catastrophe économique']
+            'positif': ['croissance', 'hausse', 'progression', 'amélioration'],
+            'négatif': ['récession', 'crise', 'chute', 'baisse', 'déclin']
         }
         
         text_lower = text.lower()
-        impact_score = 0
+        positive = sum(1 for word in impact_indicators['positif'] if word in text_lower)
+        negative = sum(1 for word in impact_indicators['négatif'] if word in text_lower)
         
-        for level, indicators in impact_indicators.items():
-            weight = {
-                'fort_positif': 2.0, 'positif': 1.0, 'négatif': -1.0, 'fort_négatif': -2.0
-            }[level]
-            
-            for indicator in indicators:
-                if indicator in text_lower:
-                    impact_score += weight
-                    break
+        total = positive + negative
+        if total == 0:
+            return 0
         
-        return max(-1, min(1, impact_score / 2))
+        return (positive - negative) / total
 
     def detect_economic_trends(self, text):
-        """Détecte les tendances économiques mentionnées"""
-        trends = {'hausse': [], 'baisse': [], 'stabilité': [], 'volatilité': []}
+        """Détecte les tendances économiques"""
+        trends = {}
         
         trend_patterns = {
-            'hausse': [r'hausse\s+de\s+([\d,]+)%', r'augmentation\s+de\s+([\d,]+)%'],
-            'baisse': [r'baisse\s+de\s+([\d,]+)%', r'chute\s+de\s+([\d,]+)%'],
-            'stabilité': [r'stable\s+à\s+([\d,]+)', r'maintien\s+à\s+([\d,]+)']
+            'hausse': r'hausse\s+de\s+([\d,]+)%',
+            'baisse': r'baisse\s+de\s+([\d,]+)%'
         }
         
-        text_lower = text.lower()
+        for trend, pattern in trend_patterns.items():
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                trends[trend] = matches
         
-        for trend, patterns in trend_patterns.items():
-            for pattern in patterns:
-                matches = re.findall(pattern, text_lower, re.IGNORECASE)
-                if matches:
-                    trends[trend].extend(matches)
-        
-        volatility_indicators = ['volatilité', 'fluctuation', 'instabilité', 'incertitude']
-        if any(indicator in text_lower for indicator in volatility_indicators):
-            trends['volatilité'].append('marché volatile détecté')
-        
-        return {k: v for k, v in trends.items() if v}
-
-    def generate_economic_recommendations(self, text):
-        """Génère des recommandations basées sur l'analyse économique"""
-        recommendations = []
-        
-        impact = self.assess_economic_impact(text)
-        sectors = self.identify_economic_sectors(text)
-        
-        if impact < -0.5:
-            recommendations.append("📉 IMPACT ÉCONOMIQUE NÉGATIF - Surveillance des marchés recommandée")
-        elif impact > 0.5:
-            recommendations.append("📈 IMPACT ÉCONOMIQUE POSITIF - Opportunités potentielles")
-        
-        if 'énergie' in sectors:
-            recommendations.append("⚡ SECTEUR ÉNERGÉTIQUE - Surveiller les prix des matières premières")
-        
-        if 'finance' in sectors:
-            recommendations.append("💹 SECTEUR FINANCIER - Analyser l'impact sur les marchés")
-        
-        if not recommendations and sectors:
-            recommendations.append("📊 ANALYSE ÉCONOMIQUE - Contextualiser avec les données macroéconomiques")
-        
-        return recommendations
+        return trends
 
     def analyze_geopolitical_context(self, article):
-        """Analyse contextuelle géopolitique"""
+        """Analyse géopolitique"""
         text = f"{article.get('title', '')} {article.get('content', '')}"
         
         return {
             'acteurs': self.extract_geopolitical_actors(text),
             'enjeux': self.extract_geopolitical_issues(text),
-            'tensions': self.assess_geopolitical_tensions(text),
-            'recommandations': self.generate_geopolitical_recommendations(text)
+            'tensions': self.assess_geopolitical_tensions(text)
         }
     
     def extract_geopolitical_actors(self, text):
         """Extrait les acteurs géopolitiques"""
         actors = {
-            'pays': re.findall(r'\b(France|Allemagne|États-Unis|USA|China|Chine|Russie|UK|Royaume-Uni|Ukraine|Israel|Palestine)\b', text, re.IGNORECASE),
-            'organisations': re.findall(r'\b(ONU|OTAN|UE|Union Européenne|UN|NATO|OMS|WHO)\b', text, re.IGNORECASE),
-            'dirigeants': re.findall(r'\b(Poutine|Zelensky|Macron|Biden|Xi|Merkel|Scholz)\b', text, re.IGNORECASE)
+            'pays': re.findall(r'\b(France|Allemagne|États-Unis|USA|Chine|Russie|Ukraine)\b', text, re.IGNORECASE),
+            'organisations': re.findall(r'\b(ONU|OTAN|UE|Union Européenne)\b', text, re.IGNORECASE)
         }
         
         return {k: list(set(v)) for k, v in actors.items() if v}
@@ -563,71 +506,53 @@ class AdvancedIAAnalyzer:
         """Extrait les enjeux géopolitiques"""
         issues = [
             'conflit territorial', 'sanctions économiques', 'crise diplomatique',
-            'accord commercial', 'coopération militaire', 'tensions frontalières'
+            'accord commercial', 'coopération militaire'
         ]
         
         detected_issues = []
+        text_lower = text.lower()
         for issue in issues:
-            if issue in text.lower():
+            if issue in text_lower:
                 detected_issues.append(issue)
         
         return detected_issues
     
     def assess_geopolitical_tensions(self, text):
         """Évalue les tensions géopolitiques"""
-        tension_indicators = ['tension', 'conflit', 'crise', 'sanction', 'menace', 'hostilité']
+        tension_indicators = ['tension', 'conflit', 'crise', 'sanction', 'menace']
         text_lower = text.lower()
         
         tension_score = sum(1 for indicator in tension_indicators if indicator in text_lower)
         return min(1.0, tension_score / 5)
     
-    def generate_geopolitical_recommendations(self, text):
-        """Génère des recommandations géopolitiques"""
-        recommendations = []
-        
-        if self.assess_geopolitical_tensions(text) > 0.5:
-            recommendations.append("⚠️ Tensions géopolitiques élevées - surveillance recommandée")
-        
-        actors = self.extract_geopolitical_actors(text)
-        if len(actors.get('pays', [])) >= 3:
-            recommendations.append("🌍 Implication multiple de pays - analyse systémique nécessaire")
-        
-        return recommendations
-    
     def analyze_social_context(self, article):
-        """Analyse contextuelle sociale"""
+        """Analyse sociale"""
         return {
             'enjeux_sociaux': [],
-            'mouvements_sociaux': [],
-            'recommandations': ["Analyse sociale à développer"]
+            'mouvements_sociaux': []
         }
     
     def analyze_environmental_context(self, article):
-        """Analyse contextuelle environnementale"""
+        """Analyse environnementale"""
         return {
             'enjeux_environnementaux': [],
-            'impacts_climatiques': [],
-            'recommandations': ["Analyse environnementale à développer"]
+            'impacts_climatiques': []
         }
     
     def analyze_biases(self, article, contextual_analysis, web_research):
-        """Détecte les biais potentiels"""
+        """Détecte les biais"""
         biases = []
         text = f"{article.get('title', '')} {article.get('content', '')}"
         
         if self.detect_emotional_language(text):
             biases.append("Langage émotionnel détecté")
         
-        if self.assess_source_credibility(article):
-            biases.append("Source à vérifier")
-        
         if web_research and web_research.get('coherence', 1) < 0.7:
             biases.append("Divergence avec le contexte médiatique")
         
         return {
             'biais_détectés': biases,
-            'score_credibilite': self.calculate_credibility_score(biases, contextual_analysis),
-            'recommandations': self.generate_bias_recommendations(biases)
+            'score_credibilite': self.calculate_credibility_score(biases, contextual_analysis)
         }
     
     def detect_emotional_language(self, text):
@@ -640,46 +565,20 @@ class AdvancedIAAnalyzer:
         text_lower = text.lower()
         return any(word in text_lower for word in emotional_words)
     
-    def assess_source_credibility(self, article):
-        """Évalue la crédibilité de la source"""
-        credible_sources = ['reuters', 'associated press', 'afp', 'bbc']
-        source = article.get('feed', '').lower()
-        
-        return not any(credible in source for credible in credible_sources)
-    
     def calculate_credibility_score(self, biases, contextual_analysis):
         """Calcule un score de crédibilité"""
         base_score = 1.0
         
         for bias in biases:
-            if "Langage émotionnel" in bias:
+            if "émotionnel" in bias.lower():
                 base_score -= 0.2
-            if "Source à vérifier" in bias:
-                base_score -= 0.3
-            if "Divergence" in bias:
+            if "divergence" in bias.lower():
                 base_score -= 0.2
         
         if contextual_analysis.get('urgence', 0) > 0.5:
             base_score += 0.1
-        if contextual_analysis.get('impact', 0) > 0.5:
-            base_score += 0.1
         
         return max(0, min(1, base_score))
-    
-    def generate_bias_recommendations(self, biases):
-        """Génère des recommandations pour corriger les biais"""
-        recommendations = []
-        
-        if "Langage émotionnel" in str(biases):
-            recommendations.append("Recadrer avec un langage plus neutre")
-        
-        if "Source à vérifier" in str(biases):
-            recommendations.append("Recouper avec des sources fiables")
-        
-        if "Divergence" in str(biases):
-            recommendations.append("Contextualiser avec des informations vérifiées")
-        
-        return recommendations
     
     def synthesize_analysis(self, article, contextual_analysis, web_research, thematic_analysis, bias_analysis):
         """Synthétise toutes les analyses"""
@@ -707,17 +606,12 @@ class AdvancedIAAnalyzer:
         }
     
     def calculate_corrected_score(self, original_score, contextual_analysis, web_research, bias_analysis):
-        """Calcule le score corrigé basé sur l'analyse approfondie"""
+        """Calcule le score corrigé"""
         correction = 0
         
         urgency = contextual_analysis.get('urgence', 0)
         if urgency > 0.7:
             correction -= 0.1
-        
-        if 'géopolitique' in contextual_analysis:
-            tensions = contextual_analysis.get('tensions', 0)
-            if tensions > 0.5:
-                correction -= 0.15
         
         if web_research:
             web_sentiment = web_research.get('sentiment_moyen', 0)
@@ -735,43 +629,42 @@ class AdvancedIAAnalyzer:
         recommendations = []
         
         if contextual_analysis.get('urgence', 0) > 0.7:
-            recommendations.append("🚨 SUJET URGENT - Surveillance renforcée recommandée")
+            recommendations.append("🚨 SUJET URGENT - Surveillance renforcée")
         
         scope = contextual_analysis.get('portée', 'local')
         if scope == 'international':
-            recommendations.append("🌍 PORTÉE INTERNATIONALE - Analyse géopolitique approfondie")
+            recommendations.append("🌍 PORTÉE INTERNATIONALE - Analyse géopolitique")
         
         credibility = bias_analysis.get('score_credibilite', 0.5)
         if credibility < 0.7:
-            recommendations.append("🔍 CRÉDIBILITÉ À VÉRIFIER - Recoupement des sources nécessaire")
-        
-        if web_research and web_research.get('coherence', 1) < 0.8:
-            recommendations.append("📊 DIVERGENCE CONTEXTUELLE - Analyse comparative recommandée")
+            recommendations.append("🔍 CRÉDIBILITÉ À VÉRIFIER - Recoupement nécessaire")
         
         return recommendations
 
-# Initialiser l'analyseur IA avancé
+# Initialiser l'analyseur IA
 advanced_analyzer = AdvancedIAAnalyzer()
 
 # ✅ ROUTES PRINCIPALES
 
 @app.route('/')
 def home():
-    """Route racine pour Render"""
+    """Route racine"""
     return jsonify({
         'message': 'Service IA d\'analyse de flux RSS',
         'status': 'running',
         'timestamp': datetime.datetime.now().isoformat(),
+        'version': '2.0',
         'endpoints': {
             'health': '/health',
             'correct_analysis': '/correct_analysis (POST)',
-            'generate_report': '/generate_report (POST)'
+            'generate_report': '/generate_report (POST)',
+            'analyze_full': '/analyze_full (POST)'
         }
     })
 
 @app.route('/health')
 def health_check():
-    """Endpoint de santé pour Render"""
+    """Endpoint de santé"""
     return jsonify({
         'status': 'healthy',
         'service': 'IA Analysis Service',
@@ -787,20 +680,19 @@ def correct_analysis():
         data = request.json or {}
         api_key = data.get('apiKey')
         articles = data.get('articles', [])
-        current_analysis = data.get('currentAnalysis', {})
         themes = data.get('themes', [])
         
         if not api_key:
             return jsonify({'success': False, 'error': 'Clé API requise'})
         
-        print(f"🧠 Correction de l'analyse pour {len(articles)} articles avec {len(themes)} thèmes")
+        print(f"🧠 Correction analyse: {len(articles)} articles, {len(themes)} thèmes")
         
         if themes and not isinstance(themes, list):
             themes = [themes]
         
         corrected_analyses = []
         for i, article in enumerate(articles):
-            print(f"📝 Traitement article {i+1}/{len(articles)}: {article.get('title', '')[:50]}...")
+            print(f"📝 Article {i+1}/{len(articles)}: {article.get('title', '')[:50]}...")
             
             try:
                 deep_analysis = advanced_analyzer.perform_deep_analysis(article, themes)
@@ -810,12 +702,10 @@ def correct_analysis():
                 
                 corrected_analyses.append(final_analysis)
                 
-                print(f"✅ Article {i+1} traité - Score: {final_analysis.get('score_corrected', 0):.2f}, Confiance: {final_analysis.get('confidence', 0):.2f}")
+                print(f"✅ Article {i+1} traité - Score: {final_analysis.get('score_corrected', 0):.2f}")
                 
             except Exception as e:
-                print(f"❌ Erreur traitement article {i+1}: {e}")
-                import traceback
-                traceback.print_exc()
+                print(f"❌ Erreur article {i+1}: {e}")
                 
                 sentiment = article.get('sentiment', {})
                 corrected_analyses.append({
@@ -826,14 +716,14 @@ def correct_analysis():
                     'recherche_web': None,
                     'analyse_thematique': {},
                     'analyse_biases': {'biais_détectés': [], 'score_credibilite': 0.5},
-                    'recommandations_globales': ['Erreur lors de l\'analyse approfondie']
+                    'recommandations_globales': ['Erreur analyse']
                 })
         
         try:
             save_analysis_batch(corrected_analyses, api_key, themes)
-            print(f"💾 Lot d'analyses sauvegardé ({len(corrected_analyses)} articles)")
+            print(f"💾 Lot sauvegardé ({len(corrected_analyses)} articles)")
         except Exception as e:
-            print(f"⚠️ Erreur sauvegarde analyses: {e}")
+            print(f"⚠️ Erreur sauvegarde: {e}")
         
         return jsonify({
             'success': True,
@@ -862,7 +752,7 @@ def correct_analysis():
 
 @app.route('/analyze_full', methods=['POST'])
 def analyze_full():
-    """Endpoint d'analyse complète pour compatibilité"""
+    """Endpoint d'analyse complète"""
     try:
         data = request.json or {}
         api_key = data.get('apiKey')
@@ -870,23 +760,68 @@ def analyze_full():
         if not api_key:
             return jsonify({'success': False, 'error': 'Clé API requise'})
         
+        feed_data = data.get('feed', {})
+        articles = feed_data.get('articles', [])
+        themes = feed_data.get('themes', [])
+        
+        print(f"🔍 Analyse complète: {len(articles)} articles")
+        
+        analyses = []
+        for article in articles[:10]:
+            try:
+                deep_analysis = advanced_analyzer.perform_deep_analysis(article, themes)
+                analyses.append(deep_analysis)
+            except Exception as e:
+                print(f"⚠️ Erreur analyse article: {e}")
+        
+        summary = {
+            'total_articles': len(articles),
+            'analyzed_articles': len(analyses),
+            'average_confidence': sum(a.get('confidence', 0) for a in analyses) / len(analyses) if analyses else 0
+        }
+        
+        key_insights = [
+            f"{len([a for a in analyses if a.get('analyse_contextuelle', {}).get('urgence', 0) > 0.7])} sujets urgents détectés",
+            f"{len([a for a in analyses if len(a.get('analyse_biases', {}).get('biais_détectés', [])) > 0])} articles avec biais détectés"
+        ]
+        
+        sentiment_overview = {
+            'positive': len([a for a in analyses if a.get('score_corrected', 0) > 0.2]) / len(analyses) if analyses else 0,
+            'negative': len([a for a in analyses if a.get('score_corrected', 0) < -0.2]) / len(analyses) if analyses else 0,
+            'neutral': len([a for a in analyses if -0.2 <= a.get('score_corrected', 0) <= 0.2]) / len(analyses) if analyses else 0
+        }
+        
+        recommendations = []
+        urgent_count = len([a for a in analyses if a.get('analyse_contextuelle', {}).get('urgence', 0) > 0.7])
+        if urgent_count > 0:
+            recommendations.append(f"Surveiller {urgent_count} sujets urgents")
+        
+        bias_count = len([a for a in analyses if len(a.get('analyse_biases', {}).get('biais_détectés', [])) > 0])
+        if bias_count > 0:
+            recommendations.append(f"Vérifier {bias_count} articles avec biais")
+        
         return jsonify({
             'success': True,
             'analysis': {
-                'summary': 'Analyse complète effectuée',
-                'key_insights': ['Tendances détectées', 'Sujets principaux identifiés'],
-                'sentiment_overview': {'positive': 0.3, 'negative': 0.2, 'neutral': 0.5},
-                'recommendations': ['Surveiller les tendances', 'Approfondir les sujets identifiés']
+                'summary': f"Analyse de {len(articles)} articles effectuée",
+                'key_insights': key_insights,
+                'sentiment_overview': sentiment_overview,
+                'recommendations': recommendations,
+                'detailed_analyses': analyses[:5]
             },
+            'summary': summary,
             'timestamp': datetime.datetime.now().isoformat()
         })
         
     except Exception as e:
+        print(f"❌ Erreur analyze_full: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
-    """Génère un rapport PDF détaillé (sans matplotlib)"""
+    """Génère un rapport PDF détaillé"""
     try:
         data = request.json or {}
         analyses = data.get('analyses', [])
@@ -899,7 +834,9 @@ def generate_report():
         filename = f"rapport_analyse_{timestamp}.pdf"
         filepath = os.path.join(REPORTS_DIR, filename)
         
-        doc = SimpleDocTemplate(filepath, pagesize=A4)
+        doc = SimpleDocTemplate(filepath, pagesize=A4, 
+                              topMargin=2*cm, bottomMargin=2*cm,
+                              leftMargin=2*cm, rightMargin=2*cm)
         styles = getSampleStyleSheet()
         story = []
         
@@ -907,21 +844,28 @@ def generate_report():
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=16,
+            fontSize=18,
             spaceAfter=30,
-            alignment=1
+            alignment=1,
+            textColor=colors.HexColor('#1a56db')
         )
         story.append(Paragraph("RAPPORT D'ANALYSE AVANCÉE", title_style))
+        story.append(Spacer(1, 12))
         
         # Métadonnées
-        meta_style = styles['Normal']
-        story.append(Paragraph(f"Date de génération: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", meta_style))
-        story.append(Paragraph(f"Nombre d'articles analysés: {len(analyses)}", meta_style))
-        story.append(Paragraph(f"Thèmes: {', '.join(str(t) for t in themes)}", meta_style))
+        meta_style = ParagraphStyle('Meta', parent=styles['Normal'], fontSize=10)
+        story.append(Paragraph(f"<b>Date:</b> {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", meta_style))
+        story.append(Paragraph(f"<b>Articles analysés:</b> {len(analyses)}", meta_style))
+        
+        theme_names = ', '.join(str(t.get('name', t) if isinstance(t, dict) else t) for t in themes[:5])
+        if len(themes) > 5:
+            theme_names += f" (+{len(themes)-5} autres)"
+        story.append(Paragraph(f"<b>Thèmes:</b> {theme_names}", meta_style))
         story.append(Spacer(1, 20))
         
         # Résumé statistique
         story.append(Paragraph("RÉSUMÉ STATISTIQUE", styles['Heading2']))
+        story.append(Spacer(1, 12))
         
         original_scores = [a.get('score_original', 0) for a in analyses]
         corrected_scores = [a.get('score_corrected', 0) for a in analyses]
@@ -932,72 +876,145 @@ def generate_report():
             ['Score moyen original', f"{sum(original_scores)/len(original_scores):.3f}"],
             ['Score moyen corrigé', f"{sum(corrected_scores)/len(corrected_scores):.3f}"],
             ['Confiance moyenne', f"{sum(confidences)/len(confidences):.3f}"],
-            ['Corrections significatives', f"{sum(1 for o,c in zip(original_scores, corrected_scores) if abs(o-c) > 0.1)}/{len(analyses)}"]
+            ['Corrections significatives', f"{sum(1 for o,c in zip(original_scores, corrected_scores) if abs(o-c) > 0.1)}/{len(analyses)}"],
+            ['Articles avec biais', f"{sum(1 for a in analyses if len(a.get('analyse_biases', {}).get('biais_détectés', [])) > 0)}"]
         ]
         
-        stats_table = Table(stats_data, colWidths=[200, 100])
+        stats_table = Table(stats_data, colWidths=[12*cm, 5*cm])
         stats_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a56db')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f3f4f6')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTSIZE', (0, 1), (-1, -1), 10)
         ]))
         story.append(stats_table)
         story.append(Spacer(1, 20))
         
-        # Détails par article (limité à 5 pour le rapport)
-        story.append(Paragraph("DÉTAILS PAR ARTICLE", styles['Heading2']))
+        # Analyse de sentiment
+        story.append(Paragraph("ANALYSE DE SENTIMENT", styles['Heading2']))
+        story.append(Spacer(1, 12))
+        
+        positive = len([s for s in corrected_scores if s > 0.2])
+        negative = len([s for s in corrected_scores if s < -0.2])
+        neutral = len(corrected_scores) - positive - negative
+        
+        sentiment_data = [
+            ['Sentiment', 'Nombre', 'Pourcentage'],
+            ['Positif', str(positive), f"{(positive/len(corrected_scores)*100):.1f}%"],
+            ['Neutre', str(neutral), f"{(neutral/len(corrected_scores)*100):.1f}%"],
+            ['Négatif', str(negative), f"{(negative/len(corrected_scores)*100):.1f}%"]
+        ]
+        
+        sentiment_table = Table(sentiment_data, colWidths=[8*cm, 5*cm, 4*cm])
+        sentiment_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#10b981')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f3f4f6')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTSIZE', (0, 1), (-1, -1), 10)
+        ]))
+        story.append(sentiment_table)
+        story.append(Spacer(1, 20))
+        
+        # Détails par article (limité à 5)
+        story.append(Paragraph("DÉTAILS PAR ARTICLE (5 premiers)", styles['Heading2']))
+        story.append(Spacer(1, 12))
         
         for i, analysis in enumerate(analyses[:5]):
-            story.append(Paragraph(f"Article {i+1}", styles['Heading3']))
+            story.append(Paragraph(f"<b>Article {i+1}</b>", styles['Heading3']))
+            story.append(Spacer(1, 6))
             
             article_data = [
+                ['Métrique', 'Valeur'],
                 ['Score original', f"{analysis.get('score_original', 0):.3f}"],
                 ['Score corrigé', f"{analysis.get('score_corrected', 0):.3f}"],
                 ['Confiance', f"{analysis.get('confidence', 0):.3f}"],
-                ['Biais détectés', f"{len(analysis.get('analyse_biases', {}).get('biais_détectés', []))}"]
+                ['Biais détectés', str(len(analysis.get('analyse_biases', {}).get('biais_détectés', [])))]
             ]
             
-            article_table = Table(article_data, colWidths=[150, 100])
+            urgence = analysis.get('analyse_contextuelle', {}).get('urgence', 0)
+            if urgence > 0.5:
+                article_data.append(['Urgence', f"{urgence:.2f} ⚠️"])
+            
+            article_table = Table(article_data, colWidths=[10*cm, 7*cm])
             article_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#6366f1')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f3f4f6')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('FONTSIZE', (0, 0), (-1, -1), 9)
             ]))
             story.append(article_table)
+            story.append(Spacer(1, 8))
             
             # Recommandations
             recommendations = analysis.get('recommandations_globales', [])
             if recommendations:
-                story.append(Paragraph("Recommandations:", styles['Normal']))
+                story.append(Paragraph("<b>Recommandations:</b>", styles['Normal']))
                 for rec in recommendations[:3]:
-                    story.append(Paragraph(f"• {rec}", styles['Normal']))
+                    story.append(Paragraph(f"• {rec}", ParagraphStyle('Bullet', parent=styles['Normal'], fontSize=9, leftIndent=20)))
+                story.append(Spacer(1, 4))
+            
+            # Biais détectés
+            biases = analysis.get('analyse_biases', {}).get('biais_détectés', [])
+            if biases:
+                story.append(Paragraph("<b>Biais détectés:</b>", styles['Normal']))
+                for bias in biases[:2]:
+                    story.append(Paragraph(f"• {bias}", ParagraphStyle('Bullet', parent=styles['Normal'], fontSize=9, leftIndent=20)))
             
             story.append(Spacer(1, 15))
+        
+        # Pied de page
+        story.append(Spacer(1, 30))
+        footer_style = ParagraphStyle('Footer', parent=styles['Normal'], 
+                                     fontSize=8, textColor=colors.grey, 
+                                     alignment=1)
+        story.append(Paragraph(f"Rapport généré le {datetime.datetime.now().strftime('%d/%m/%Y à %H:%M')} - Service IA d'Analyse RSS", footer_style))
         
         # Générer le PDF
         doc.build(story)
         
+        print(f"✅ Rapport PDF généré: {filename}")
+        
         return jsonify({
             'success': True,
             'reportUrl': f'/reports/{filename}',
-            'filename': filename
+            'filename': filename,
+            'filesize': os.path.getsize(filepath)
         })
         
     except Exception as e:
         print(f"❌ Erreur génération rapport: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/reports/<filename>')
 def download_report(filename):
     """Télécharge un rapport généré"""
-    return send_from_directory(REPORTS_DIR, filename)
+    try:
+        return send_from_directory(REPORTS_DIR, filename, as_attachment=True)
+    except Exception as e:
+        print(f"❌ Erreur téléchargement: {e}")
+        return jsonify({'success': False, 'error': 'Fichier introuvable'}), 404
 
 # ✅ DÉMARRAGE COMPATIBLE RENDER
 if __name__ == '__main__':
     print(f"🚀 Démarrage du service IA sur le port {PORT}")
     print(f"📁 Dossier des rapports: {REPORTS_DIR}")
+    print(f"🧠 Analyseur IA initialisé")
+    print(f"✅ Service prêt pour Render")
+    
     app.run(host='0.0.0.0', port=PORT, debug=False)
