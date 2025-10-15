@@ -7,7 +7,6 @@ class ChartManager {
         this.aggregation = 'count';
         this.showMinorThemes = false;
         this.minorThreshold = 0.02; // 2% du total
-        this.currentChart = null;
         
         this.initialize();
     }
@@ -21,14 +20,21 @@ class ChartManager {
     loadSettings() {
         const savedSettings = localStorage.getItem('chartSettings');
         if (savedSettings) {
-            const settings = JSON.parse(savedSettings);
-            this.timeScale = settings.timeScale || 'week';
-            this.aggregation = settings.aggregation || 'count';
-            this.showMinorThemes = settings.showMinorThemes || false;
-            this.minorThreshold = settings.minorThreshold || 0.02;
-            
-            if (settings.selectedThemes) {
-                this.selectedThemes = new Set(settings.selectedThemes);
+            try {
+                const settings = JSON.parse(savedSettings);
+                this.timeScale = settings.timeScale || 'week';
+                this.aggregation = settings.aggregation || 'count';
+                this.showMinorThemes = settings.showMinorThemes || false;
+                this.minorThreshold = settings.minorThreshold || 0.02;
+                
+                if (settings.selectedThemes) {
+                    this.selectedThemes = new Set(settings.selectedThemes);
+                }
+                
+                // Mettre à jour les contrôles UI
+                this.updateUIControls();
+            } catch (e) {
+                console.error('Erreur lors du chargement des paramètres:', e);
             }
         }
     }
@@ -44,54 +50,73 @@ class ChartManager {
         localStorage.setItem('chartSettings', JSON.stringify(settings));
     }
     
-    createThemeSelector() {
-        const chartCard = document.querySelector('#timelineChart')?.closest('.card');
-        if (!chartCard) return;
+    updateUIControls() {
+        const timeScaleSelect = document.getElementById('timeScale');
+        const aggregationSelect = document.getElementById('aggregationType');
+        const toggleBtn = document.getElementById('toggleMinorBtn');
         
-        const selectorHtml = `
-            <div class="theme-selector">
-                <h4>📊 Sélection des thèmes à afficher</h4>
-                <div class="theme-checkboxes" id="themeCheckboxes">
-                    <div class="loading">Chargement des thèmes...</div>
-                </div>
-                <div class="chart-controls">
-                    <button onclick="chartManager.selectAllThemes()" class="control-btn">✓ Tout sélectionner</button>
-                    <button onclick="chartManager.deselectAllThemes()" class="control-btn">✗ Tout désélectionner</button>
-                    <button onclick="chartManager.selectTopThemes(5)" class="control-btn">🏆 Top 5</button>
-                    <button onclick="chartManager.selectTopThemes(10)" class="control-btn">🎯 Top 10</button>
-                </div>
-            </div>
-        `;
-        
-        chartCard.insertAdjacentHTML('afterbegin', selectorHtml);
-        this.updateThemeSelector();
+        if (timeScaleSelect) timeScaleSelect.value = this.timeScale;
+        if (aggregationSelect) aggregationSelect.value = this.aggregation;
+        if (toggleBtn) {
+            toggleBtn.textContent = this.showMinorThemes ? 
+                '👁️ Afficher thèmes mineurs' : 
+                '👁️ Masquer thèmes mineurs';
+        }
     }
     
-    updateThemeSelector() {
-        const checkboxesContainer = document.getElementById('themeCheckboxes');
-        if (!checkboxesContainer) return;
+    createThemeSelector() {
+        const container = document.getElementById('themeSelectorContainer');
+        if (!container) return;
         
         const themes = this.getAvailableThemes();
         if (themes.length === 0) {
-            checkboxesContainer.innerHTML = '<div class="loading">Aucun thème disponible</div>';
+            container.innerHTML = '<div class="loading">Aucun thème disponible</div>';
             return;
         }
         
         // Si aucun thème n'est sélectionné, sélectionner les 5 premiers par défaut
         if (this.selectedThemes.size === 0) {
             themes.slice(0, 5).forEach(theme => this.selectedThemes.add(theme.name));
+            this.saveSettings();
         }
         
-        checkboxesContainer.innerHTML = themes.map(theme => `
+        const selectorHtml = `
+            <div class="theme-selector">
+                <h4>📊 Sélection des thèmes à afficher</h4>
+                <div class="theme-checkboxes" id="themeCheckboxes">
+                    ${this.generateThemeCheckboxes()}
+                </div>
+                <div class="chart-controls">
+                    <button onclick="app.chartManager.selectAllThemes()" class="control-btn">✓ Tout sélectionner</button>
+                    <button onclick="app.chartManager.deselectAllThemes()" class="control-btn">✗ Tout désélectionner</button>
+                    <button onclick="app.chartManager.selectTopThemes(5)" class="control-btn">🏆 Top 5</button>
+                    <button onclick="app.chartManager.selectTopThemes(10)" class="control-btn">🎯 Top 10</button>
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = selectorHtml;
+    }
+    
+    generateThemeCheckboxes() {
+        const themes = this.getAvailableThemes();
+        return themes.map(theme => `
             <label class="theme-checkbox ${!this.selectedThemes.has(theme.name) ? 'disabled' : ''}">
                 <input type="checkbox" value="${theme.name}" 
                        ${this.selectedThemes.has(theme.name) ? 'checked' : ''}
-                       onchange="chartManager.toggleTheme('${theme.name}', this.checked)">
+                       onchange="app.chartManager.toggleTheme('${theme.name}', this.checked)">
                 <span class="theme-color" style="background-color: ${theme.color}"></span>
                 <span class="theme-name">${theme.name}</span>
                 <span class="theme-count">(${theme.count})</span>
             </label>
         `).join('');
+    }
+    
+    updateThemeSelector() {
+        const checkboxesContainer = document.getElementById('themeCheckboxes');
+        if (checkboxesContainer) {
+            checkboxesContainer.innerHTML = this.generateThemeCheckboxes();
+        }
     }
     
     getAvailableThemes() {
@@ -164,9 +189,11 @@ class ChartManager {
     
     toggleMinorThemes() {
         this.showMinorThemes = !this.showMinorThemes;
-        const button = document.querySelector('.toggle-minor-btn');
+        const button = document.getElementById('toggleMinorBtn');
         if (button) {
-            button.textContent = this.showMinorThemes ? '👁️ Afficher thèmes mineurs' : '👁️ Masquer thèmes mineurs';
+            button.textContent = this.showMinorThemes ? 
+                '👁️ Afficher thèmes mineurs' : 
+                '👁️ Masquer thèmes mineurs';
         }
         this.refreshChart();
         this.saveSettings();
@@ -180,7 +207,9 @@ class ChartManager {
     }
     
     prepareChartData() {
-        if (!this.app.articles || !this.app.themes) return { dates: [], themes: [] };
+        if (!this.app.articles || !this.app.themes || this.app.articles.length === 0) {
+            return { dates: ['Aucune donnée'], themes: [] };
+        }
         
         // Grouper les données par période
         const periods = this.groupByPeriod(this.app.articles);
@@ -248,7 +277,7 @@ class ChartManager {
         );
         
         // Grouper les thèmes mineurs si nécessaire
-        if (!this.showMinorThemes) {
+        if (!this.showMinorThemes && themesToShow.length > 8) {
             const majorThemes = [];
             const minorThemes = [];
             
@@ -303,7 +332,7 @@ class ChartManager {
     }
     
     convertToCSV(data) {
-        const headers = ['Date', ...data.themes.map(theme => theme.name)];
+        const headers = ['Date', ...data.themes.map(theme => `"${theme.name}"`)];
         const rows = [headers.join(',')];
         
         data.dates.forEach((date, index) => {
@@ -329,27 +358,7 @@ class ChartManager {
     }
     
     setupEventListeners() {
-        // Mettre à jour les contrôles quand les données changent
-        if (this.app) {
-            const originalRefresh = this.app.refreshData;
-            if (originalRefresh) {
-                this.app.refreshData = (...args) => {
-                    const result = originalRefresh.apply(this.app, args);
-                    setTimeout(() => {
-                        this.updateThemeSelector();
-                        this.refreshChart();
-                    }, 100);
-                    return result;
-                };
-            }
-        }
-    }
-    
-    // Méthode pour détruire le gestionnaire
-    destroy() {
-        if (this.currentChart) {
-            this.currentChart.destroy();
-        }
+        // Les écouteurs sont déjà attachés via les attributs onclick dans le HTML
     }
 }
 

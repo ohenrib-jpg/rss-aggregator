@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS Thématique + IA V.1.2</title>
+    <title>Agrégateur RSS Thématique + IA V.2.3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -30,7 +33,7 @@
                 <div class="demo-content">
                     <div class="demo-title">Application de démonstration</div>
                     <div class="demo-text">
-                        Avec à présent la possibilité de stocker jusqu’à 1Go de données (Merci à Render!). Attention : cela reste un serveur de test et de présentation, il se réinitialise automatiquement lorsque les quotas alloués sont atteints 
+                        Avec à présent la possibilité de stocker jusqu'à 1Go de données (Merci à Render!). Attention : cela reste un serveur de test et de présentation, il se réinitialise automatiquement lorsque les quotas alloués sont atteints 
                     </div>
                     <div class="demo-api-info">
                         Testez la fonction IA avec une clé API gratuite sur 
@@ -51,39 +54,32 @@
                     <span class="blink">🔄</span> Auto-actualisation
                 </div>
                 <button class="refresh" onclick="app.manualRefresh()" id="refreshBtn">
-                    🔄 Générer
+                    🔄 Actualiser
                 </button>
             </div>
         </div>
 
-        <!-- Barre d'export réorganisée sur 2 lignes -->
+        <!-- Barre d'export CORRIGÉE - Une seule ligne alignée -->
         <div class="export-bar">
-            <!-- Première ligne de boutons -->
-            <div class="export-row">
-                <button class="export-btn json" onclick="app.exportData('json')">
-                    📥 Export JSON
-                </button>
-                <button class="export-btn csv" onclick="app.exportData('csv')">
-                    📥 Export CSV
-                </button>
-                <button class="export-btn stats" onclick="app.showLearningStats()">
-                    📊 Stats Apprentissage
-                </button>
-            </div>
-            
-            <!-- Deuxième ligne de boutons -->
-            <div class="export-row">
-                <button class="export-btn ia" onclick="app.runAIAnalysis()" id="iaAnalyzeBtn">
-                    🧠 Analyse IA
-                </button>
-                <button class="export-btn ia-config" onclick="app.showIAApiKeyModal()" id="iaConfigBtn">
-                    ⚙️ Config IA
-                </button>
-            </div>
+            <button class="export-btn json" onclick="app.exportData('json')">
+                📥 Export JSON
+            </button>
+            <button class="export-btn csv" onclick="app.exportData('csv')">
+                📥 Export CSV
+            </button>
+            <button class="export-btn stats" onclick="app.showLearningStats()">
+                📊 Stats Apprentissage
+            </button>
+            <button class="export-btn ia" onclick="app.runAIAnalysis()" id="iaAnalyzeBtn">
+                🧠 Analyse IA
+            </button>
+            <button class="export-btn ia-config" onclick="app.showIAApiKeyModal()" id="iaConfigBtn">
+                ⚙️ Config IA
+            </button>
         </div>
 
         <!-- Indicateur Corrections IA -->
-        <div id="iaStatusBar" class="status-bar" style="display: none; border-left-color: #8b5cf6;">
+        <div id="iaStatusBar" class="status-bar ia-status-bar" style="display: none;">
             <div class="auto-refresh-indicator">
                 <span class="blink">🤖</span> 
                 <span id="iaStatusText">Corrections IA actives</span>
@@ -124,48 +120,46 @@
                         <canvas id="themeChart" height="250"></canvas>
                     </div>
                     <div class="card">
-    <h3>Évolution Temporelle</h3>
-    
-     <!-- Contrôles avancés du graphique -->
-        <div class="chart-controls-bar">
-            <div class="control-group">
-                <label>Échelle temporelle :</label>
-                    <select id="timeScale" onchange="chartManager.changeTimeScale(this.value)">
-                    <option value="day">Par jour</option>
-                    <option value="week" selected>Par semaine</option>
-                    <option value="month">Par mois</option>
-                    <option value="quarter">Par trimestre</option>
-                </select>
-            </div>
-        
-                   <div class="control-group">
-                   <label>Agrégation :</label>
-                   <select id="aggregationType" onchange="chartManager.changeAggregation(this.value)">
-                    <option value="count">Nombre d'articles</option>
-                    <option value="percentage">Pourcentage</option>
-                    <option value="movingAverage">Moyenne mobile (7j)</option>
-                  </select>
-                </div>
-        
-                 <div class="control-group">
-                 <button onclick="chartManager.toggleMinorThemes()" class="toggle-minor-btn">
-                  👁️ Masquer thèmes mineurs
-                 </button>
-                 <button onclick="chartManager.exportChartData()" class="export-data-btn">
-                  📥 Exporter données
-                </button>
-              </div>
-          </div>
-    
-                    <!-- Le sélecteur de thèmes sera injecté ici automatiquement -->
-    
-                    <div class="chart-container">
-                    <canvas id="timelineChart" height="400"></canvas>
-                  </div>
-    
-                  <!-- Légende interactive -->
-                  <div class="chart-legend" id="timelineLegend"></div>
-                   </div>
+                        <h3>Évolution Temporelle</h3>
+                        
+                        <!-- Contrôles avancés du graphique -->
+                        <div class="chart-controls-bar">
+                            <div class="control-group">
+                                <label>Échelle temporelle :</label>
+                                <select id="timeScale" onchange="app.chartManager.changeTimeScale(this.value)">
+                                    <option value="day">Par jour</option>
+                                    <option value="week" selected>Par semaine</option>
+                                    <option value="month">Par mois</option>
+                                    <option value="quarter">Par trimestre</option>
+                                </select>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label>Agrégation :</label>
+                                <select id="aggregationType" onchange="app.chartManager.changeAggregation(this.value)">
+                                    <option value="count" selected>Nombre d'articles</option>
+                                    <option value="percentage">Pourcentage</option>
+                                    <option value="movingAverage">Moyenne mobile (7j)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="control-group">
+                                <button onclick="app.chartManager.toggleMinorThemes()" class="toggle-minor-btn" id="toggleMinorBtn">
+                                    👁️ Masquer thèmes mineurs
+                                </button>
+                                <button onclick="app.chartManager.exportChartData()" class="export-data-btn">
+                                    📥 Exporter données
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Sélecteur de thèmes injecté ici -->
+                        <div id="themeSelectorContainer"></div>
+                        
+                        <div class="chart-container">
+                            <canvas id="timelineChart" height="400"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -296,7 +290,7 @@
                 </div>
             </div>
 
-            <!-- NOUVEL ONGLET : Corrections IA -->
+            <!-- ONGLET : Corrections IA -->
             <div id="ia-correctionsTab" class="tab-content">
                 <div class="dashboard">
                     <div class="card">
@@ -403,7 +397,7 @@
         </div>
     </div>
 
-    <!-- NOUVEAU : Modal pour la configuration IA -->
+    <!-- Modal pour la configuration IA -->
     <div id="iaApiKeyModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="app.closeIAApiKeyModal()">&times;</span>
@@ -445,203 +439,49 @@
         </div>
     </div>
 
+    <script src="chart-manager.js"></script>
     <script src="app.js"></script>
 
-    <style>
-        /* Styles pour le nouveau header */
-        .header-main {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        .header-title h1 {
-            margin: 0 0 8px 0;
-            font-size: 2rem;
-            font-weight: 700;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .header-subtitle {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-
-        .header-subtitle .author {
-            background: rgba(255,255,255,0.2);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-weight: 600;
-        }
-
-        .header-subtitle .version {
-            background: rgba(255,255,255,0.15);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-family: monospace;
-        }
-
-        .header-tagline {
-            font-size: 1rem;
-            opacity: 0.9;
-            margin-top: 8px;
-            line-height: 1.4;
-        }
-
-        /* Styles pour le bandeau de démonstration amélioré */
-        .demo-banner {
-            display: flex;
-            align-items: flex-start;
-            gap: 15px;
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            border: 1px solid #ffeaa7;
-            border-left: 4px solid #fdcb6e;
-            padding: 16px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .demo-icon {
-            font-size: 1.5rem;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .demo-content {
-            flex: 1;
-        }
-
-        .demo-title {
-            font-weight: 700;
-            font-size: 1rem;
-            color: #2d3436;
-            margin-bottom: 6px;
-        }
-
-        .demo-text {
-            font-size: 0.9rem;
-            color: #636e72;
-            line-height: 1.4;
-            margin-bottom: 8px;
-        }
-
-        .demo-api-info {
-            font-size: 0.85rem;
-            color: #0984e3;
-        }
-
-        .demo-api-info a {
-            color: #0984e3;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .demo-api-info a:hover {
-            text-decoration: underline;
-        }
-
-        /* Styles pour la barre d'export réorganisée */
-        .export-bar {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .export-row {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .export-row:first-child {
-            margin-bottom: 10px;
-        }
-
-        .export-btn {
-            flex: 1;
-            min-width: 140px;
-            max-width: 200px;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .export-btn.json {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-        }
-
-        .export-btn.csv {
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            color: white;
-        }
-
-        .export-btn.ia {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            color: white;
-        }
-
-        .export-btn.ia-config {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-        }
-
-        .export-btn.stats {
-            background: linear-gradient(135deg, #06b6d4, #0891b2);
-            color: white;
-        }
-
-        .export-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .export-row {
-                flex-direction: column;
-                align-items: center;
+    <script>
+        // Script d'initialisation des présélecteurs de couleurs
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialiser les présélecteurs de couleurs
+            const colorPresets = document.querySelectorAll('.color-preset');
+            colorPresets.forEach(preset => {
+                preset.addEventListener('click', function() {
+                    const color = this.getAttribute('data-color');
+                    document.getElementById('themeColor').value = color;
+                    
+                    // Mettre à jour la classe active
+                    colorPresets.forEach(p => p.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+            
+            // Initialiser le slider de score
+            const scoreSlider = document.getElementById('expectedScore');
+            if (scoreSlider) {
+                scoreSlider.addEventListener('input', function() {
+                    document.getElementById('scoreValue').textContent = parseFloat(this.value).toFixed(2);
+                });
             }
             
-            .export-btn {
-                min-width: 100%;
-                max-width: 100%;
-            }
+            // Fermeture des modals
+            document.querySelectorAll('.modal .close').forEach(closeBtn => {
+                closeBtn.addEventListener('click', function() {
+                    this.closest('.modal').style.display = 'none';
+                });
+            });
             
-            .header-title h1 {
-                font-size: 1.6rem;
-            }
-            
-            .header-subtitle {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-            
-            .demo-banner {
-                flex-direction: column;
-                text-align: center;
-            }
-            
-            .demo-icon {
-                align-self: center;
-            }
-        }
-    </style>
+            // Fermeture des modals en cliquant à l'extérieur
+            window.addEventListener('click', function(event) {
+                document.querySelectorAll('.modal').forEach(modal => {
+                    if (event.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
