@@ -2,8 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Parser = require('rss-parser');
-const { initializeDatabase, pool } = require('./db/database');
-const sqlStorage = require('./modules/sql_storage_manager');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -15,18 +13,25 @@ const parser = new Parser({
     item: ['content:encoded']
   }
 });
-const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ✅ CONFIGURATION RENDER
+const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// ✅ MIDDLEWARE POUR RENDER
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+// ✅ SERVIR LES FICHIERS STATIQUES POUR RENDER
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Fichiers de configuration
-const CONFIG_FILE = path.join(__dirname, 'config.json');
-const THEMES_FILE = path.join(__dirname, 'themes.json');
-const SENTIMENT_LEXICON_FILE = path.join(__dirname, 'sentiment-lexicon.json');
-const IA_CORRECTIONS_FILE = path.join(__dirname, 'ia-corrections.json');
+// ✅ GESTION DES FICHIERS DE CONFIGURATION POUR RENDER
+const configDir = __dirname;
+const CONFIG_FILE = path.join(configDir, 'config.json');
+const THEMES_FILE = path.join(configDir, 'themes.json');
+const SENTIMENT_LEXICON_FILE = path.join(configDir, 'sentiment-lexicon.json');
+const IA_CORRECTIONS_FILE = path.join(configDir, 'ia-corrections.json');
 
 // Cache pour les données analysées
 let cachedAnalysis = {
@@ -45,32 +50,41 @@ const DEFAULT_THEME_COLORS = [
   '#06b6d4', '#84cc16', '#f97316', '#ec4899', '#64748b'
 ];
 
-// Initialiser les fichiers de configuration s'ils n'existent pas
+// ✅ INITIALISATION COMPATIBLE RENDER
 function initializeConfigFiles() {
-  if (!fs.existsSync(CONFIG_FILE)) {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ feeds: [] }, null, 2));
-    console.log('📁 Fichier config.json créé');
-  }
-  if (!fs.existsSync(THEMES_FILE)) {
-    fs.writeFileSync(THEMES_FILE, JSON.stringify({ themes: [] }, null, 2));
-    console.log('📁 Fichier themes.json créé');
-  }
-  if (!fs.existsSync(SENTIMENT_LEXICON_FILE)) {
-    initializeSentimentLexicon();
-    console.log('📁 Fichier sentiment-lexicon.json créé');
-  }
-  if (!fs.existsSync(IA_CORRECTIONS_FILE)) {
-    fs.writeFileSync(IA_CORRECTIONS_FILE, JSON.stringify({
-      corrections: [],
-      lastCorrection: null,
-      stats: {
-        totalCorrections: 0,
-        accuracyImprovement: 0,
-        falsePositivesCorrected: 0,
-        contextImprovements: 0
-      }
-    }, null, 2));
-    console.log('📁 Fichier ia-corrections.json créé');
+  try {
+    // Créer le dossier de configuration si nécessaire
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(CONFIG_FILE)) {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify({ feeds: [] }, null, 2));
+      console.log('📁 Fichier config.json créé');
+    }
+    if (!fs.existsSync(THEMES_FILE)) {
+      fs.writeFileSync(THEMES_FILE, JSON.stringify({ themes: [] }, null, 2));
+      console.log('📁 Fichier themes.json créé');
+    }
+    if (!fs.existsSync(SENTIMENT_LEXICON_FILE)) {
+      initializeSentimentLexicon();
+      console.log('📁 Fichier sentiment-lexicon.json créé');
+    }
+    if (!fs.existsSync(IA_CORRECTIONS_FILE)) {
+      fs.writeFileSync(IA_CORRECTIONS_FILE, JSON.stringify({
+        corrections: [],
+        lastCorrection: null,
+        stats: {
+          totalCorrections: 0,
+          accuracyImprovement: 0,
+          falsePositivesCorrected: 0,
+          contextImprovements: 0
+        }
+      }, null, 2));
+      console.log('📁 Fichier ia-corrections.json créé');
+    }
+  } catch (error) {
+    console.error('❌ Erreur initialisation fichiers config:', error);
   }
 }
 
@@ -148,7 +162,7 @@ function saveSentimentLexicon(lexicon) {
 class IACorrectionManager {
   constructor() {
     this.corrections = this.loadCorrections();
-    this.iaApiKey = null;
+    this.iaApiKey = process.env.IA_API_KEY || null; // ✅ Variable d'environnement
     this.lastIACall = null;
     this.iaInterval = null;
   }
@@ -1033,16 +1047,6 @@ async function refreshData() {
       index === self.findIndex(a => a.id === article.id)
     );
 
-    // Sauvegarder les articles dans la base de données
-    try {
-      for (const article of uniqueArticles) {
-        await sqlStorage.saveArticle(article);
-      }
-      console.log(`💾 ${uniqueArticles.length} articles sauvegardés en base de données`);
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde base de données:', error);
-    }
-
     if (cachedAnalysis.analysis && cachedAnalysis.analysis.themes) {
       analysisHistory.push({
         ...cachedAnalysis.analysis,
@@ -1072,7 +1076,7 @@ async function refreshData() {
   }
 }
 
-// Routes API
+// ✅ ROUTES API COMPATIBLES RENDER
 
 // Récupérer tous les articles (avec cache)
 app.get('/api/articles', async (req, res) => {
@@ -1108,37 +1112,6 @@ app.get('/api/articles', async (req, res) => {
       },
       lastUpdate: null
     });
-  }
-});
-
-// NOUVELLE ROUTE : Récupérer les articles depuis la base de données
-app.get('/api/articles/db', async (req, res) => {
-  try {
-    const { limit = 100, offset = 0, theme = null } = req.query;
-    const articles = await sqlStorage.getArticles(parseInt(limit), parseInt(offset), theme);
-    
-    res.json({
-      success: true,
-      articles: articles,
-      total: articles.length
-    });
-  } catch (error) {
-    console.error('Erreur API articles DB:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// NOUVELLE ROUTE : Statistiques de la base de données
-app.get('/api/stats/db', async (req, res) => {
-  try {
-    const stats = await sqlStorage.getDatabaseStats();
-    res.json({
-      success: true,
-      stats: stats
-    });
-  } catch (error) {
-    console.error('Erreur API stats DB:', error);
-    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -1527,6 +1500,18 @@ app.get('/api/export/csv', async (req, res) => {
   }
 });
 
+// ✅ ROUTES POUR RENDER
+
+// Route de santé pour Render
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: NODE_ENV,
+    port: PORT
+  });
+});
+
 // Route racine - servir index.html depuis public
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -1537,42 +1522,27 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Démarrer le serveur
-app.listen(PORT, async () => {
-  console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
+// ✅ DÉMARRAGE COMPATIBLE RENDER
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+  console.log(`🌍 Environnement: ${NODE_ENV}`);
   console.log(`📁 Dossier public: ${path.join(__dirname, 'public')}`);
   console.log(`📁 Dossier courant: ${__dirname}`);
   
-  // Initialiser la base de données
-  try {
-    await initializeDatabase();
-    console.log('🗄️  Base de données initialisée avec succès');
-  } catch (error) {
-    console.error('❌ Erreur initialisation base de données:', error);
-  }
-  
+  // Initialiser les fichiers de configuration
   initializeConfigFiles();
   
   console.log('🔄 Premier rafraîchissement des données...');
   await refreshData();
   
+  // Rafraîchissement automatique
   setInterval(async () => {
     await refreshData();
-  }, 30000);
+  }, 5 * 60 * 1000); // ✅ 5 minutes pour Render
   
-  console.log('🔄 Rafraîchissement automatique activé (30 secondes)');
-  console.log('🧠 Module IA intégré avec corrections automatiques (toutes les heures)');
-  console.log('🗄️  Base de données SQLite intégrée');
+  console.log('✅ Serveur prêt pour Render');
+  console.log('🔄 Rafraîchissement automatique activé (5 minutes)');
+  console.log('🧠 Module IA intégré avec corrections automatiques');
   console.log('📤 Export disponible: /api/export/json et /api/export/csv');
-  console.log('🎨 Personnalisation des couleurs par thème activée');
-  console.log('📈 Analyse avancée des tendances activée');
-  console.log('🧠 Analyse de sentiment avec apprentissage automatique activée');
-  console.log('🎭 Détection d\'ironie et de contexte activée');
-  console.log('🔧 Routes IA disponibles:');
-  console.log('   - POST /api/ia/config → Configuration clé API');
-  console.log('   - POST /api/ia/correct → Correction manuelle');
-  console.log('   - POST /api/ia/analyze → Analyse complète + rapport');
-  console.log('🗄️  Routes Base de données:');
-  console.log('   - GET /api/articles/db → Articles depuis DB');
-  console.log('   - GET /api/stats/db → Statistiques DB');
+  console.log('🏥 Health check: /health');
 });
