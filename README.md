@@ -46,12 +46,9 @@ EVO3 15/10/2025=>
 - **Sauvegarde automatique** et récupération des données
 - **Migration transparente** depuis l'ancien système JSON/Parquet
 
-## 🔧 Installation
+MAJ 15/10 V3.2
 
-1. **Cloner le repository**
-```bash
-git clone <votre-repo>
-cd geopolis-ia-aggregator
+- **Integration PostgreSQL
 
 init db base :
 npm run init-db
