@@ -62,37 +62,7 @@ class RSSAggregator {
         this.currentAnalysis = null;
         this.iaApiKey = null;
         this.iaAutoCorrection = false;
-        this.flaskServiceUrl = 'https://rss-aggregator-1-wx0b.onrender.com';
         console.log('RSSAggregator initialisé avec module IA');
-    }
-
-    // Fonction utilitaire pour les appels IA
-    async makeIACall(endpoint, data = {}) {
-        try {
-            console.log(`🔗 Appel IA: ${endpoint}`);
-            
-            const response = await fetch(`${this.flaskServiceUrl}${endpoint}`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-
-            // Vérifier que c'est bien du JSON
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const text = await response.text();
-                console.error('❌ Réponse non-JSON:', text.substring(0, 200));
-                throw new Error('Le service IA a retourné une réponse non-JSON');
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error(`❌ Erreur appel IA ${endpoint}:`, error);
-            throw error;
-        }
     }
 
     async init() {
@@ -124,11 +94,29 @@ class RSSAggregator {
 
     async enableIACorrections() {
         try {
-            const result = await this.makeIACall('/api/ia/config', {
-                apiKey: this.iaApiKey,
-                enableAutoCorrection: this.iaAutoCorrection
-            });
+            let response;
+            try {
+                response = await fetch('/api/ia/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        apiKey: this.iaApiKey,
+                        enableAutoCorrection: this.iaAutoCorrection
+                    })
+                });
+            } catch (e) {
+                response = await fetch('./api/ia/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        apiKey: this.iaApiKey,
+                        enableAutoCorrection: this.iaAutoCorrection
+                    })
+                });
+            }
 
+            const result = await response.json();
+            
             if (result.success) {
                 this.showIAStatusBar(true);
                 this.showMessage('🤖 Corrections IA activées', 'success');
@@ -155,6 +143,73 @@ class RSSAggregator {
         }
     }
 
+async runAdvancedAIAnalysis() {
+    if (!this.iaApiKey) {
+        this.showIAApiKeyModal();
+        return;
+    }
+
+    if (!confirm('🚀 Lancer l\'analyse IA AVANCÉE ?\n\nCette analyse approfondie va :\n• Effectuer une recherche web contextuelle\n• Analyser la crédibilité des sources\n• Détecter les biais et controverses\n• Générer un rapport stratégique détaillé\n• Prendre 2-3 minutes')) {
+        return;
+    }
+
+    try {
+        this.showMessage('🧠 Lancement de l\'analyse IA avancée...', 'info');
+        const iaButton = document.getElementById('iaAnalyzeBtn');
+        if (iaButton) {
+            iaButton.disabled = true;
+            iaButton.innerHTML = '⏳ Analyse avancée...';
+        }
+
+        let response;
+        try {
+            response = await fetch('/api/ia/advanced_analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey: this.iaApiKey })
+            });
+        } catch (e) {
+            response = await fetch('./api/ia/advanced_analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey: this.iaApiKey })
+            });
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            this.showMessage('✅ Analyse IA avancée terminée! Rapport stratégique généré.', 'success');
+            
+            if (result.report_url) {
+                window.open(result.report_url, '_blank');
+            }
+            
+            // Afficher les métriques avancées
+            if (result.analysis_metadata) {
+                console.log('📈 Métriques avancées:', result.analysis_metadata);
+                this.showMessage(`🔍 ${result.corrections_applied} articles analysés en profondeur`, 'info');
+            }
+
+            await this.loadData();
+            
+        } else {
+            throw new Error(result.error || 'Erreur lors de l\'analyse avancée');
+        }
+
+    } catch (error) {
+        console.error('❌ Erreur analyse IA avancée:', error);
+        this.showMessage(`❌ Erreur IA avancée: ${error.message}`, 'error');
+    } finally {
+        const iaButton = document.getElementById('iaAnalyzeBtn');
+        if (iaButton) {
+            iaButton.disabled = false;
+            iaButton.innerHTML = '🧠 Analyse IA';
+        }
+    }
+}
+
+    // MÉTHODES IA
     async runAIAnalysis() {
         if (!this.iaApiKey) {
             this.showIAApiKeyModal();
@@ -173,139 +228,53 @@ class RSSAggregator {
                 iaButton.innerHTML = '⏳ Analyse...';
             }
 
-            // Récupérer les données depuis PostgreSQL
-            const articles = await this.fetchArticlesForIA();
-            const themes = await this.fetchThemesForIA();
-
-            if (articles.length === 0) {
-                throw new Error('Aucun article à analyser');
+            let response;
+            try {
+                response = await fetch('/api/ia/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: this.iaApiKey })
+                });
+            } catch (e) {
+                response = await fetch('./api/ia/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: this.iaApiKey })
+                });
             }
 
-            // Appel au service Flask
-            const result = await this.makeIACall('/correct_analysis', {
-                apiKey: this.iaApiKey,
-                articles: articles,
-                themes: themes
-            });
+            const result = await response.json();
 
             if (result.success) {
-                this.showMessage('✅ Analyse IA terminée! Application des corrections...', 'success');
+                this.showMessage('✅ Analyse IA terminée! Téléchargement du rapport...', 'success');
                 
-                // Appliquer les corrections aux articles
-                if (result.corrections && result.corrections.length > 0) {
-                    await this.applyIACorrections(result.corrections);
+                if (result.report_url) {
+                    window.open(result.report_url, '_blank');
                 }
                 
-                // Recharger les données
+                if (result.summary) {
+                    console.log('📋 Résumé IA:', result.summary);
+                }
+
                 await this.loadData();
-                this.updateIACorrectionsTab();
                 
             } else {
-                throw new Error(result.error || 'Erreur lors de l\'analyse IA');
+                throw new Error(result.error || 'Erreur inconnue lors de l\'analyse IA');
             }
 
         } catch (error) {
             console.error('❌ Erreur analyse IA:', error);
             this.showMessage(`❌ Erreur IA: ${error.message}`, 'error');
+            
+            if (error.message.includes('Flask') || error.message.includes('5051')) {
+                this.showMessage('💡 Astuce: Démarrez le microservice Flask avec: python app.py', 'info');
+            }
         } finally {
             const iaButton = document.getElementById('iaAnalyzeBtn');
             if (iaButton) {
                 iaButton.disabled = false;
                 iaButton.innerHTML = '🧠 Analyse IA';
             }
-        }
-    }
-
-    // Nouvelles méthodes pour récupérer les données PostgreSQL
-    async fetchArticlesForIA() {
-        try {
-            let response;
-            try {
-                response = await fetch('/api/articles?limit=20');
-            } catch (e) {
-                response = await fetch('./api/articles?limit=20');
-            }
-            
-            const data = await response.json();
-            return data.articles || [];
-        } catch (error) {
-            console.error('❌ Erreur récupération articles:', error);
-            return [];
-        }
-    }
-
-    async fetchThemesForIA() {
-        try {
-            let response;
-            try {
-                response = await fetch('/api/themes');
-            } catch (e) {
-                response = await fetch('./api/themes');
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('❌ Erreur récupération thèmes:', error);
-            return [];
-        }
-    }
-
-    async applyIACorrections(corrections) {
-        try {
-            let correctionsApplied = 0;
-            for (const correction of corrections) {
-                try {
-                    await this.updateArticleSentiment(
-                        correction.articleId, 
-                        correction.correctedScore, 
-                        correction.confidence
-                    );
-                    correctionsApplied++;
-                } catch (error) {
-                    console.error(`❌ Erreur correction article ${correction.articleId}:`, error);
-                }
-            }
-            this.showMessage(`✅ ${correctionsApplied} corrections appliquées`, 'success');
-        } catch (error) {
-            console.error('❌ Erreur application corrections:', error);
-            throw error;
-        }
-    }
-
-    async updateArticleSentiment(articleId, correctedScore, confidence) {
-        try {
-            let response;
-            try {
-                response = await fetch('/api/articles/correct', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        articleId: articleId,
-                        correctedScore: correctedScore,
-                        confidence: confidence,
-                        iaCorrected: true
-                    })
-                });
-            } catch (e) {
-                response = await fetch('./api/articles/correct', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        articleId: articleId,
-                        correctedScore: correctedScore,
-                        confidence: confidence,
-                        iaCorrected: true
-                    })
-                });
-            }
-
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.error);
-            }
-        } catch (error) {
-            console.error('❌ Erreur mise à jour article:', error);
-            throw error;
         }
     }
 
@@ -318,11 +287,20 @@ class RSSAggregator {
         try {
             this.showMessage('🔧 Correction IA manuelle en cours...', 'info');
             
-            const result = await this.makeIACall('/correct_analysis', {
-                apiKey: this.iaApiKey,
-                articles: await this.fetchArticlesForIA(),
-                themes: await this.fetchThemesForIA()
-            });
+            let response;
+            try {
+                response = await fetch('/api/ia/correct', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (e) {
+                response = await fetch('./api/ia/correct', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+
+            const result = await response.json();
 
             if (result.success) {
                 this.showMessage('✅ Correction IA appliquée!', 'success');
@@ -388,7 +366,7 @@ class RSSAggregator {
     // ONGLET CORRECTIONS IA
     async updateIACorrectionsTab() {
         this.updateIAStatusOverview();
-        await this.updateIACorrectionsStats();
+        this.updateIACorrectionsStats();
         this.updateIACorrectionsHistory();
     }
 
@@ -413,10 +391,6 @@ class RSSAggregator {
                     <div class="ia-status-label">Clé API</div>
                     <div class="ia-status-value">${this.iaApiKey ? '🔑 Configurée' : '❌ Manquante'}</div>
                 </div>
-                <div class="ia-status-item">
-                    <div class="ia-status-label">Service IA</div>
-                    <div class="ia-status-value">${this.testIAService() ? '🟢 Connecté' : '🔴 Hors ligne'}</div>
-                </div>
             </div>
             ${!this.iaApiKey ? `
                 <div class="ia-config-prompt">
@@ -427,71 +401,75 @@ class RSSAggregator {
         `;
     }
 
-    async updateIACorrectionsStats() {
+    updateIACorrectionsStats() {
         const statsElement = document.getElementById('iaCorrectionsStats');
-        if (!statsElement) return;
+        if (!statsElement || !this.currentAnalysis?.iaCorrections) return;
 
-        try {
-            let response;
-            try {
-                response = await fetch('/api/ia/stats');
-            } catch (e) {
-                response = await fetch('./api/ia/stats');
-            }
-
-            const result = await response.json();
-            
-            if (result.success) {
-                const stats = result.stats;
-                statsElement.innerHTML = `
-                    <div class="ia-stats-grid">
-                        <div class="ia-stat-card">
-                            <div class="ia-stat-number">${stats.totalCorrections || 0}</div>
-                            <div class="ia-stat-label">Corrections totales</div>
-                        </div>
-                        <div class="ia-stat-card">
-                            <div class="ia-stat-number">${stats.recentCorrections || 0}</div>
-                            <div class="ia-stat-label">Corrections récentes</div>
-                        </div>
-                        <div class="ia-stat-card">
-                            <div class="ia-stat-number">${stats.avgConfidence ? stats.avgConfidence.toFixed(2) : '0.00'}</div>
-                            <div class="ia-stat-label">Confiance moyenne</div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                statsElement.innerHTML = '<div class="loading">Aucune statistique disponible</div>';
-            }
-        } catch (error) {
-            console.error('Erreur stats corrections:', error);
-            statsElement.innerHTML = '<div class="loading">Erreur chargement stats</div>';
-        }
+        const corrections = this.currentAnalysis.iaCorrections;
+        const stats = corrections.stats || {};
+        
+        statsElement.innerHTML = `
+            <div class="ia-stats-grid">
+                <div class="ia-stat-card">
+                    <div class="ia-stat-number">${stats.totalCorrections || 0}</div>
+                    <div class="ia-stat-label">Corrections totales</div>
+                </div>
+                <div class="ia-stat-card">
+                    <div class="ia-stat-number">${stats.falsePositivesCorrected || 0}</div>
+                    <div class="ia-stat-label">Faux positifs corrigés</div>
+                </div>
+                <div class="ia-stat-card">
+                    <div class="ia-stat-number">${stats.contextImprovements || 0}</div>
+                    <div class="ia-stat-label">Améliorations contextuelles</div>
+                </div>
+                <div class="ia-stat-card">
+                    <div class="ia-stat-number">${stats.accuracyImprovement || 0}%</div>
+                    <div class="ia-stat-label">Amélioration précision</div>
+                </div>
+            </div>
+            ${corrections.lastCorrection ? `
+                <div class="ia-last-correction">
+                    <strong>Dernière correction:</strong> 
+                    ${new Date(corrections.lastCorrection).toLocaleString('fr-FR')}
+                </div>
+            ` : ''}
+        `;
     }
 
     updateIACorrectionsHistory() {
         const historyElement = document.getElementById('iaCorrectionsHistory');
-        if (!historyElement) return;
+        if (!historyElement || !this.currentAnalysis?.iaCorrections) return;
 
-        // Simuler l'historique pour le moment
-        historyElement.innerHTML = `
+        const corrections = this.currentAnalysis.iaCorrections.corrections || [];
+        const recentCorrections = corrections.slice(-10).reverse();
+
+        if (recentCorrections.length === 0) {
+            historyElement.innerHTML = '<div class="loading">Aucune correction récente</div>';
+            return;
+        }
+
+        historyElement.innerHTML = recentCorrections.map(correction => `
             <div class="ia-correction-item">
                 <div class="ia-correction-header">
-                    <strong>Corrections IA disponibles</strong>
+                    <strong>${this.escapeHtml(correction.title || 'Article sans titre')}</strong>
                     <span class="ia-correction-date">${new Date().toLocaleDateString('fr-FR')}</span>
                 </div>
                 <div class="ia-correction-scores">
-                    <span class="ia-correction-desc">Utilisez le bouton "Corriger maintenant" pour appliquer les corrections IA</span>
+                    <span class="score-original">${correction.originalScore?.toFixed(2) || 'N/A'}</span>
+                    <span class="score-arrow">→</span>
+                    <span class="score-corrected">${correction.correctedScore?.toFixed(2) || 'N/A'}</span>
+                    <span class="ia-confidence">Confiance: ${((correction.confidence || 0) * 100).toFixed(0)}%</span>
                 </div>
+                ${correction.contextAnalysis?.notes?.length ? `
+                    <div class="ia-correction-notes">
+                        <strong>Observations:</strong> ${correction.contextAnalysis.notes.join(', ')}
+                    </div>
+                ` : ''}
             </div>
-        `;
+        `).join('');
     }
 
-    testIAService() {
-        // Test simple de connectivité
-        return true; // Pour le moment, on suppose que c'est connecté
-    }
-
-    // MÉTHODES EXISTANTES (raccourcies pour la lisibilité)
+    // MÉTHODES EXISTANTES (avec mises à jour mineures)
     setupColorPresets() {
         const presets = document.querySelectorAll('.color-preset');
         const colorInput = document.getElementById('themeColor');
@@ -589,6 +567,16 @@ class RSSAggregator {
                     seasonality: {},
                     sentiment: {},
                     learningStats: {}
+                },
+                iaCorrections: {
+                    corrections: [],
+                    lastCorrection: null,
+                    stats: {
+                        totalCorrections: 0,
+                        accuracyImprovement: 0,
+                        falsePositivesCorrected: 0,
+                        contextImprovements: 0
+                    }
                 }
             };
             this.updateStats(this.currentAnalysis);
@@ -596,6 +584,12 @@ class RSSAggregator {
         }
     }
 
+    // [TOUTES LES AUTRES MÉTHODES EXISTANTES RESTENT IDENTIQUES...]
+    // showLoading, showMessage, updateLastUpdate, updateRefreshButton, 
+    // updateStats, updateCharts, displayArticles, loadFeeds, loadThemes,
+    // addFeed, removeFeed, addTheme, removeTheme, startAutoRefresh, etc.
+
+    // MÉTHODES EXISTANTES (raccourcies pour la lisibilité)
     async manualRefresh() {
         try {
             this.updateRefreshButton(true);
@@ -720,7 +714,20 @@ class RSSAggregator {
         const themesWithData = Object.keys(analysis.themes || {}).filter(theme => analysis.themes[theme].count > 0).length;
         const totalMatches = Object.values(analysis.themes || {}).reduce((sum, theme) => sum + theme.count, 0);
 
-        // Pour les corrections IA, on utilisera les données réelles
+        let positiveArticles = 0;
+        let negativeArticles = 0;
+        let neutralArticles = 0;
+
+        Object.keys(analysis.themes || {}).forEach(themeName => {
+            const theme = analysis.themes[themeName];
+            if (theme.sentiment) {
+                positiveArticles += theme.sentiment.positive || 0;
+                negativeArticles += theme.sentiment.negative || 0;
+                neutralArticles += theme.sentiment.neutral || 0;
+            }
+        });
+
+        // Compter les articles corrigés par l'IA
         const iaCorrectedArticles = analysis.iaCorrections?.corrections?.length || 0;
 
         statsGrid.innerHTML = `
@@ -1572,7 +1579,7 @@ class RSSAggregator {
                 <div class="sentiment-stats">
                     <div class="sentiment-item positive">
                         <span class="sentiment-emoji">😊</span>
-                        <span class="sentiment-label">Positif</span>
+                        <span class="sentiment-label">Évolution positive</span>
                         <span class="sentiment-value">${positivePercent}%</span>
                         <small>${totalPositive} articles</small>
                     </div>
@@ -1584,21 +1591,21 @@ class RSSAggregator {
                     </div>
                     <div class="sentiment-item negative">
                         <span class="sentiment-emoji">😞</span>
-                        <span class="sentiment-label">Négatif</span>
+                        <span class="sentiment-label">Évolution Négative</span>
                         <span class="sentiment-value">${negativePercent}%</span>
                         <small>${totalNegative} articles</small>
                     </div>
                 </div>
                 <div class="sentiment-chart">
                     <div class="sentiment-bar">
-                        <div class="sentiment-fill positive" style="width: ${positivePercent}%" title="Positif: ${positivePercent}%"></div>
+                        <div class="sentiment-fill positive" style="width: ${positivePercent}%" title="Évolution positive: ${positivePercent}%"></div>
                         <div class="sentiment-fill neutral" style="width: ${neutralPercent}%" title="Neutre: ${neutralPercent}%"></div>
-                        <div class="sentiment-fill negative" style="width: ${negativePercent}%" title="Négatif: ${negativePercent}%"></div>
+                        <div class="sentiment-fill negative" style="width: ${negativePercent}%" title="Évolution Négative: ${negativePercent}%"></div>
                     </div>
                     <div class="sentiment-legend">
-                        <span>😊 Positif</span>
+                        <span>😊 Évolution positive</span>
                         <span>😐 Neutre</span>
-                        <span>😞 Négatif</span>
+                        <span>😞 Évolution Négative</span>
                     </div>
                 </div>
             </div>
@@ -1644,8 +1651,8 @@ class RSSAggregator {
             };
 
             const getSentimentLabel = (score) => {
-                if (score > 0.3) return 'Positif';
-                if (score < -0.3) return 'Négatif';
+                if (score > 0.3) return 'Évolution positive';
+                if (score < -0.3) return 'Évolution Négative';
                 return 'Neutre';
             };
 
@@ -1659,7 +1666,7 @@ class RSSAggregator {
                     <div class="sentiment-breakdown">
                         <div class="sentiment-detail">
                             <span class="sentiment-dot positive"></span>
-                            <span>Positif: ${positivePercent}% (${sentiment.positive})</span>
+                            <span>Évolution positive: ${positivePercent}% (${sentiment.positive})</span>
                         </div>
                         <div class="sentiment-detail">
                             <span class="sentiment-dot neutral"></span>
@@ -1667,7 +1674,7 @@ class RSSAggregator {
                         </div>
                         <div class="sentiment-detail">
                             <span class="sentiment-dot negative"></span>
-                            <span>Négatif: ${negativePercent}% (${sentiment.negative})</span>
+                            <span>Évolution Négative: ${negativePercent}% (${sentiment.negative})</span>
                         </div>
                     </div>
                     <div class="sentiment-score">

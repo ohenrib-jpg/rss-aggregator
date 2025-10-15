@@ -240,7 +240,7 @@ async function initializeDatabase() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ia_corrections (
         id SERIAL PRIMARY KEY,
-        article_id INTEGER,
+        article_id INTEGER REFERENCES articles(id),
         original_score DECIMAL(3,2),
         corrected_score DECIMAL(3,2),
         confidence DECIMAL(3,2),
