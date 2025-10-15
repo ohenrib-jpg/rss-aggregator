@@ -10,9 +10,9 @@
     "init-db": "node scripts/init-db.js", 
     "check-db": "node scripts/check-connection.js",         
     "migrate": "node scripts/migrate.js",
-    "fix-constraints": "node scripts/fix-constraints.js",          
-    "setup": "npm run init-db && npm run migrate", 
-    "reset-db": "node scripts/reset-db.js"         
+    "fix-constraints": "node scripts/fix-unique-constraints.js",
+    "setup": "npm run fix-constraints && npm start",
+    "check-db": "node scripts/check-connection.js"         
   },
   "dependencies": {
     "express": "^4.18.2",

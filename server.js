@@ -266,58 +266,66 @@ class PostgreSQLManager {
     }
   }
 
-  // THÈMES - VERSION CORRIGÉE
-  async saveTheme(themeData) {
-    const { name, keywords, color, description } = themeData;
-    
-    try {
-      // Essayer d'abord avec ON CONFLICT
-      const result = await pool.query(`
-        INSERT INTO themes (name, keywords, color, description)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (name) 
-        DO UPDATE SET 
-          keywords = EXCLUDED.keywords,
-          color = EXCLUDED.color,
-          description = EXCLUDED.description
-        RETURNING *
-      `, [name, keywords, color || '#6366f1', description]);
+async saveTheme(themeData) {
+  const { name, keywords, color, description } = themeData;
+  
+  try {
+    // Essayer d'abord avec ON CONFLICT
+    const result = await pool.query(`
+      INSERT INTO themes (name, keywords, color, description)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (name) 
+      DO UPDATE SET 
+        keywords = EXCLUDED.keywords,
+        color = EXCLUDED.color,
+        description = EXCLUDED.description
+      RETURNING *
+    `, [name, keywords, color || '#6366f1', description]);
 
-      return result.rows[0];
-    } catch (error) {
-      if (error.code === '42P10') {
-        console.log('⚠️  Contrainte UNIQUE manquante, tentative sans ON CONFLICT...');
-        
-        // Fallback: vérifier si le thème existe déjà
+    console.log(`✅ Thème "${name}" sauvegardé avec ON CONFLICT`);
+    return result.rows[0];
+    
+  } catch (error) {
+    if (error.code === '42P10') { // contrainte manquante
+      console.log(`⚠️  Contrainte manquante pour "${name}", fallback...`);
+      
+      try {
+        // Vérifier si le thème existe
         const existing = await pool.query(
           'SELECT * FROM themes WHERE name = $1', 
           [name]
         );
         
         if (existing.rows.length > 0) {
-          // Mettre à jour le thème existant
+          // Mettre à jour
           const result = await pool.query(`
             UPDATE themes 
             SET keywords = $2, color = $3, description = $4 
             WHERE name = $1 
             RETURNING *
           `, [name, keywords, color || '#6366f1', description]);
+          console.log(`✅ Thème "${name}" mis à jour`);
           return result.rows[0];
         } else {
-          // Créer un nouveau thème
+          // Créer nouveau
           const result = await pool.query(`
             INSERT INTO themes (name, keywords, color, description)
             VALUES ($1, $2, $3, $4)
             RETURNING *
           `, [name, keywords, color || '#6366f1', description]);
+          console.log(`✅ Thème "${name}" créé`);
           return result.rows[0];
         }
-      } else {
-        console.error('❌ Erreur sauvegarde thème:', error);
-        throw error;
+      } catch (fallbackError) {
+        console.error(`❌ Erreur fallback thème "${name}":`, fallbackError.message);
+        throw fallbackError;
       }
+    } else {
+      console.error(`❌ Erreur sauvegarde thème "${name}":`, error.message);
+      throw error;
     }
   }
+}
 
   async getThemes() {
     try {
