@@ -7,8 +7,10 @@
     "start": "node server.js",
     "dev": "node server.js",
     "ia-service": "python app.py",
-    "migrate": "node scripts/migrate.js",
-    "init-db": "node -e \"require('./db/database').initializeDatabase().then(() => process.exit(0)).catch(() => process.exit(1))\""
+    "init-db": "node scripts/init-db.js",          
+    "migrate": "node scripts/migrate.js",          
+    "setup": "npm run init-db && npm run migrate", 
+    "reset-db": "node scripts/reset-db.js"         
   },
   "dependencies": {
     "express": "^4.18.2",
