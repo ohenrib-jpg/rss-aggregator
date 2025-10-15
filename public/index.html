@@ -124,9 +124,48 @@
                         <canvas id="themeChart" height="250"></canvas>
                     </div>
                     <div class="card">
-                        <h3>Évolution Temporelle</h3>
-                        <canvas id="timelineChart" height="250"></canvas>
-                    </div>
+    <h3>Évolution Temporelle</h3>
+    
+     <!-- Contrôles avancés du graphique -->
+        <div class="chart-controls-bar">
+            <div class="control-group">
+                <label>Échelle temporelle :</label>
+                    <select id="timeScale" onchange="chartManager.changeTimeScale(this.value)">
+                    <option value="day">Par jour</option>
+                    <option value="week" selected>Par semaine</option>
+                    <option value="month">Par mois</option>
+                    <option value="quarter">Par trimestre</option>
+                </select>
+            </div>
+        
+                   <div class="control-group">
+                   <label>Agrégation :</label>
+                   <select id="aggregationType" onchange="chartManager.changeAggregation(this.value)">
+                    <option value="count">Nombre d'articles</option>
+                    <option value="percentage">Pourcentage</option>
+                    <option value="movingAverage">Moyenne mobile (7j)</option>
+                  </select>
+                </div>
+        
+                 <div class="control-group">
+                 <button onclick="chartManager.toggleMinorThemes()" class="toggle-minor-btn">
+                  👁️ Masquer thèmes mineurs
+                 </button>
+                 <button onclick="chartManager.exportChartData()" class="export-data-btn">
+                  📥 Exporter données
+                </button>
+              </div>
+          </div>
+    
+                    <!-- Le sélecteur de thèmes sera injecté ici automatiquement -->
+    
+                    <div class="chart-container">
+                    <canvas id="timelineChart" height="400"></canvas>
+                  </div>
+    
+                  <!-- Légende interactive -->
+                  <div class="chart-legend" id="timelineLegend"></div>
+                   </div>
                 </div>
             </div>
 
