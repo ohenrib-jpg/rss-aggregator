@@ -40,7 +40,7 @@ async function ensureDatabaseInitialized() {
   }
 }
 
-// ✅ SYSTÈME D'ANALYSE DE SENTIMENT (Adapté pour PostgreSQL)
+// ✅ SYSTÈME D'ANALYSE DE SENTIMENT
 class SelfLearningSentiment {
   constructor() {
     this.lexicon = new Map();
@@ -266,11 +266,12 @@ class PostgreSQLManager {
     }
   }
 
-  // THÈMES
+  // THÈMES - VERSION CORRIGÉE
   async saveTheme(themeData) {
     const { name, keywords, color, description } = themeData;
     
     try {
+      // Essayer d'abord avec ON CONFLICT
       const result = await pool.query(`
         INSERT INTO themes (name, keywords, color, description)
         VALUES ($1, $2, $3, $4)
@@ -284,8 +285,37 @@ class PostgreSQLManager {
 
       return result.rows[0];
     } catch (error) {
-      console.error('❌ Erreur sauvegarde thème:', error);
-      throw error;
+      if (error.code === '42P10') {
+        console.log('⚠️  Contrainte UNIQUE manquante, tentative sans ON CONFLICT...');
+        
+        // Fallback: vérifier si le thème existe déjà
+        const existing = await pool.query(
+          'SELECT * FROM themes WHERE name = $1', 
+          [name]
+        );
+        
+        if (existing.rows.length > 0) {
+          // Mettre à jour le thème existant
+          const result = await pool.query(`
+            UPDATE themes 
+            SET keywords = $2, color = $3, description = $4 
+            WHERE name = $1 
+            RETURNING *
+          `, [name, keywords, color || '#6366f1', description]);
+          return result.rows[0];
+        } else {
+          // Créer un nouveau thème
+          const result = await pool.query(`
+            INSERT INTO themes (name, keywords, color, description)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+          `, [name, keywords, color || '#6366f1', description]);
+          return result.rows[0];
+        }
+      } else {
+        console.error('❌ Erreur sauvegarde thème:', error);
+        throw error;
+      }
     }
   }
 
@@ -488,59 +518,6 @@ async function refreshData() {
   }
 }
 
-// Dans la classe PostgreSQLManager du server.js
-async saveTheme(themeData) {
-  const { name, keywords, color, description } = themeData;
-  
-  try {
-    // Essayer d'abord avec ON CONFLICT
-    const result = await pool.query(`
-      INSERT INTO themes (name, keywords, color, description)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (name) 
-      DO UPDATE SET 
-        keywords = EXCLUDED.keywords,
-        color = EXCLUDED.color,
-        description = EXCLUDED.description
-      RETURNING *
-    `, [name, keywords, color || '#6366f1', description]);
-
-    return result.rows[0];
-  } catch (error) {
-    if (error.code === '42P10') { // code d'erreur pour contrainte manquante
-      console.log('⚠️  Contrainte UNIQUE manquante, tentative sans ON CONFLICT...');
-      
-      // Fallback: vérifier si le thème existe déjà
-      const existing = await pool.query(
-        'SELECT * FROM themes WHERE name = $1', 
-        [name]
-      );
-      
-      if (existing.rows.length > 0) {
-        // Mettre à jour le thème existant
-        const result = await pool.query(`
-          UPDATE themes 
-          SET keywords = $2, color = $3, description = $4 
-          WHERE name = $1 
-          RETURNING *
-        `, [name, keywords, color || '#6366f1', description]);
-        return result.rows[0];
-      } else {
-        // Créer un nouveau thème
-        const result = await pool.query(`
-          INSERT INTO themes (name, keywords, color, description)
-          VALUES ($1, $2, $3, $4)
-          RETURNING *
-        `, [name, keywords, color || '#6366f1', description]);
-        return result.rows[0];
-      }
-    } else {
-      console.error('❌ Erreur sauvegarde thème:', error);
-      throw error;
-    }
-  }
-}
-
 // ✅ ROUTES API
 
 // Middleware pour initialisation base de données
@@ -732,7 +709,7 @@ async function startServer() {
     const configPath = require('path').join(__dirname, 'config.json');
     if (require('fs').existsSync(configPath)) {
       const configData = require(configPath);
-      for (const feedUrl of configData.feeds.slice(0, 10)) { // Limiter pour le premier chargement
+      for (const feedUrl of configData.feeds.slice(0, 10)) {
         await dbManager.saveFeed(feedUrl);
       }
       console.log(`✅ ${configData.feeds.length} flux chargés`);
@@ -746,7 +723,7 @@ async function startServer() {
     // Rafraîchissement automatique
     setInterval(async () => {
       await refreshData();
-    }, 15 * 60 * 1000); // 15 minutes
+    }, 15 * 60 * 1000);
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Serveur démarré sur le port ${PORT}`);
