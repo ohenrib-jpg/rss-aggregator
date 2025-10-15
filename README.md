@@ -55,3 +55,8 @@ cd geopolis-ia-aggregator
 
 init db base :
 npm run init-db
+
+requirements :
+npm install pg dotenv
+
+
