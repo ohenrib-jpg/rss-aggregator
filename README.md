@@ -30,3 +30,28 @@ Système complet d'analyse de flux RSS avec intégration IA pour la correction d
 **Backend Node.js:**
 ```bash
 npm install
+
+## NEXTGEN Updates
+- Parquet storage for analyses (data/analyses/*.parquet)
+- Corroboration module (rapidfuzz)
+- Bayesian fusion and improved confidence calculation
+- Frontend adjusted to use `confidence` and display `bayesian_posterior`
+- Tests added in `tests/`
+
+EVO3 15/10/2025=>
+
+- **Base de données PostgreSQL** sur Render pour une meilleure performance
+- **Stockage relationnel** des articles, thèmes et analyses
+- **Requêtes optimisées** pour les grandes quantités de données
+- **Sauvegarde automatique** et récupération des données
+- **Migration transparente** depuis l'ancien système JSON/Parquet
+
+## 🔧 Installation
+
+1. **Cloner le repository**
+```bash
+git clone <votre-repo>
+cd geopolis-ia-aggregator
+
+init db base :
+npm run init-db

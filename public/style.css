@@ -1498,3 +1498,12 @@ button.refresh:hover {
         gap: 0.5rem;
     }
 }
+
+
+/* NEXTGEN header buttons */
+.header-buttons { display:flex; gap:8px; justify-content:flex-end; align-items:center; }
+.header-buttons button { width:auto; min-width:48px; padding:6px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.08); background:transparent; cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; }
+.header-buttons button:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,0.06); }
+.card { border-radius:12px; padding:12px; box-shadow: 0 6px 18px rgba(0,0,0,0.04); background: #fff; margin-bottom:12px; }
+.progress { height:10px; border-radius:6px; background:#eee; overflow:hidden; }
+.progress > span { display:block; height:100%; border-radius:6px; }

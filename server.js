@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Parser = require('rss-parser');
+const { initializeDatabase, pool } = require('./db/database');
+const sqlStorage = require('./modules/sql_storage_manager');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -1031,6 +1033,16 @@ async function refreshData() {
       index === self.findIndex(a => a.id === article.id)
     );
 
+    // Sauvegarder les articles dans la base de données
+    try {
+      for (const article of uniqueArticles) {
+        await sqlStorage.saveArticle(article);
+      }
+      console.log(`💾 ${uniqueArticles.length} articles sauvegardés en base de données`);
+    } catch (error) {
+      console.error('❌ Erreur sauvegarde base de données:', error);
+    }
+
     if (cachedAnalysis.analysis && cachedAnalysis.analysis.themes) {
       analysisHistory.push({
         ...cachedAnalysis.analysis,
@@ -1099,6 +1111,37 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
+// NOUVELLE ROUTE : Récupérer les articles depuis la base de données
+app.get('/api/articles/db', async (req, res) => {
+  try {
+    const { limit = 100, offset = 0, theme = null } = req.query;
+    const articles = await sqlStorage.getArticles(parseInt(limit), parseInt(offset), theme);
+    
+    res.json({
+      success: true,
+      articles: articles,
+      total: articles.length
+    });
+  } catch (error) {
+    console.error('Erreur API articles DB:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// NOUVELLE ROUTE : Statistiques de la base de données
+app.get('/api/stats/db', async (req, res) => {
+  try {
+    const stats = await sqlStorage.getDatabaseStats();
+    res.json({
+      success: true,
+      stats: stats
+    });
+  } catch (error) {
+    console.error('Erreur API stats DB:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Forcer le rafraîchissement manuel
 app.post('/api/refresh', async (req, res) => {
   try {
@@ -1117,7 +1160,7 @@ app.post('/api/refresh', async (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE : Configuration de l'API IA
+// Configuration de l'API IA
 app.post('/api/ia/config', (req, res) => {
   try {
     const { apiKey, enableAutoCorrection } = req.body;
@@ -1142,7 +1185,7 @@ app.post('/api/ia/config', (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE : Correction IA manuelle
+// Correction IA manuelle
 app.post('/api/ia/correct', async (req, res) => {
   try {
     await iaCorrectionManager.performIACorrection();
@@ -1157,7 +1200,7 @@ app.post('/api/ia/correct', async (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE : Analyse IA avancée
+// Analyse IA avancée
 app.post('/api/ia/advanced_analyze', async (req, res) => {
   try {
     const { apiKey } = req.body;
@@ -1177,7 +1220,7 @@ app.post('/api/ia/advanced_analyze', async (req, res) => {
         currentAnalysis: cachedAnalysis.analysis,
         themes: themes.themes
       }
-    }, { timeout: 180000 }); // 3 minutes timeout
+    }, { timeout: 180000 });
 
     res.json({
       success: true,
@@ -1194,7 +1237,7 @@ app.post('/api/ia/advanced_analyze', async (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE : Analyse IA complète avec rapport
+// Analyse IA complète avec rapport
 app.post('/api/ia/analyze', async (req, res) => {
   try {
     const { apiKey } = req.body;
@@ -1500,6 +1543,14 @@ app.listen(PORT, async () => {
   console.log(`📁 Dossier public: ${path.join(__dirname, 'public')}`);
   console.log(`📁 Dossier courant: ${__dirname}`);
   
+  // Initialiser la base de données
+  try {
+    await initializeDatabase();
+    console.log('🗄️  Base de données initialisée avec succès');
+  } catch (error) {
+    console.error('❌ Erreur initialisation base de données:', error);
+  }
+  
   initializeConfigFiles();
   
   console.log('🔄 Premier rafraîchissement des données...');
@@ -1511,6 +1562,7 @@ app.listen(PORT, async () => {
   
   console.log('🔄 Rafraîchissement automatique activé (30 secondes)');
   console.log('🧠 Module IA intégré avec corrections automatiques (toutes les heures)');
+  console.log('🗄️  Base de données SQLite intégrée');
   console.log('📤 Export disponible: /api/export/json et /api/export/csv');
   console.log('🎨 Personnalisation des couleurs par thème activée');
   console.log('📈 Analyse avancée des tendances activée');
@@ -1520,4 +1572,7 @@ app.listen(PORT, async () => {
   console.log('   - POST /api/ia/config → Configuration clé API');
   console.log('   - POST /api/ia/correct → Correction manuelle');
   console.log('   - POST /api/ia/analyze → Analyse complète + rapport');
+  console.log('🗄️  Routes Base de données:');
+  console.log('   - GET /api/articles/db → Articles depuis DB');
+  console.log('   - GET /api/stats/db → Statistiques DB');
 });

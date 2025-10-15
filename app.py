@@ -13,6 +13,9 @@ from reportlab.platypus.flowables import Spacer
 import matplotlib.pyplot as plt
 import io
 import base64
+from analysis_utils import ensure_deep_analysis_consistency, compute_confidence_from_features, clamp01
+from modules.storage_manager import save_analysis_batch, load_recent_analyses
+from modules.corroboration import find_corroborations
 
 app = Flask(__name__)
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), 'reports')
@@ -233,8 +236,8 @@ class AdvancedIAAnalyzer:
             sentiment = article.get('sentiment', {})
             return {
                 'score_original': sentiment.get('score', 0),
-                'score_corrigé': sentiment.get('score', 0),
-                'confiance': 0.3,
+                'score_corrected': sentiment.get('score', 0),
+                'confidence': 0.3,
                 'analyse_contextuelle': {},
                 'recherche_web': None,
                 'analyse_thematique': {},
@@ -736,12 +739,12 @@ class AdvancedIAAnalyzer:
         
         return {
             'score_original': original_score,
-            'score_corrigé': corrected_score,
+            'score_corrected': corrected_score,
             'analyse_contextuelle': contextual_analysis,
             'recherche_web': web_research,
             'analyse_thematique': thematic_analysis,
             'analyse_biases': bias_analysis,
-            'confiance': bias_analysis.get('score_credibilite', 0.5),
+            'confidence': bias_analysis.get('score_credibilite', 0.5),
             'recommandations_globales': self.generate_global_recommendations(
                 contextual_analysis, web_research, bias_analysis
             )
@@ -815,312 +818,247 @@ def correct_analysis():
         if not api_key:
             return jsonify({'success': False, 'error': 'Clé API requise'})
         
-        print(f"🧠 Correction IA avancée demandée pour {len(articles)} articles")
+        print(f"🧠 Correction de l'analyse pour {len(articles)} articles avec {len(themes)} thèmes")
         
-        corrections = []
-        for article in articles[:10]:  # Limiter pour performance
+        # CORRECTION : s'assurer que themes est une liste
+        if themes and not isinstance(themes, list):
+            themes = [themes]
+        
+        # Appliquer l'analyse approfondie à chaque article
+        corrected_analyses = []
+        for i, article in enumerate(articles):
+            print(f"📝 Traitement article {i+1}/{len(articles)}: {article.get('title', '')[:50]}...")
+            
             try:
-                original_sentiment = article.get('sentiment', {})
+                # Analyse approfondie avec raisonnement
+                deep_analysis = advanced_analyzer.perform_deep_analysis(article, themes)
                 
-                if original_sentiment:
-                    # Analyse approfondie
-                    deep_analysis = advanced_analyzer.perform_deep_analysis(article, themes)
-                    
-                    # CORRECTION : vérifier que les clés existent
-                    if deep_analysis and 'score_original' in deep_analysis and 'score_corrigé' in deep_analysis:
-                        corrections.append({
-                            'articleId': article.get('id'),
-                            'title': article.get('title'),
-                            'originalScore': deep_analysis['score_original'],
-                            'correctedScore': deep_analysis['score_corrigé'],
-                            'confidence': deep_analysis.get('confiance', 0.5),
-                            'deepAnalysis': deep_analysis,
-                            'timestamp': datetime.datetime.now().isoformat()
-                        })
-                    else:
-                        print(f"⚠️ Analyse incomplète pour: {article.get('title', 'Unknown')[:50]}")
+                # CORRECTION : s'assurer de la cohérence de l'analyse
+                final_analysis = ensure_deep_analysis_consistency(deep_analysis, article)
+                
+                # Calcul de la confiance basé sur les features
+                confidence = compute_confidence_from_features(final_analysis)
+                final_analysis['confidence'] = clamp01(confidence)
+                
+                corrected_analyses.append(final_analysis)
+                
+                print(f"✅ Article {i+1} traité - Score: {final_analysis.get('score_corrected', 0):.2f}, Confiance: {final_analysis.get('confidence', 0):.2f}")
+                
             except Exception as e:
-                print(f"❌ Erreur analyse article {article.get('title', 'Unknown')[:50]}: {e}")
+                print(f"❌ Erreur traitement article {i+1}: {e}")
                 import traceback
                 traceback.print_exc()
-                continue
+                
+                # En cas d'erreur, utiliser l'analyse de base
+                sentiment = article.get('sentiment', {})
+                corrected_analyses.append({
+                    'score_original': sentiment.get('score', 0),
+                    'score_corrected': sentiment.get('score', 0),
+                    'confidence': 0.3,
+                    'analyse_contextuelle': {},
+                    'recherche_web': None,
+                    'analyse_thematique': {},
+                    'analyse_biases': {'biais_détectés': [], 'score_credibilite': 0.5},
+                    'recommandations_globales': ['Erreur lors de l\'analyse approfondie']
+                })
         
-        print(f"✅ Corrections IA avancées appliquées: {len(corrections)} articles")
+        # CORRECTION : sauvegarde du lot d'analyses
+        try:
+            save_analysis_batch(corrected_analyses, api_key, themes)
+            print(f"💾 Lot d'analyses sauvegardé ({len(corrected_analyses)} articles)")
+        except Exception as e:
+            print(f"⚠️ Erreur sauvegarde analyses: {e}")
+        
+        # CORRECTION : corroboration automatique et fusion bayésienne
+        try:
+            print("🔄 Début de la corroboration automatique...")
+            corroboration_results = []
+            
+            for i, (article, analysis) in enumerate(zip(articles, corrected_analyses)):
+                try:
+                    # Recherche de corroborations pour cet article
+                    article_corroborations = find_corroborations(
+                        article_title=article.get('title', ''),
+                        article_content=article.get('content', ''),
+                        themes=themes,
+                        api_key=api_key
+                    )
+                    
+                    if article_corroborations:
+                        # Appliquer la fusion bayésienne si des corroborations trouvées
+                        from modules.bayesian_fusion import apply_bayesian_fusion
+                        
+                        fused_analysis = apply_bayesian_fusion(
+                            base_analysis=analysis,
+                            corroborations=article_corroborations,
+                            article_data=article
+                        )
+                        
+                        # Mettre à jour l'analyse avec les résultats fusionnés
+                        if fused_analysis:
+                            corrected_analyses[i] = fused_analysis
+                            print(f"✅ Fusion bayésienne appliquée pour l'article {i+1}")
+                    
+                    corroboration_results.append({
+                        'article_index': i,
+                        'corroborations_found': len(article_corroborations) if article_corroborations else 0,
+                        'corroboration_details': article_corroborations
+                    })
+                    
+                except Exception as e:
+                    print(f"❌ Erreur corroboration article {i+1}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    corroboration_results.append({
+                        'article_index': i,
+                        'corroborations_found': 0,
+                        'error': str(e)
+                    })
+            
+            print(f"✅ Corroboration terminée: {sum(r.get('corroborations_found', 0) for r in corroboration_results)} corroborations trouvées")
+            
+        except Exception as e:
+            print(f"❌ Erreur globale dans la corroboration: {e}")
+            import traceback
+            traceback.print_exc()
+            corroboration_results = []
         
         return jsonify({
             'success': True,
-            'corrections': corrections,
+            'correctedAnalyses': corrected_analyses,
+            'corroborationResults': corroboration_results,
             'summary': {
-                'total_corrected': len(corrections),
-                'average_confidence': sum(c['confidence'] for c in corrections) / len(corrections) if corrections else 0,
-                'deep_analysis_performed': len(corrections)
+                'articles_traites': len(corrected_analyses),
+                'analyses_corrigees': len([a for a in corrected_analyses if abs(a.get('score_corrected', 0) - a.get('score_original', 0)) > 0.1]),
+                'confiance_moyenne': sum(a.get('confidence', 0) for a in corrected_analyses) / len(corrected_analyses) if corrected_analyses else 0
             }
         })
         
     except Exception as e:
-        print(f"❌ Erreur correction IA avancée: {str(e)}")
+        print(f"❌ Erreur endpoint correct_analysis: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
-def generate_advanced_report(corrections, feed):
-    """Génère un rapport PDF avancé avec analyse approfondie"""
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f'rapport_analyse_avancee_{timestamp}.pdf'
-    filepath = os.path.join(REPORTS_DIR, filename)
-
-    # Création du document PDF
-    doc = SimpleDocTemplate(filepath, pagesize=A4)
-    styles = getSampleStyleSheet()
-    
-    # Styles personnalisés
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Title'],
-        fontSize=16,
-        spaceAfter=30,
-        textColor=colors.HexColor('#1e3a8a')
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=12,
-        spaceAfter=12,
-        textColor=colors.HexColor('#374151')
-    )
-    
-    elements = []
-
-    # En-tête du rapport
-    elements.append(Paragraph("RAPPORT D'ANALYSE AVANCÉE - GEOPOLIS IA", title_style))
-    elements.append(Paragraph(f"Généré le: {datetime.datetime.now().strftime('%d/%m/%Y à %H:%M')}", styles['Normal']))
-    elements.append(Spacer(1, 20))
-
-    # Résumé exécutif
-    elements.append(Paragraph("📊 RÉSUMÉ EXÉCUTIF", heading_style))
-    
-    executive_summary = generate_executive_summary(corrections)
-    for paragraph in executive_summary:
-        elements.append(Paragraph(paragraph, styles['Normal']))
-    
-    elements.append(Spacer(1, 15))
-
-    # Analyse par article
-    elements.append(Paragraph("🔍 ANALYSE DÉTAILLÉE PAR ARTICLE", heading_style))
-    
-    for i, correction in enumerate(corrections[:5], 1):  # Limiter à 5 articles
-        elements.append(Paragraph(f"Article {i}: {correction.get('title', 'Sans titre')[:80]}...", styles['Heading3']))
-        
-        # Score et correction
-        original_score = correction.get('originalScore', 0)
-        corrected_score = correction.get('correctedScore', 0)
-        score_diff = corrected_score - original_score
-        
-        score_text = f"Score: {original_score:.2f} → {corrected_score:.2f} (Δ{score_diff:+.2f})"
-        elements.append(Paragraph(score_text, styles['Normal']))
-        
-        # Analyse contextuelle
-        deep_analysis = correction.get('deepAnalysis', {})
-        context = deep_analysis.get('analyse_contextuelle', {})
-        
-        if context:
-            elements.append(Paragraph("📈 Analyse Contextuelle:", styles['Heading4']))
-            elements.append(Paragraph(f"• Urgence: {context.get('urgence', 0):.1%}", styles['Normal']))
-            elements.append(Paragraph(f"• Portée: {context.get('portée', 'N/A')}", styles['Normal']))
-            elements.append(Paragraph(f"• Impact: {context.get('impact', 0):.1%}", styles['Normal']))
-        
-        # Recommandations
-        recommendations = deep_analysis.get('recommandations_globales', [])
-        if recommendations:
-            elements.append(Paragraph("💡 Recommandations:", styles['Heading4']))
-            for rec in recommendations[:3]:
-                elements.append(Paragraph(f"• {rec}", styles['Normal']))
-        
-        elements.append(Spacer(1, 10))
-
-    # Tendances et insights
-    elements.append(Paragraph("📈 TENDANCES ET INSIGHTS", heading_style))
-    trends_analysis = analyze_trends(corrections)
-    for trend in trends_analysis:
-        elements.append(Paragraph(f"• {trend}", styles['Normal']))
-    
-    elements.append(Spacer(1, 15))
-
-    # Méthodologie
-    elements.append(Paragraph("🔧 MÉTHODOLOGIE", heading_style))
-    methodology = [
-        "• Analyse contextuelle multi-niveaux",
-        "• Recherche web sur sources fiables", 
-        "• Détection de biais et crédibilité",
-        "• Analyse géopolitique spécialisée",
-        "• Synthèse par intelligence artificielle"
-    ]
-    
-    for item in methodology:
-        elements.append(Paragraph(item, styles['Normal']))
-
-    # Construction du PDF
-    doc.build(elements)
-    print(f"📊 Rapport avancé généré: {filename}")
-    
-    return filename
-
-def generate_executive_summary(corrections):
-    """Génère un résumé exécutif intelligent"""
-    if not corrections:
-        return ["Aucune analyse disponible."]
-    
-    total_articles = len(corrections)
-    significant_corrections = [c for c in corrections if abs(c.get('correctedScore', 0) - c.get('originalScore', 0)) > 0.2]
-    
-    high_impact = [c for c in corrections 
-                   if c.get('deepAnalysis', {}).get('analyse_contextuelle', {}).get('impact', 0) > 0.7]
-    urgent_articles = [c for c in corrections 
-                      if c.get('deepAnalysis', {}).get('analyse_contextuelle', {}).get('urgence', 0) > 0.7]
-    
-    summary = [
-        f"📊 Analyse de {total_articles} articles avec intelligence artificielle avancée.",
-        f"🔧 {len(significant_corrections)} corrections significatives appliquées.",
-        f"🚨 {len(urgent_articles)} sujets identifiés comme urgents nécessitant une attention particulière.",
-        f"💥 {len(high_impact)} articles à fort impact détectés.",
-        "",
-        "🔍 PRINCIPAUX ENSEIGNEMENTS:"
-    ]
-    
-    # Ajouter des insights spécifiques
-    if urgent_articles:
-        summary.append("• Présence de sujets urgents nécessitant un suivi rapproché")
-    
-    if len(significant_corrections) > total_articles * 0.3:
-        summary.append("• Correction importante des scores initiaux - amélioration de la précision")
-    
-    avg_confidence = sum(c.get('confidence', 0) for c in corrections) / len(corrections) if corrections else 0
-    if avg_confidence > 0.8:
-        summary.append("• Forte confiance dans les analyses réalisées")
-    elif avg_confidence < 0.6:
-        summary.append("• Attention: confiance modérée dans certaines analyses")
-    
-    return summary
-
-def analyze_trends(corrections):
-    """Analyse les tendances globales"""
-    if not corrections:
-        return ["Aucune donnée pour l'analyse des tendances."]
-    
-    trends = []
-    
-    # Tendances des corrections
-    corrections_values = [abs(c.get('correctedScore', 0) - c.get('originalScore', 0)) for c in corrections]
-    avg_correction = sum(corrections_values) / len(corrections_values) if corrections_values else 0
-    
-    if avg_correction > 0.3:
-        trends.append("Corrections importantes: scores initiaux significativement ajustés")
-    elif avg_correction > 0.1:
-        trends.append("Corrections modérées: ajustements contextuels appliqués")
-    else:
-        trends.append("Cohérence générale: scores initiaux globalement fiables")
-    
-    # Tendances d'urgence
-    urgent_count = sum(1 for c in corrections 
-                      if c.get('deepAnalysis', {}).get('analyse_contextuelle', {}).get('urgence', 0) > 0.5)
-    if urgent_count > len(corrections) * 0.3:
-        trends.append("Contexte tendu: proportion élevée de sujets urgents")
-    
-    # Tendances de crédibilité
-    credibility_scores = [c.get('deepAnalysis', {}).get('analyse_biases', {}).get('score_credibilite', 0.5) 
-                         for c in corrections]
-    avg_credibility = sum(credibility_scores) / len(credibility_scores) if credibility_scores else 0.5
-    
-    if avg_credibility < 0.6:
-        trends.append("Vigilance crédibilité: certaines sources nécessitent vérification")
-    
-    return trends
-
-@app.route('/analyze_full', methods=['POST'])
-def analyze_full():
-    """Analyse complète avec génération de rapport avancé"""
+@app.route('/generate_report', methods=['POST'])
+def generate_report():
+    """Génère un rapport PDF détaillé"""
     try:
         data = request.json or {}
-        feed = data.get('feed', {})
-        api_key = data.get('apiKey')
-
-        if not api_key:
-            return jsonify({'success': False, 'error': 'Clé API requise'})
-
-        print("🧠 Début de l'analyse IA avancée...")
+        analyses = data.get('analyses', [])
+        themes = data.get('themes', [])
+        date_range = data.get('dateRange', {})
         
-        # Analyse approfondie
-        articles = feed.get('articles', [])
-        themes = feed.get('themes', [])
-        corrections = []
+        if not analyses:
+            return jsonify({'success': False, 'error': 'Aucune analyse fournie'})
         
-        for article in articles[:8]:  # Limiter pour performance
-            try:
-                original_sentiment = article.get('sentiment', {})
-                if original_sentiment:
-                    deep_analysis = advanced_analyzer.perform_deep_analysis(article, themes)
-                    
-                    if deep_analysis and 'score_original' in deep_analysis and 'score_corrigé' in deep_analysis:
-                        corrections.append({
-                            'title': article.get('title'),
-                            'originalScore': deep_analysis['score_original'],
-                            'correctedScore': deep_analysis['score_corrigé'],
-                            'confidence': deep_analysis.get('confiance', 0.5),
-                            'deepAnalysis': deep_analysis
-                        })
-            except Exception as e:
-                print(f"❌ Erreur analyse article: {e}")
-                continue
-
-        # Génération du rapport avancé
-        report_filename = generate_advanced_report(corrections, feed)
-        report_url = f'https://rss-aggregator-1-wx0b.onrender.com/reports/{report_filename}'
+        # Créer le nom du fichier
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"rapport_analyse_{timestamp}.pdf"
+        filepath = os.path.join(REPORTS_DIR, filename)
         
-        print("✅ Analyse IA avancée terminée")
+        # Créer le document PDF
+        doc = SimpleDocTemplate(filepath, pagesize=A4)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        # Titre
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=30,
+            alignment=1
+        )
+        story.append(Paragraph("RAPPORT D'ANALYSE AVANCÉE", title_style))
+        
+        # Métadonnées
+        meta_style = styles['Normal']
+        story.append(Paragraph(f"Date de génération: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", meta_style))
+        story.append(Paragraph(f"Nombre d'articles analysés: {len(analyses)}", meta_style))
+        story.append(Paragraph(f"Thèmes: {', '.join(str(t) for t in themes)}", meta_style))
+        story.append(Spacer(1, 20))
+        
+        # Résumé statistique
+        story.append(Paragraph("RÉSUMÉ STATISTIQUE", styles['Heading2']))
+        
+        # Calculer les statistiques
+        original_scores = [a.get('score_original', 0) for a in analyses]
+        corrected_scores = [a.get('score_corrected', 0) for a in analyses]
+        confidences = [a.get('confidence', 0) for a in analyses]
+        
+        stats_data = [
+            ['Métrique', 'Valeur'],
+            ['Score moyen original', f"{sum(original_scores)/len(original_scores):.3f}"],
+            ['Score moyen corrigé', f"{sum(corrected_scores)/len(corrected_scores):.3f}"],
+            ['Confiance moyenne', f"{sum(confidences)/len(confidences):.3f}"],
+            ['Corrections significatives', f"{sum(1 for o,c in zip(original_scores, corrected_scores) if abs(o-c) > 0.1)}/{len(analyses)}"]
+        ]
+        
+        stats_table = Table(stats_data, colWidths=[200, 100])
+        stats_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(stats_table)
+        story.append(Spacer(1, 20))
+        
+        # Détails par article
+        story.append(Paragraph("DÉTAILS PAR ARTICLE", styles['Heading2']))
+        
+        for i, analysis in enumerate(analyses[:10]):  # Limiter à 10 articles pour le rapport
+            story.append(Paragraph(f"Article {i+1}", styles['Heading3']))
+            
+            article_data = [
+                ['Score original', f"{analysis.get('score_original', 0):.3f}"],
+                ['Score corrigé', f"{analysis.get('score_corrected', 0):.3f}"],
+                ['Confiance', f"{analysis.get('confidence', 0):.3f}"],
+                ['Biais détectés', f"{len(analysis.get('analyse_biases', {}).get('biais_détectés', []))}"]
+            ]
+            
+            article_table = Table(article_data, colWidths=[150, 100])
+            article_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(article_table)
+            story.append(Spacer(1, 10))
+        
+        # Générer le PDF
+        doc.build(story)
         
         return jsonify({
             'success': True,
-            'report_url': report_url,
-            'corrections_applied': len(corrections),
-            'average_confidence': sum(c['confidence'] for c in corrections) / len(corrections) if corrections else 0,
-            'analysis_metadata': {
-                'articles_analyzed': len(corrections),
-                'deep_analysis_performed': True,
-                'contextual_research': True,
-                'bias_detection': True,
-                'generated_at': datetime.datetime.now().isoformat()
-            }
+            'reportUrl': f'/reports/{filename}',
+            'filename': filename
         })
-
+        
     except Exception as e:
-        print(f"❌ Erreur analyse avancée: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Erreur génération rapport: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-# Routes de service
-@app.route('/reports/<path:filename>', methods=['GET'])
-def serve_report(filename):
-    return send_from_directory(REPORTS_DIR, filename, as_attachment=False)
+@app.route('/reports/<filename>')
+def download_report(filename):
+    """Télécharge un rapport généré"""
+    return send_from_directory(REPORTS_DIR, filename)
 
-@app.route('/health', methods=['GET'])
+@app.route('/health')
 def health_check():
+    """Endpoint de santé"""
     return jsonify({
         'status': 'healthy',
-        'service': 'Advanced IA Analysis Service',
-        'features': ['deep_context_analysis', 'web_research', 'bias_detection', 'advanced_reporting'],
-        'timestamp': datetime.datetime.now().isoformat()
+        'timestamp': datetime.datetime.now().isoformat(),
+        'reports_count': len(os.listdir(REPORTS_DIR)) if os.path.exists(REPORTS_DIR) else 0
     })
 
 if __name__ == '__main__':
-    print("🚀 Service IA Avancé démarré sur https://rss-aggregator-1-wx0b.onrender.com")
-    print("🧠 Fonctionnalités activées:")
-    print("   - Analyse contextuelle avancée")
-    print("   - Recherche web contextuelle") 
-    print("   - Détection de biais et crédibilité")
-    print("   - Analyse géopolitique spécialisée")
-    print("   - Rapports PDF intelligents")
-    print("   - Synthèse par IA avancée")
-    
-    app.run(host='0.0.0.0', port=5051, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
