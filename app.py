@@ -71,7 +71,7 @@ def api_refresh():
         return json_error("refresh failed: " + str(e))
 
 # Mettre à jour api_feeds pour gérer les flux réels
-@app.route("/api/feeds", methods=["GET", "POST", "DELETE"])
+@app.route("/feeds", methods=["GET", "POST", "DELETE"])
 def api_feeds():
     """Gestion complète des flux RSS"""
     try:
@@ -193,7 +193,7 @@ def root_index():
         return jsonify({"status": "ok", "message": "RSS Aggregator API (use /api/*)"})
 
 
-@app.route("/api/health", methods=["GET"])
+@app.route("/health", methods=["GET"])
 def api_health():
     """
     Retourne l'état de santé du service et si la DB est active.
@@ -259,7 +259,7 @@ def api_analyze():
         return json_error("analyse échouée: " + str(e))
 
 
-@app.route("/api/articles", methods=["GET"])
+@app.route("/articles", methods=["GET"])
 def api_articles():
     """
     Renvoie les articles récents (normalisés pour le frontend).
@@ -302,7 +302,7 @@ def api_themes():
         return json_error("impossible de charger thèmes: " + str(e))
 
 
-@app.route("/api/feeds", methods=["GET", "POST", "DELETE"])
+@app.route("/feeds", methods=["GET", "POST", "DELETE"])
 def api_feeds():
     """
     Point d'accès basique pour les flux (implémentation légère) :
@@ -326,7 +326,7 @@ def api_feeds():
         return json_error("feeds error: " + str(e))
 
 
-@app.route("/api/summaries", methods=["GET"])
+@app.route("/summaries", methods=["GET"])
 def api_summaries():
     """
     Retourne les métriques agrégées (moyennes, total).
@@ -346,7 +346,7 @@ def api_summaries():
         return json_error("impossible de générer résumé: " + str(e))
 
 
-@app.route("/api/metrics", methods=["GET"])
+@app.route("/metrics", methods=["GET"])
 def api_metrics():
     """
     Métadonnées supplémentaires utiles pour les dashboards ou alerting.
