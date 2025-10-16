@@ -114,5 +114,25 @@ def api_refresh():
     # This route can be used to trigger background scraping in future
     return jsonify({"success": True, "message": "refresh triggered (placeholder)"}), 200
 
+# --- routes metrics ---
+from modules.metrics import compute_metrics
+
+@app.route("/api/metrics", methods=["GET"])
+def api_metrics():
+    """
+    Retourne métriques et évolutions (sentiments / thèmes) pour la période demandée.
+    Query param: days (int), default 30
+    """
+    try:
+        days = int(request.args.get("days") or 30)
+    except:
+        days = 30
+    try:
+        data = compute_metrics(days=days)
+        return jsonify({"success": True, "metrics": data})
+    except Exception as e:
+        app.logger.exception("api_metrics failed")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
