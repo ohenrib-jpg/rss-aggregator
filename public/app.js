@@ -1,18 +1,10 @@
-/* public/app.js
-   Version unifiée — Option B (SQL backend)
-   - fournit : chargement articles, thèmes, métriques, navigation onglets, exports, apprentissage (placeholders)
-   - compatibilité Chart.js
-*/
-
+/* public/app.js - Version corrigée pour backend Node.js */
 /* global Chart */
 window.app = (function () {
-  // -------------------------
-  // State
-  // -------------------------
   const state = {
     apiBase: "/api",
     autoRefresh: true,
-    refreshIntervalMs: 300000, // 5 min
+    refreshIntervalMs: 300000,
     articles: [],
     themes: [],
     summary: {},
@@ -46,17 +38,9 @@ window.app = (function () {
   function plural(n, s = "s") { return n > 1 ? s : ""; }
   function escapeHtml(s) {
     if (!s && s !== 0) return "";
-    return String(s)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+    return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   }
 
-  // -------------------------
-  // API helpers
-  // -------------------------
   async function apiGET(path) {
     const url = path.startsWith("/") ? path : state.apiBase + path;
     const res = await fetch(url, { method: "GET", credentials: "same-origin" });
@@ -66,6 +50,7 @@ window.app = (function () {
     }
     return res.json();
   }
+
   async function apiPOST(path, body) {
     const url = path.startsWith("/") ? path : state.apiBase + path;
     const res = await fetch(url, {
@@ -81,17 +66,28 @@ window.app = (function () {
     return res.json();
   }
 
-  // -------------------------
-  // Data loaders
-  // -------------------------
   async function loadArticles() {
     setMessage("Chargement des articles...");
     try {
       const json = await apiGET("/articles");
-      const list = json.articles || json.data || [];
-      state.articles = list.map(normalizeArticle);
+      
+      // ✅ CORRECTION : backend Node.js renvoie { success, articles, analysis }
+      if (json.success && json.articles) {
+        state.articles = json.articles.map(normalizeArticle);
+      } else {
+        const list = json.articles || json.data || [];
+        state.articles = list.map(normalizeArticle);
+      }
+      
       renderArticlesList();
       computeThemesFromArticles();
+      
+      // ✅ Mettre à jour les stats depuis la réponse
+      if (json.totalArticles !== undefined) {
+        if (!state.summary) state.summary = {};
+        state.summary.total_articles = json.totalArticles;
+      }
+      
       setMessage("");
       return state.articles;
     } catch (err) {
@@ -108,66 +104,58 @@ window.app = (function () {
     const out = {};
     if (!a || typeof a !== "object") return out;
     out.id = a.id || a._id || null;
-    out.title = a.title || (a.raw && a.raw.title) || "";
-    out.link = a.link || (a.raw && a.raw.link) || "";
-    out.date = a.date || a.pubDate || a.published || (a.raw && (a.raw.pubDate || a.raw.date)) || null;
+    out.title = a.title || "";
+    out.link = a.link || "";
+    out.date = a.date || a.pubDate || a.published || null;
     if (out.date && typeof out.date !== "string") {
       try { out.date = new Date(out.date).toISOString(); } catch (e) {}
     }
-    let themes = a.themes || a.detected_themes || a.topics || null;
-    if (!themes && a.raw && a.raw.themes) themes = a.raw.themes;
-    if (!themes && a.theme) themes = a.theme;
-    if (!themes) themes = [];
+    
+    let themes = a.themes || [];
     if (typeof themes === "string") themes = themes.split(",").map(s => s.trim()).filter(Boolean);
-    if (Array.isArray(themes)) { out.themes = themes.map(t => (typeof t === "string" ? t : (t.name || t))).filter(Boolean); }
-    else if (typeof themes === "object") {
-      if (Array.isArray(themes.names)) out.themes = themes.names.map(String);
-      else out.themes = Object.keys(themes);
-    } else out.themes = [];
-    out.sentiment = a.sentiment || a.tone || a.sentiment_label || (a.raw && a.raw.sentiment) || null;
+    out.themes = Array.isArray(themes) ? themes : [];
+    
+    out.sentiment = a.sentiment || null;
     out.confidence = safeNumber(a.confidence, 0);
     out.bayesian_posterior = safeNumber(a.bayesian_posterior, 0);
     out.corroboration_strength = safeNumber(a.corroboration_strength, 0);
-    out.summary = a.summary || (a.raw && a.raw.summary) || "";
+    out.summary = a.summary || a.content || "";
     return out;
   }
 
   async function loadMetrics(days = 30) {
     setMessage("Chargement des métriques...");
     try {
-      const json = await apiGET(`/metrics?days=${days}`);
-      if (!json || !json.success) {
-        const s = await apiGET("/summaries").catch(() => null);
-        state.metrics = { summary: s };
-      } else {
-        state.metrics = json.metrics;
-      }
-      if (state.metrics && state.metrics.summary) state.summary = state.metrics.summary;
+      // ✅ CORRECTION : Pas de route /metrics dans Node.js, on calcule depuis les articles
+      // On simule les métriques depuis state.articles
+      const totalArticles = state.articles.length;
+      const avgConfidence = totalArticles > 0 
+        ? (state.articles.reduce((sum, a) => sum + (a.confidence || 0), 0) / totalArticles)
+        : 0;
+      
+      state.metrics = {
+        summary: {
+          total_articles: totalArticles,
+          avg_confidence: avgConfidence.toFixed(3),
+          avg_posterior: 0,
+          avg_corroboration: 0
+        },
+        sentiment_evolution: [],
+        top_themes: state.themes.map(t => ({ name: t.name, total: t.count }))
+      };
+      
+      state.summary = state.metrics.summary;
       renderMetricsUI();
       setMessage("");
       return state.metrics;
     } catch (err) {
-      console.warn("loadMetrics error -> trying /summaries fallback", err);
-      try {
-        const s = await apiGET("/summaries");
-        state.metrics = { summary: s || {} };
-        state.summary = s || {};
-        renderMetricsUI();
-        setMessage("");
-        return state.metrics;
-      } catch (err2) {
-        console.error("loadMetrics fallback failed", err2);
-        setMessage("Erreur lors du chargement des métriques: " + err2.message);
-        state.metrics = null;
-        renderMetricsUI();
-        return null;
-      }
+      console.warn("loadMetrics error", err);
+      state.metrics = null;
+      renderMetricsUI();
+      return null;
     }
   }
 
-  // -------------------------
-  // Compute themes
-  // -------------------------
   function computeThemesFromArticles() {
     const counter = new Map();
     state.articles.forEach(a => {
@@ -191,9 +179,6 @@ window.app = (function () {
     return `hsl(${hue} 70% 45%)`;
   }
 
-  // -------------------------
-  // Renderers
-  // -------------------------
   function renderArticlesList() {
     const container = qs("#articlesList");
     if (!container) return;
@@ -204,10 +189,30 @@ window.app = (function () {
     }
     state.articles.slice(0, 200).forEach(a => {
       const card = el("div", { class: "article-card" });
+      
+      // ✅ Extraction du sentiment
+      let sentimentScore = 0;
+      let sentimentType = 'neutral';
+      if (a.sentiment) {
+        if (typeof a.sentiment === 'object') {
+          sentimentScore = a.sentiment.score || 0;
+          sentimentType = a.sentiment.sentiment || 'neutral';
+        } else if (typeof a.sentiment === 'number') {
+          sentimentScore = a.sentiment;
+          sentimentType = sentimentScore > 0.1 ? 'positive' : sentimentScore < -0.1 ? 'negative' : 'neutral';
+        }
+      }
+      
+      const sentimentEmoji = sentimentType === 'positive' ? '😊' : sentimentType === 'negative' ? '😞' : '😐';
+      
       card.innerHTML = `
         <h4><a href="${escapeHtml(a.link || '#')}" target="_blank" rel="noreferrer noopener">${escapeHtml(a.title || "(sans titre)")}</a></h4>
-        <div class="meta"><small>${escapeHtml(a.date ? a.date.slice(0,10) : "")}</small> - <small>Confiance: ${Number(a.confidence||0).toFixed(2)}</small></div>
-        <p>${escapeHtml(a.summary || "")}</p>
+        <div class="meta">
+          <small>${escapeHtml(a.date ? a.date.slice(0,10) : "")}</small> • 
+          <small>Confiance: ${Number(a.confidence||0).toFixed(2)}</small> • 
+          <small>${sentimentEmoji} ${sentimentType} (${sentimentScore.toFixed(2)})</small>
+        </div>
+        <p>${escapeHtml((a.summary || "").substring(0, 200))}${a.summary && a.summary.length > 200 ? '...' : ''}</p>
         <div class="themes">${(a.themes||[]).map(t => '<span class="tag">'+escapeHtml(t)+'</span>').join(" ")}</div>
       `;
       container.appendChild(card);
@@ -231,10 +236,13 @@ window.app = (function () {
 
   function renderMetricsUI() {
     const s = state.metrics && state.metrics.summary ? state.metrics.summary : state.summary || {};
-    const m_total = qs("#m_total"); const m_conf = qs("#m_confidence");
-    const m_post = qs("#m_posterior"); const m_corro = qs("#m_corro");
+    const m_total = qs("#m_total");
+    const m_conf = qs("#m_confidence");
+    const m_post = qs("#m_posterior");
+    const m_corro = qs("#m_corro");
+    
     if (m_total) m_total.innerText = (s.total_articles != null) ? s.total_articles : (state.articles.length || 0);
-    if (m_conf) m_conf.innerText = (s.avg_confidence != null) ? Number(s.avg_conf).toFixed ? Number(s.avg_confidence).toFixed(3) : s.avg_confidence : "—";
+    if (m_conf) m_conf.innerText = (s.avg_confidence != null) ? s.avg_confidence : "—";
     if (m_post) m_post.innerText = (s.avg_posterior != null) ? Number(s.avg_posterior).toFixed(3) : "—";
     if (m_corro) m_corro.innerText = (s.avg_corroboration != null) ? Number(s.avg_corroboration).toFixed(3) : "—";
 
@@ -248,19 +256,22 @@ window.app = (function () {
       });
     }
 
-    if (state.metrics && Array.isArray(state.metrics.sentiment_evolution)) {
-      renderSentimentChart(state.metrics.periods || state.metrics.sentiment_evolution.map(s => s.date), state.metrics.sentiment_evolution);
-    } else {
-      const buckets = buildSentimentBucketsFromArticles(30);
-      renderSentimentChart(Object.keys(buckets), Object.values(buckets).map(v => ({ date: v.date, positive: v.positive, neutral: v.neutral, negative: v.negative })));
-    }
+    // Sentiment chart
+    const buckets = buildSentimentBucketsFromArticles(30);
+    renderSentimentChart(Object.keys(buckets), Object.values(buckets).map(v => ({ 
+      date: v.date, 
+      positive: v.positive, 
+      neutral: v.neutral, 
+      negative: v.negative 
+    })));
   }
 
   function buildSentimentBucketsFromArticles(days = 30) {
     const map = {};
     const today = new Date();
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today); d.setDate(today.getDate() - i);
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
       const key = isoDay(d);
       map[key] = { date: key, positive: 0, neutral: 0, negative: 0 };
     }
@@ -274,21 +285,23 @@ window.app = (function () {
   }
 
   function classifySentiment(sentiment, article) {
+    if (typeof sentiment === "object" && sentiment.sentiment) {
+      return sentiment.sentiment;
+    }
     if (typeof sentiment === "number") {
       if (sentiment > 0.1) return "positive";
       if (sentiment < -0.1) return "negative";
       return "neutral";
     }
-    if (!sentiment && article) return "neutral";
-    const s = String(sentiment || "").toLowerCase();
-    if (s.includes("pos") || s.includes("+") || s.includes("positive")) return "positive";
-    if (s.includes("neg") || s.includes("-") || s.includes("negative")) return "negative";
+    if (typeof sentiment === "object" && sentiment.score !== undefined) {
+      const score = sentiment.score;
+      if (score > 0.1) return "positive";
+      if (score < -0.1) return "negative";
+      return "neutral";
+    }
     return "neutral";
   }
 
-  // -------------------------
-  // Charts
-  // -------------------------
   function renderThemeChart() {
     const ctx = qs("#themeChart");
     if (!ctx) return;
@@ -324,8 +337,24 @@ window.app = (function () {
     try {
       state.charts.timelineChart = new Chart(ctx.getContext("2d"), {
         type: "line",
-        data: { labels: labels, datasets: [{ label: "Articles par jour", data: data, fill: true, tension: 0.25 }] },
-        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        data: { labels: labels, datasets: [{ label: "Articles par jour", data: data, fill: true, tension: 0.25, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)' }] },
+        options: { 
+          responsive: true, 
+          scales: { y: { beginAtZero: true } },
+          plugins: {
+            zoom: {
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'xy'
+              },
+              pan: {
+                enabled: true,
+                mode: 'xy'
+              }
+            }
+          }
+        }
       });
     } catch (e) { console.warn("Chart renderTimelineChart failed", e); }
   }
@@ -334,7 +363,8 @@ window.app = (function () {
     const today = new Date();
     const map = {};
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today); d.setDate(today.getDate() - i);
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
       const key = isoDay(d);
       map[key] = { date: key, count: 0 };
     }
@@ -375,25 +405,44 @@ window.app = (function () {
     } catch (e) { console.warn("renderSentimentChart failed", e); }
   }
 
-  // -------------------------
-  // UI helpers / exports / learning placeholders
-  // -------------------------
-  function setMessage(msg) { const m = qs("#messageContainer"); if (!m) return; m.innerText = msg || ""; }
+  function setMessage(msg) { 
+    const m = qs("#messageContainer"); 
+    if (!m) return; 
+    m.innerText = msg || "";
+    m.style.color = msg ? '#ef4444' : '';
+    m.style.padding = msg ? '10px' : '0';
+  }
 
   function toCSV(arr) {
     if (!Array.isArray(arr)) return "";
-    const headers = ["id","date","title","link","sentiment","confidence","bayesian_posterior","corroboration_strength","themes","summary"];
+    const headers = ["id","date","title","link","sentiment","confidence","themes","summary"];
     const rows = arr.map(a => headers.map(h => {
       let v = a[h] !== undefined ? a[h] : (h === "themes" ? (Array.isArray(a.themes) ? a.themes.join(";") : "") : "");
       if (v === null || v === undefined) v = "";
+      if (typeof v === 'object') v = JSON.stringify(v);
       return `"${String(v).replace(/"/g, '""')}"`;
     }).join(","));
     return [headers.join(","), ...rows].join("\n");
   }
-  function downloadBlob(blob, filename) { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+
+  function downloadBlob(blob, filename) { 
+    const url = URL.createObjectURL(blob); 
+    const a = document.createElement("a"); 
+    a.href = url; 
+    a.download = filename; 
+    document.body.appendChild(a); 
+    a.click(); 
+    a.remove(); 
+    setTimeout(() => URL.revokeObjectURL(url), 1000); 
+  }
 
   function exportData(type = "json") {
-    const payload = { generatedAt: new Date().toISOString(), summary: state.summary || {}, metrics: state.metrics || {}, articles: state.articles || [] };
+    const payload = { 
+      generatedAt: new Date().toISOString(), 
+      summary: state.summary || {}, 
+      metrics: state.metrics || {}, 
+      articles: state.articles || [] 
+    };
     if (type === "json") {
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       downloadBlob(blob, `rss-aggregator-export-${new Date().toISOString().slice(0,10)}.json`);
@@ -408,135 +457,166 @@ window.app = (function () {
     const modal = qs("#learningStatsModal");
     const container = qs("#modalLearningStats") || qs("#learningStats");
     if (!container) return;
-    container.innerHTML = "<div class='loading'>Chargement des statistiques...</div>";
-    try {
-      const json = await apiGET("/learning/stats").catch(() => null);
-      if (json && json.success) container.innerHTML = `<pre>${escapeHtml(JSON.stringify(json, null, 2))}</pre>`;
-      else container.innerHTML = "<div>Aucune statistique d'apprentissage disponible (endpoint absent).</div>";
-    } catch (err) { container.innerHTML = "<div>Erreur: " + escapeHtml(err.message) + "</div>"; }
+    container.innerHTML = "<div class='loading'>Statistiques d'apprentissage non disponibles (endpoint absent)</div>";
     if (modal) modal.style.display = "block";
   }
-  async function learnFromCorrection() {
-    const text = qs("#learningText") ? qs("#learningText").value : "";
-    const scoreEl = qs("#expectedScore");
-    const score = scoreEl ? Number(scoreEl.value) : 0;
-    const out = qs("#learningResult");
-    if (out) out.innerHTML = "Envoi en cours...";
-    try {
-      const resp = await apiPOST("/learning/teach", { text, score }).catch(() => ({ success: false }));
-      if (resp && resp.success) { if (out) out.innerHTML = "Apprentissage OK"; } else { if (out) out.innerHTML = "Service d'apprentissage indisponible (endpoint absent)."; }
-    } catch (err) { if (out) out.innerHTML = "Erreur: " + escapeHtml(err.message); }
-  }
-  async function resetLearning() { if (!confirm("Réinitialiser les données d'apprentissage ?")) return; try { const r = await apiPOST("/learning/reset").catch(() => ({ success: false })); alert((r && r.success) ? "Réinitialisation effectuée." : "Impossible de réinitialiser (endpoint absent)."); } catch (e) { alert("Erreur: " + e.message); } }
 
-  // -------------------------
-  // Feeds & Themes actions
-  // -------------------------
-  async function addFeed() {
-    const urlEl = qs("#feedUrl");
-    if (!urlEl || !urlEl.value) return alert("Entrez une URL de flux.");
-    try {
-      const resp = await apiPOST("/feeds/add", { url: urlEl.value }).catch(() => ({ success: false }));
-      if (resp && resp.success) { alert("Flux ajouté."); loadFeeds(); } else alert("Impossible d'ajouter le flux (endpoint absent).");
-    } catch (e) { alert("Erreur: " + e.message); }
-  }
   async function loadFeeds() {
     try {
-      const json = await apiGET("/feeds").catch(() => null);
+      const json = await apiGET("/feeds");
       const container = qs("#feedsList");
       if (!container) return;
-      if (json && json.success && Array.isArray(json.feeds)) container.innerHTML = json.feeds.map(f => `<div>${escapeHtml(f.url)}</div>`).join("");
-      else container.innerHTML = "<div class='loading'>Aucun flux (ou endpoint absent).</div>";
-    } catch (e) { const c = qs("#feedsList"); if (c) c.innerHTML = "<div class='loading'>Erreur chargement flux.</div>"; }
+      if (Array.isArray(json) && json.length > 0) {
+        container.innerHTML = json.map(url => `<div class="feed-item" style="padding: 10px; border-bottom: 1px solid #e9ecef;">${escapeHtml(url)}</div>`).join("");
+      } else {
+        container.innerHTML = "<div class='loading'>Aucun flux RSS configuré.</div>";
+      }
+    } catch (e) { 
+      const c = qs("#feedsList"); 
+      if (c) c.innerHTML = "<div class='loading'>Erreur chargement flux.</div>"; 
+    }
   }
-  async function addTheme() {
-    const nameEl = qs("#themeName"); const keywordsEl = qs("#themeKeywords"); const colorEl = qs("#themeColor");
-    if (!nameEl || !keywordsEl) return alert("Formulaire thème incomplet.");
-    const payload = { name: nameEl.value, keywords: keywordsEl.value, color: colorEl ? colorEl.value : null };
-    try {
-      const resp = await apiPOST("/themes/add", payload).catch(() => ({ success: false }));
-      if (resp && resp.success) { alert("Thème créé."); loadThemes(); } else alert("Impossible de créer le thème (endpoint absent).");
-    } catch (e) { alert("Erreur: " + e.message); }
-  }
+
   async function loadThemes() {
     try {
-      const json = await apiGET("/themes").catch(() => null);
-      if (json && json.success && Array.isArray(json.themes)) {
-        const container = qs("#themesList"); if (container) { container.innerHTML = ""; json.themes.forEach(t => { const node = el("div", {}, `${t.name} — ${t.description || ""}`); container.appendChild(node); }); }
-      } else computeThemesFromArticles();
-    } catch (e) { computeThemesFromArticles(); }
+      const json = await apiGET("/themes");
+      const container = qs("#themesList");
+      if (!container) return;
+      if (Array.isArray(json) && json.length > 0) {
+        container.innerHTML = "";
+        json.forEach(t => {
+          const node = el("div", { class: "theme-row" });
+          node.innerHTML = `<strong>${escapeHtml(t.name)}</strong> — ${(t.keywords || []).join(', ')}`;
+          container.appendChild(node);
+        });
+      } else {
+        computeThemesFromArticles();
+      }
+    } catch (e) { 
+      computeThemesFromArticles(); 
+    }
   }
 
-  // -------------------------
-  // Refresh controls
-  // -------------------------
   async function manualRefresh() {
+    const btn = qs("#refreshBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Rafraîchissement...";
+    }
+    
     setMessage("Rafraîchissement manuel en cours...");
     try {
-      try { await apiPOST("/refresh", {}); } catch(e) {}
-      await Promise.all([loadArticles(), loadMetrics()]);
-      renderTimelineChart(); renderThemeChart(); renderMetricsUI();
-      setMessage("Mise à jour terminée.");
-      const lu = qs("#lastUpdate"); if (lu) lu.innerText = "Dernière mise à jour: " + new Date().toLocaleString();
-    } catch (e) { console.error("manualRefresh failed", e); setMessage("Erreur lors du rafraîchissement: " + e.message); } finally { setTimeout(() => setMessage(""), 3000); }
+      await apiPOST("/refresh", {});
+      await Promise.all([loadArticles(), loadFeeds(), loadThemes()]);
+      await loadMetrics();
+      renderTimelineChart();
+      renderThemeChart();
+      renderMetricsUI();
+      setMessage("Mise à jour terminée !");
+      const lu = qs("#lastUpdate");
+      if (lu) lu.innerText = "Dernière mise à jour: " + new Date().toLocaleString();
+    } catch (e) {
+      console.error("manualRefresh failed", e);
+      setMessage("Erreur lors du rafraîchissement: " + e.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "🔄 Générer";
+      }
+      setTimeout(() => setMessage(""), 5000);
+    }
   }
 
-  function startAutoRefresh() { stopAutoRefresh(); if (!state.autoRefresh) return; state.timers.autoRefresh = setInterval(() => manualRefresh().catch(() => {}), state.refreshIntervalMs); }
-  function stopAutoRefresh() { if (state.timers.autoRefresh) clearInterval(state.timers.autoRefresh); state.timers.autoRefresh = null; }
+  function startAutoRefresh() { 
+    stopAutoRefresh(); 
+    if (!state.autoRefresh) return; 
+    state.timers.autoRefresh = setInterval(() => manualRefresh().catch(() => {}), state.refreshIntervalMs); 
+  }
+  
+  function stopAutoRefresh() { 
+    if (state.timers.autoRefresh) clearInterval(state.timers.autoRefresh); 
+    state.timers.autoRefresh = null; 
+  }
 
-  // -------------------------
-  // Navigation / tabs
-  // -------------------------
   window.showTab = function (target, ev) {
-    const mapping = { analysis: "#analysisTab", trends: "#trendsTab", metrics: "#metricsTab", sentiment: "#sentimentTab", learning: "#learningTab", feeds: "#feedsTab", themes: "#themesTab", articles: "#articlesTab" };
+    const mapping = { 
+      analysis: "#analysisTab", trends: "#trendsTab", metrics: "#metricsTab", 
+      sentiment: "#sentimentTab", learning: "#learningTab", feeds: "#feedsTab", 
+      themes: "#themesTab", articles: "#articlesTab" 
+    };
     const sel = mapping[target] || `#${target}Tab`;
-    const tabs = qsa(".tab"); tabs.forEach(t => t.classList.remove("active"));
-    const elms = tabs.filter(t => { try { return (t.getAttribute("onclick") || "").includes("'" + target + "'") || (t.textContent || "").toLowerCase().includes(target.toLowerCase()); } catch (e) { return false; } });
+    const tabs = qsa(".tab");
+    tabs.forEach(t => t.classList.remove("active"));
+    const elms = tabs.filter(t => {
+      try {
+        return (t.getAttribute("onclick") || "").includes("'" + target + "'");
+      } catch (e) { return false; }
+    });
     if (elms.length) elms[0].classList.add("active");
-    const sections = qsa(".tab-content"); sections.forEach(s => s.classList.remove("active")); const targetSection = qs(sel); if (targetSection) targetSection.classList.add("active");
+    const sections = qsa(".tab-content");
+    sections.forEach(s => s.classList.remove("active"));
+    const targetSection = qs(sel);
+    if (targetSection) targetSection.classList.add("active");
+    
     if (target === "metrics") loadMetrics().then(() => renderMetricsUI()).catch(() => {});
     if (target === "analysis") { renderThemeChart(); renderTimelineChart(); }
+    if (target === "feeds") loadFeeds();
+    if (target === "themes") loadThemes();
   };
 
-  // -------------------------
-  // Initialization
-  // -------------------------
   function attachUIBindings() {
-    const jsonBtn = qs(".export-btn.json"); const csvBtn = qs(".export-btn.csv"); const statsBtn = qs(".export-btn.stats");
+    const jsonBtn = qs(".export-btn.json");
+    const csvBtn = qs(".export-btn.csv");
+    const statsBtn = qs(".export-btn.stats");
     if (jsonBtn) jsonBtn.addEventListener("click", () => exportData("json"));
-    if (csvBtn) csvBtn.addEventListener("click", () => exportData("csv"));
+    if (csvBtn) jsonBtn.addEventListener("click", () => exportData("csv"));
     if (statsBtn) statsBtn.addEventListener("click", () => showLearningStats());
-    const learnBtn = qs(".learn-btn"); if (learnBtn) learnBtn.addEventListener("click", learnFromCorrection);
-    const resetBtn = qs(".delete"); if (resetBtn) resetBtn.addEventListener("click", resetLearning);
-    const refreshBtn = qs("#refreshBtn"); if (refreshBtn) refreshBtn.addEventListener("click", manualRefresh);
-    const modal = qs("#learningStatsModal"); if (modal) { const close = modal.querySelector(".close"); if (close) close.addEventListener("click", () => modal.style.display = "none"); window.addEventListener("click", (e) => { if (e.target === modal) modal.style.display = "none"; }); }
-    qsa(".tab").forEach(t => { t.addEventListener("click", (ev) => {
-      const onclick = t.getAttribute("onclick"); if (onclick) { const match = onclick.match(/showTab\(['"]([^'"]+)['"]/); if (match) { showTab(match[1], ev); return; } }
-      const text = (t.textContent || "").trim().toLowerCase();
-      if (text.includes("analyse")) showTab("analysis");
-      else if (text.includes("tendances")) showTab("trends");
-      else if (text.includes("métriques") || text.includes("metrics")) showTab("metrics");
-      else if (text.includes("sentiment")) showTab("sentiment");
-      else if (text.includes("apprentissage")) showTab("learning");
-      else if (text.includes("flux")) showTab("feeds");
-      else if (text.includes("thèmes") || text.includes("themes")) showTab("themes");
-      else if (text.includes("articles")) showTab("articles");
-    }); });
+    
+    const refreshBtn = qs("#refreshBtn");
+    if (refreshBtn) refreshBtn.addEventListener("click", manualRefresh);
+    
+    const modal = qs("#learningStatsModal");
+    if (modal) {
+      const close = modal.querySelector(".close");
+      if (close) close.addEventListener("click", () => modal.style.display = "none");
+      window.addEventListener("click", (e) => { if (e.target === modal) modal.style.display = "none"; });
+    }
+    
+    qsa(".tab").forEach(t => {
+      t.addEventListener("click", (ev) => {
+        const onclick = t.getAttribute("onclick");
+        if (onclick) {
+          const match = onclick.match(/showTab\(['"]([^'"]+)['"]/);
+          if (match) {
+            showTab(match[1], ev);
+            return;
+          }
+        }
+      });
+    });
   }
 
   async function init() {
+    console.log("🚀 Initialisation de l'application...");
     attachUIBindings();
-    await Promise.allSettled([loadArticles(), loadThemes(), loadMetrics()]);
-    renderThemeChart(); renderTimelineChart(); renderMetricsUI();
+    await Promise.allSettled([loadArticles(), loadThemes(), loadFeeds()]);
+    await loadMetrics();
+    renderThemeChart();
+    renderTimelineChart();
+    renderMetricsUI();
     startAutoRefresh();
+    console.log("✅ Application initialisée");
   }
 
-  // -------------------------
-  // Exposed API
-  // -------------------------
   return {
-    init, manualRefresh, exportData, showLearningStats, refreshLearningStats: showLearningStats, learnFromCorrection, addFeed, addTheme, loadArticles, loadMetrics, loadThemes, _state: state
+    init, manualRefresh, exportData, showLearningStats, 
+    loadArticles, loadMetrics, loadThemes, loadFeeds,
+    _state: state
   };
-})(); // end app closure
+})();
 
-window.addEventListener("load", () => { if (window.app && typeof window.app.init === "function") { window.app.init().catch(err => console.error("app.init failed", err)); } });
+window.addEventListener("load", () => { 
+  if (window.app && typeof window.app.init === "function") { 
+    window.app.init().catch(err => console.error("app.init failed", err)); 
+  } 
+});
