@@ -3,667 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS Thématique - Module "standalone" de la suite Open Source Geopolis - V.2.3</title>
+    <title>Agrégateur RSS Thématique + IA V.1.2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1"></script>
-    <style>
-        /* Reset et base */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f5f6fa;
-            min-height: 100vh;
-            color: #333;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* En-tête amélioré */
-        .header-main {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        .header-title h1 {
-            margin: 0 0 8px 0;
-            font-size: 2rem;
-            font-weight: 700;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .header-subtitle {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            font-size: 0.9rem;
-            opacity: 0.9;
-            flex-wrap: wrap;
-        }
-
-        .header-subtitle .author {
-            background: rgba(255,255,255,0.2);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-weight: 600;
-        }
-
-        .header-subtitle .version {
-            background: rgba(255,255,255,0.15);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-family: monospace;
-        }
-
-        .header-tagline {
-            font-size: 1rem;
-            opacity: 0.9;
-            margin-top: 8px;
-            line-height: 1.4;
-        }
-
-        /* Bandeau de démonstration */
-        .demo-banner {
-            display: flex;
-            align-items: flex-start;
-            gap: 15px;
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            border: 1px solid #ffeaa7;
-            border-left: 4px solid #fdcb6e;
-            padding: 16px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .demo-icon {
-            font-size: 1.5rem;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .demo-content {
-            flex: 1;
-        }
-
-        .demo-title {
-            font-weight: 700;
-            font-size: 1rem;
-            color: #2d3436;
-            margin-bottom: 6px;
-        }
-
-        .demo-text {
-            font-size: 0.9rem;
-            color: #636e72;
-            line-height: 1.4;
-            margin-bottom: 8px;
-        }
-
-        /* Messages */
-        #messageContainer {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            max-width: 400px;
-        }
-
-        .message {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            animation: slideIn 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(400px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        .message.success {
-            background: #27ae60;
-            color: white;
-            border-left: 4px solid #219a52;
-        }
-
-        .message.error {
-            background: #e74c3c;
-            color: white;
-            border-left: 4px solid #c0392b;
-        }
-
-        .message.info {
-            background: #3498db;
-            color: white;
-            border-left: 4px solid #2980b9;
-        }
-
-        .message-close {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 1.2rem;
-            cursor: pointer;
-            padding: 0;
-            width: auto;
-            margin-left: auto;
-        }
-
-        /* Barre de statut */
-        .status-bar {
-            background: white;
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-left: 4px solid #3498db;
-        }
-
-        .refresh-controls {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .auto-refresh-indicator {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: #27ae60;
-            font-size: 0.9rem;
-        }
-
-        .blink {
-            animation: blink 1s infinite;
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        /* Barre d'export */
-        .export-bar {
-            background: white;
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-            border-left: 4px solid #9b59b6;
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.8rem;
-        }
-
-        .export-btn {
-            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
-            padding: 0.875rem 1rem;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-            font-size: 0.9rem;
-        }
-
-        .export-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .export-btn.json { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
-        .export-btn.csv { background: linear-gradient(135deg, #27ae60 0%, #219a52 100%); }
-        .export-btn.stats { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-        .export-btn.ia { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-        .export-btn.ia-config { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); }
-
-        /* Grille de statistiques */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-3px);
-        }
-
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-
-        /* Onglets */
-        .tabs {
-            display: flex;
-            background: white;
-            border-radius: 12px;
-            padding: 0.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            flex-wrap: wrap;
-            gap: 0.25rem;
-            overflow-x: auto;
-        }
-
-        .tab {
-            padding: 0.75rem 1.5rem;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            color: #555;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .tab.active {
-            background: #3498db;
-            color: white;
-            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
-        }
-
-        .tab:hover:not(.active) {
-            background: #f8f9fa;
-            color: #3498db;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        /* Dashboard et cartes */
-        .dashboard {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e1e5e9;
-            margin-bottom: 1.5rem;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .card.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .card h3 {
-            color: #2c3e50;
-            margin-bottom: 1rem;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        /* Contrôles de graphiques avancés */
-        .chart-controls-bar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            padding: 1rem;
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .control-group label {
-            font-weight: 600;
-            color: #374151;
-            font-size: 0.9rem;
-        }
-
-        .control-group select {
-            padding: 0.5rem;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            background: white;
-            font-size: 0.9rem;
-        }
-
-        .control-btn, .toggle-minor-btn {
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.3s ease;
-        }
-
-        .control-btn:hover, .toggle-minor-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        }
-
-        /* Sélecteur de thèmes AMÉLIORÉ */
-        .theme-selector {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-
-        .theme-selector h4 {
-            margin: 0 0 1rem 0;
-            color: #1f2937;
-            font-size: 1.1rem;
-        }
-
-        .theme-checkboxes {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 0.75rem;
-            margin: 1rem 0;
-            max-height: 300px;
-            overflow-y: auto;
-            padding: 1rem;
-            background: #f8fafc;
-            border-radius: 8px;
-        }
-
-        .theme-checkbox {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            background: white;
-            border: 1px solid #e2e8f0;
-        }
-
-        .theme-checkbox:hover {
-            background: #f8fafc;
-            border-color: #3b82f6;
-            transform: translateY(-1px);
-        }
-
-        .theme-checkbox.disabled {
-            opacity: 0.5;
-        }
-
-        .theme-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            flex-shrink: 0;
-        }
-
-        .theme-name {
-            font-weight: 500;
-            color: #374151;
-            flex: 1;
-        }
-
-        .theme-count {
-            font-size: 0.8rem;
-            color: #6b7280;
-            background: #f3f4f6;
-            padding: 0.2rem 0.5rem;
-            border-radius: 12px;
-        }
-
-        /* Formulaires */
-        input, textarea, select, button {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-        }
-
-        button {
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
-        }
-
-        button:disabled {
-            background: #95a5a6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        button.delete {
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-        }
-
-        /* Listes */
-        .articles-list {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .article-item {
-            background: #f8f9fa;
-            border-left: 4px solid #3498db;
-            padding: 1rem;
-            margin-bottom: 0.75rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-
-        .article-item:hover {
-            background: #e3f2fd;
-            transform: translateX(5px);
-        }
-
-        .article-item h4 {
-            margin-bottom: 0.5rem;
-        }
-
-        .article-item a {
-            color: #3498db;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .article-meta {
-            display: flex;
-            gap: 1rem;
-            margin: 0.5rem 0;
-            font-size: 0.9rem;
-            color: #7f8c8d;
-            flex-wrap: wrap;
-        }
-
-        .theme-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.3rem;
-            margin-top: 0.5rem;
-        }
-
-        .theme-tag {
-            display: inline-block;
-            background: #3498db;
-            color: white;
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-
-        .sentiment-badge {
-            display: inline-block;
-            padding: 0.3rem 0.6rem;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .sentiment-badge.positive {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .sentiment-badge.negative {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .sentiment-badge.neutral {
-            background: #f3f4f6;
-            color: #374151;
-        }
-
-        .feed-item, .theme-item {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 0.75rem;
-            border-left: 4px solid #27ae60;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #7f8c8d;
-            font-style: italic;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container {
-                padding: 15px;
-            }
-            
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .tabs {
-                flex-direction: column;
-            }
-            
-            .export-bar {
-                grid-template-columns: 1fr;
-            }
-            
-            .theme-checkboxes {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <div class="header-main">
-                <div class="header-title">
-                    <h1>📊 Agrégateur RSS Thématique</h1>
-                    <div class="header-subtitle">
-                        <span class="author">Olivier Henri B.</span>
-                        <span class="version">V.2.3</span>
-                    </div>
-                </div>
-                <div class="header-tagline">
-                    Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances + IA
-                </div>
-            </div>
+            <h1 style="font-size:1.35rem; line-height:1.1; margin:0 0 6px 0;">📊 Agrégateur RSS Thématique <span style="font-weight:600; font-size:0.85rem; display:inline-block; margin-left:8px;">- Olivier Henri B.</span></h1>
+            <p style="margin:0 0 8px 0; font-size:0.95rem;">Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances - DeepLearning + OpenAI</p>
 
-            <div class="demo-banner">
-                <div class="demo-icon">🚀</div>
-                <div class="demo-content">
-                    <div class="demo-title">Application de démonstration</div>
-                    <div class="demo-text">
-                        Stockage PostgreSQL 1Go. Serveur de test qui se réinitialise automatiquement.
-                    </div>
+            <!-- Bandeau de démonstration ajouté : petit, discret, et accessible -->
+            <div role="note" aria-live="polite" style="border-left:4px solid #e5e7eb; padding:8px 12px; border-radius:6px; background:rgba(0,0,0,0.02); color:#374151; font-size:0.85rem; max-width:100%; box-sizing:border-box;">
+                <strong style="display:block; font-size:0.88rem; margin-bottom:4px;">Application pour démonstration</strong>
+                <span>
+                    Hébergée sur un serveur avec un compte gratuit, se réinitialisant lorsque trop de données sont accumulées (≈ 1&nbsp;journée et demie). L'application est faite pour fonctionner sans interruption pour affiner le modèle.
+                </span>
+                <div style="margin-top:6px; font-size:0.85rem;">
+                    Vous pouvez tester la fonction IA en obtenant une clé API gratuite sur le site d'OpenAI&nbsp;
+                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">https://platform.openai.com/api-keys</a>.
                 </div>
             </div>
         </header>
@@ -671,87 +29,241 @@
         <div id="messageContainer"></div>
 
         <div class="status-bar">
-            <div class="last-update" id="lastUpdate">Chargement...</div>
+            <div class="last-update" id="lastUpdate">
+                Chargement...
+            </div>
             <div class="refresh-controls">
                 <div class="auto-refresh-indicator">
                     <span class="blink">🔄</span> Auto-actualisation
                 </div>
-                <button onclick="app.manualRefresh()" id="refreshBtn">🔄 Actualiser</button>
+                <button class="refresh" onclick="app.manualRefresh()" id="refreshBtn">
+                    🔄 Générer
+                </button>
             </div>
         </div>
 
         <div class="export-bar">
-            <button class="export-btn json" onclick="app.exportData('json')">📥 Export JSON</button>
-            <button class="export-btn csv" onclick="app.exportData('csv')">📥 Export CSV</button>
-            <button class="export-btn stats" onclick="app.showLearningStats()">📊 Stats</button>
-            <button class="export-btn ia" onclick="app.runAIAnalysis()">🧠 Analyse IA</button>
+            <div class="export-controls">
+                <button class="export-btn json" onclick="app.exportData('json')">
+                    📥 Export JSON
+                </button>
+                <button class="export-btn csv" onclick="app.exportData('csv')">
+                    📥 Export CSV
+                </button>
+                <!-- NOUVEAU : Boutons IA -->
+                <button class="export-btn ia" onclick="app.runAIAnalysis()" id="iaAnalyzeBtn">
+                    🧠 Analyse IA
+                </button>
+                <button class="export-btn ia-config" onclick="app.showIAApiKeyModal()" id="iaConfigBtn">
+                    ⚙️ Config IA
+                </button>
+                <button class="export-btn stats" onclick="app.showLearningStats()">
+                    📊 Stats Apprentissage
+                </button>
+            </div>
+        </div>
+
+        <!-- Indicateur Corrections IA -->
+        <div id="iaStatusBar" class="status-bar" style="display: none; border-left-color: #8b5cf6;">
+            <div class="auto-refresh-indicator">
+                <span class="blink">🤖</span> 
+                <span id="iaStatusText">Corrections IA actives</span>
+            </div>
+            <div class="refresh-controls">
+                <span id="iaLastCorrection">Dernière correction: --</span>
+                <button class="refresh" onclick="app.manualIACorrection()" id="iaCorrectBtn">
+                    🔧 Corriger maintenant
+                </button>
+            </div>
         </div>
 
         <div class="stats-grid" id="statsGrid">
-            <div class="loading">Chargement des statistiques...</div>
+            <div class="loading">Chargement des données...</div>
         </div>
 
         <div class="tab-container">
             <div class="tabs">
                 <div class="tab active" onclick="showTab('analysis', event)">📈 Analyse</div>
                 <div class="tab" onclick="showTab('trends', event)">📊 Tendances</div>
-                <div class="tab" onclick="showTab('articles', event)">📄 Articles</div>
+                <div class="tab" onclick="showTab('metrics', event)">🎯 Métriques</div>
+                <div class="tab" onclick="showTab('sentiment', event)">😊 Sentiment</div>
+                <div class="tab" onclick="showTab('learning', event)">🧠 Apprentissage</div>
+                <div class="tab" onclick="showTab('ia-corrections', event)">🤖 Corrections IA</div>
                 <div class="tab" onclick="showTab('feeds', event)">📰 Flux RSS</div>
                 <div class="tab" onclick="showTab('themes', event)">🎨 Thèmes</div>
+                <div class="tab" onclick="showTab('articles', event)">📄 Articles</div>
             </div>
 
-            <!-- Onglet Analyse -->
+            <!-- Onglet Analyse Principale -->
             <div id="analysisTab" class="tab-content active">
                 <div class="dashboard">
                     <div class="card">
-                        <h3>Répartition par Thème</h3>
+                        <h3>
+                            Répartition par Thème 
+                            <span class="info-icon" title="Seuls les thèmes ayant au moins une correspondance sont affichés">ℹ️</span>
+                        </h3>
                         <canvas id="themeChart" height="250"></canvas>
                     </div>
                     <div class="card">
-                        <h3>Évolution Temporelle AMÉLIORÉE</h3>
-                        
-                        <!-- Contrôles avancés -->
-                        <div class="chart-controls-bar">
-                            <div class="control-group">
-                                <label>Échelle :</label>
-                                <select id="timeScale" onchange="app.chartManager && app.chartManager.changeTimeScale(this.value)">
-                                    <option value="day">Par jour</option>
-                                    <option value="week" selected>Par semaine</option>
-                                    <option value="month">Par mois</option>
-                                </select>
-                            </div>
-                            
-                            <div class="control-group">
-                                <button class="control-btn" onclick="app.chartManager && app.chartManager.selectTopThemes(5)">🏆 Top 5</button>
-                                <button class="control-btn" onclick="app.chartManager && app.chartManager.selectAllThemes()">✓ Tout</button>
-                                <button class="control-btn" onclick="app.chartManager && app.chartManager.deselectAllThemes()">✗ Aucun</button>
-                            </div>
-                        </div>
-
-                        <!-- Sélecteur de thèmes -->
-                        <div id="themeSelectorContainer"></div>
-                        
-                        <div style="position: relative; height: 400px;">
-                            <canvas id="timelineChart"></canvas>
-                        </div>
+                        <h3>Évolution Temporelle</h3>
+                        <canvas id="timelineChart" height="250"></canvas>
                     </div>
                 </div>
             </div>
 
             <!-- Onglet Tendances -->
             <div id="trendsTab" class="tab-content">
-                <div class="card full-width">
-                    <h3>📈 Évolution des Thèmes</h3>
-                    <div id="trendsTable" class="loading">Calcul des tendances...</div>
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📈 Évolution des Thèmes</h3>
+                        <div id="trendsTable" class="trends-table">
+                            <div class="loading">Calcul des tendances...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🔼 Thèmes en Croissance</h3>
+                        <div id="growthThemes" class="trends-list">
+                            <div class="loading">Analyse en cours...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>🔽 Thèmes en Baisse</h3>
+                        <div id="declineThemes" class="trends-list">
+                            <div class="loading">Analyse en cours...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Onglet Articles -->
-            <div id="articlesTab" class="tab-content">
-                <div class="card">
-                    <h3>📄 Derniers Articles</h3>
-                    <div class="articles-list" id="articlesList">
-                        <div class="loading">Chargement des articles...</div>
+            <!-- Onglet Métriques Avancées -->
+            <div id="metricsTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>🎯 Efficacité des Mots-Clés</h3>
+                        <div id="keywordMetrics" class="metrics-table">
+                            <div class="loading">Analyse des mots-clés...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🔄 Corrélations entre Thèmes</h3>
+                        <div id="correlationsMatrix" class="correlations-matrix">
+                            <div class="loading">Calcul des corrélations...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>📅 Analyse Saisonnière</h3>
+                        <div id="seasonalityAnalysis" class="seasonality-chart">
+                            <div class="loading">Analyse saisonnière...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onglet Analyse de Sentiment -->
+            <div id="sentimentTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📊 Aperçu du Sentiment Global</h3>
+                        <div id="sentimentOverview">
+                            <div class="loading">Analyse de sentiment en cours...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>🎨 Évolution des Sentiments par Thèmes</h3>
+                        <div id="sentimentByTheme">
+                            <div class="loading">Calcul des sentiments par thème...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>😊 Articles Positifs</h3>
+                        <div id="positiveArticles" class="articles-list">
+                            <div class="loading">Chargement des articles positifs...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>😞 Articles Négatifs</h3>
+                        <div id="negativeArticles" class="articles-list">
+                            <div class="loading">Chargement des articles négatifs...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ONGLET : Apprentissage -->
+            <div id="learningTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🧠 Statistiques d'Apprentissage</h3>
+                        <div id="learningStats">
+                            <div class="loading">Chargement des statistiques...</div>
+                        </div>
+                        <div class="learning-actions">
+                            <button onclick="app.refreshLearningStats()" class="refresh">🔄 Actualiser</button>
+                            <button onclick="app.resetLearning()" class="delete">🗑️ Réinitialiser</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>🎓 Apprentissage Manuel</h3>
+                        <div class="learning-form">
+                            <textarea id="learningText" placeholder="Entrez le texte à analyser..." rows="4"></textarea>
+                            <div class="score-slider">
+                                <label>Score attendu: <span id="scoreValue">0.00</span></label>
+                                <input type="range" id="expectedScore" min="-1" max="1" step="0.1" value="0">
+                                <div class="score-labels">
+                                    <span>Négatif (-1)</span>
+                                    <span>Neutre (0)</span>
+                                    <span>Positif (+1)</span>
+                                </div>
+                            </div>
+                            <button onclick="app.learnFromCorrection()" class="learn-btn">🎓 Apprendre</button>
+                            <div id="learningResult" class="learning-result"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📈 Mots Appris Récemment</h3>
+                        <div id="learnedWords" class="learned-words">
+                            <div class="loading">Chargement des mots appris...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NOUVEL ONGLET : Corrections IA -->
+            <div id="ia-correctionsTab" class="tab-content">
+                <div class="dashboard">
+                    <div class="card">
+                        <h3>🤖 État des Corrections IA</h3>
+                        <div id="iaStatusOverview">
+                            <div class="loading">Chargement des corrections IA...</div>
+                        </div>
+                        <div class="learning-actions">
+                            <button onclick="app.manualIACorrection()" class="refresh">🔧 Correction Manuelle</button>
+                            <button onclick="app.configureIA()" class="learn-btn">⚙️ Configuration IA</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>📈 Statistiques des Corrections</h3>
+                        <div id="iaCorrectionsStats">
+                            <div class="loading">Calcul des statistiques...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>📋 Historique des Corrections</h3>
+                        <div id="iaCorrectionsHistory" class="articles-list">
+                            <div class="loading">Chargement de l'historique...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -761,9 +273,10 @@
                 <div class="card">
                     <h3>➕ Ajouter un Flux RSS</h3>
                     <div class="form-group">
-                        <input type="url" id="feedUrl" placeholder="https://exemple.com/flux.rss">
+                        <input type="url" id="feedUrl" placeholder="https://exemple.com/flux.rss" required>
                         <button onclick="addFeed()">Ajouter le flux</button>
                     </div>
+                    <small>Exemples: https://www.lemonde.fr/rss/une.xml, https://www.liberation.fr/arc/outboundfeeds/rss-all/collection/accueil-une/</small>
                 </div>
                 <div class="card">
                     <h3>📋 Mes Flux RSS</h3>
@@ -778,9 +291,26 @@
                 <div class="card">
                     <h3>🎨 Créer un Thème</h3>
                     <div class="form-group">
-                        <input type="text" id="themeName" placeholder="Nom du thème">
-                        <textarea id="themeKeywords" placeholder="Mots-clés (séparés par des virgules)"></textarea>
-                        <input type="color" id="themeColor" value="#6366f1">
+                        <input type="text" id="themeName" placeholder="Nom du thème (ex: Joie)" required>
+                        <textarea id="themeKeywords" placeholder="Mots-clés (séparés par des virgules): joie, bonheur, succès, réussite" rows="3" required></textarea>
+                        
+                        <div class="color-picker-section">
+                            <label for="themeColor">Couleur du thème :</label>
+                            <div class="color-picker-container">
+                                <input type="color" id="themeColor" value="#6366f1" class="color-input">
+                                <div class="color-presets">
+                                    <div class="color-preset" style="background-color: #6366f1;" data-color="#6366f1"></div>
+                                    <div class="color-preset" style="background-color: #10b981;" data-color="#10b981"></div>
+                                    <div class="color-preset" style="background-color: #f59e0b;" data-color="#f59e0b"></div>
+                                    <div class="color-preset" style="background-color: #ef4444;" data-color="#ef4444"></div>
+                                    <div class="color-preset" style="background-color: #8b5cf6;" data-color="#8b5cf6"></div>
+                                    <div class="color-preset" style="background-color: #06b6d4;" data-color="#06b6d4"></div>
+                                    <div class="color-preset" style="background-color: #84cc16;" data-color="#84cc16"></div>
+                                    <div class="color-preset" style="background-color: #f97316;" data-color="#f97316"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <button onclick="addTheme()">Créer le thème</button>
                     </div>
                 </div>
@@ -791,777 +321,72 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Onglet Articles -->
+            <div id="articlesTab" class="tab-content">
+                <div class="card">
+                    <h3>📄 Derniers Articles</h3>
+                    <div class="articles-list" id="articlesList">
+                        <div class="loading">Chargement des articles...</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script>
-        // VOTRE APPLICATION COMPLÈTE RESTAURÉE
-        const app = {
-            config: {
-                apiUrl: 'https://rss-aggregator-l7qj.onrender.com',
-                refreshInterval: 300000,
-                autoRefresh: true
-            },
-            
-            articles: [],
-            themes: [],
-            feeds: [],
-            stats: {},
-            charts: {},
-            chartManager: null,
-            
-            init: function() {
-                console.log('🚀 Initialisation...');
-                this.loadData();
-                this.setupEventListeners();
-                this.initializeCharts();
-                this.startAutoRefresh();
-                this.showMessage('Application chargée!', 'success');
-            },
-            
-            loadData: function() {
-                this.loadThemes();
-                this.loadFeeds();
-                this.loadArticles();
-            },
-            
-            loadThemes: function() {
-                fetch(`${this.config.apiUrl}/api/themes`)
-                    .then(r => r.json())
-                    .then(themes => {
-                        this.themes = themes.map(t => ({
-                            name: t.name,
-                            keywords: t.keywords,
-                            color: t.color || '#6366f1'
-                        }));
-                        console.log(`📚 ${this.themes.length} thèmes chargés`);
-                        this.updateThemesList();
-                        if (this.chartManager) {
-                            this.chartManager.updateThemeSelector();
-                        }
-                    })
-                    .catch(err => console.error('❌ Erreur thèmes:', err));
-            },
-            
-            loadFeeds: function() {
-                fetch(`${this.config.apiUrl}/api/feeds`)
-                    .then(r => r.json())
-                    .then(feeds => {
-                        this.feeds = feeds;
-                        console.log(`📰 ${this.feeds.length} flux chargés`);
-                        this.updateFeedsList();
-                    })
-                    .catch(err => console.error('❌ Erreur flux:', err));
-            },
-            
-            loadArticles: function() {
-                fetch(`${this.config.apiUrl}/api/articles`)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            this.articles = data.articles;
-                            this.stats = {
-                                totalArticles: data.totalArticles,
-                                lastUpdate: data.lastUpdate
-                            };
-                            console.log(`📄 ${this.articles.length} articles chargés`);
-                            this.updateDashboard();
-                        }
-                    })
-                    .catch(err => console.error('❌ Erreur articles:', err));
-            },
-            
-            initializeCharts: function() {
-                console.log('📊 Initialisation graphiques...');
-                this.chartManager = new ChartManager(this);
-                this.createThemeChart();
-                this.createTimelineChart();
-            },
-            
-            createThemeChart: function() {
-                const ctx = document.getElementById('themeChart');
-                if (!ctx) return;
-                
-                const themeCounts = {};
-                this.articles.forEach(article => {
-                    if (article.themes) {
-                        article.themes.forEach(theme => {
-                            themeCounts[theme] = (themeCounts[theme] || 0) + 1;
-                        });
-                    }
-                });
-                
-                const labels = Object.keys(themeCounts);
-                const data = Object.values(themeCounts);
-                const colors = labels.map(name => {
-                    const theme = this.themes.find(t => t.name === name);
-                    return theme ? theme.color : '#6366f1';
-                });
-                
-                if (this.charts.themeChart) {
-                    this.charts.themeChart.destroy();
-                }
-                
-                this.charts.themeChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            data: data,
-                            backgroundColor: colors,
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    padding: 15,
-                                    usePointStyle: true,
-                                    font: { size: 11 }
-                                }
-                            }
-                        }
-                    }
-                });
-            },
-            
-            createTimelineChart: function() {
-                const ctx = document.getElementById('timelineChart');
-                if (!ctx) return;
-                
-                const chartData = this.chartManager ? this.chartManager.prepareChartData() : this.prepareBasicTimelineData();
-                
-                if (this.charts.timelineChart) {
-                    this.charts.timelineChart.destroy();
-                }
-                
-                this.charts.timelineChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: chartData.dates,
-                        datasets: chartData.themes.map(theme => ({
-                            label: theme.name,
-                            data: theme.values,
-                            borderColor: theme.color,
-                            backgroundColor: this.hexToRgba(theme.color, 0.1),
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4
-                        }))
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                                labels: { usePointStyle: true, boxWidth: 12 }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: { precision: 0 }
-                            }
-                        }
-                    }
-                });
-            },
-            
-            updateTimelineChart: function(chartData) {
-                if (!this.charts.timelineChart) {
-                    this.createTimelineChart();
-                    return;
-                }
-                
-                this.charts.timelineChart.data.labels = chartData.dates;
-                this.charts.timelineChart.data.datasets = chartData.themes.map(theme => ({
-                    label: theme.name,
-                    data: theme.values,
-                    borderColor: theme.color,
-                    backgroundColor: this.hexToRgba(theme.color, 0.1),
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }));
-                
-                this.charts.timelineChart.update('none');
-            },
-            
-            prepareBasicTimelineData: function() {
-                if (!this.articles || this.articles.length === 0) {
-                    return { dates: [], themes: [] };
-                }
-                
-                const dateGroups = {};
-                this.articles.forEach(article => {
-                    const date = new Date(article.pubDate || article.date).toISOString().split('T')[0];
-                    if (!dateGroups[date]) dateGroups[date] = { themes: {} };
-                    
-                    article.themes?.forEach(theme => {
-                        dateGroups[date].themes[theme] = (dateGroups[date].themes[theme] || 0) + 1;
-                    });
-                });
-                
-                const dates = Object.keys(dateGroups).sort();
-                const themes = this.themes.slice(0, 8);
-                
-                return {
-                    dates: dates,
-                    themes: themes.map(theme => ({
-                        name: theme.name,
-                        color: theme.color,
-                        values: dates.map(date => dateGroups[date]?.themes[theme.name] || 0)
-                    }))
-                };
-            },
-            
-            hexToRgba: function(hex, alpha) {
-                const r = parseInt(hex.slice(1, 3), 16);
-                const g = parseInt(hex.slice(3, 5), 16);
-                const b = parseInt(hex.slice(5, 7), 16);
-                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-            },
-            
-            setupEventListeners: function() {
-                // Listeners déjà gérés par onclick dans HTML
-            },
-            
-            manualRefresh: function() {
-                console.log('🔄 Actualisation...');
-                this.showMessage('Actualisation en cours...', 'info');
-                
-                const btn = document.getElementById('refreshBtn');
-                if (btn) {
-                    btn.disabled = true;
-                    btn.textContent = '⏳ Chargement...';
-                }
-                
-                fetch(`${this.config.apiUrl}/api/refresh`, { method: 'POST' })
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            this.showMessage('Données actualisées!', 'success');
-                            this.loadArticles();
-                        }
-                    })
-                    .catch(err => {
-                        this.showMessage('Erreur actualisation', 'error');
-                    })
-                    .finally(() => {
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.textContent = '🔄 Actualiser';
-                        }
-                    });
-            },
-            
-            updateDashboard: function() {
-                this.updateStatsGrid();
-                this.updateArticlesList();
-                this.updateFeedsList();
-                this.updateThemesList();
-                if (this.charts.themeChart) this.createThemeChart();
-                if (this.chartManager) this.chartManager.refreshChart();
-            },
-            
-            updateStatsGrid: function() {
-                const grid = document.getElementById('statsGrid');
-                if (!grid) return;
-                
-                const sentimentDist = this.getSentimentDistribution();
-                
-                grid.innerHTML = `
-                    <div class="stat-card">
-                        <div class="stat-number">${this.articles.length}</div>
-                        <div class="stat-label">Articles analysés</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${this.themes.length}</div>
-                        <div class="stat-label">Thèmes actifs</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${this.feeds.length}</div>
-                        <div class="stat-label">Flux RSS</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${sentimentDist.positive}</div>
-                        <div class="stat-label">Articles positifs</div>
-                    </div>
-                `;
-                
-                const lastUpdate = document.getElementById('lastUpdate');
-                if (lastUpdate) {
-                    lastUpdate.textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
-                }
-            },
-            
-            getSentimentDistribution: function() {
-                const sentiments = this.articles.map(a => parseFloat(a.sentiment?.score) || 0);
-                return {
-                    positive: sentiments.filter(s => s > 0.1).length,
-                    neutral: sentiments.filter(s => s >= -0.1 && s <= 0.1).length,
-                    negative: sentiments.filter(s => s < -0.1).length
-                };
-            },
-            
-            updateArticlesList: function() {
-                const list = document.getElementById('articlesList');
-                if (!list) return;
-                
-                if (this.articles.length === 0) {
-                    list.innerHTML = '<div class="loading">Aucun article disponible</div>';
-                    return;
-                }
-                
-                list.innerHTML = this.articles.slice(0, 20).map(article => {
-                    const sentiment = article.sentiment || {};
-                    const sentimentClass = this.getSentimentClass(sentiment.score);
-                    const themesTags = article.themes?.map(theme => 
-                        `<span class="theme-tag">${theme}</span>`
-                    ).join('') || '';
-                    
-                    return `
-                        <div class="article-item">
-                            <h4><a href="${article.link}" target="_blank">${article.title}</a></h4>
-                            <div class="article-meta">
-                                <span>📅 ${new Date(article.pubDate).toLocaleDateString()}</span>
-                                <span class="sentiment-badge ${sentimentClass}">
-                                    ${this.getSentimentEmoji(sentimentClass)} 
-                                    ${(sentiment.score || 0).toFixed(2)}
-                                </span>
-                            </div>
-                            ${themesTags ? `<div class="theme-tags">${themesTags}</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
-            },
-            
-            updateFeedsList: function() {
-                const list = document.getElementById('feedsList');
-                if (!list) return;
-                
-                if (this.feeds.length === 0) {
-                    list.innerHTML = '<div class="loading">Aucun flux configuré</div>';
-                    return;
-                }
-                
-                list.innerHTML = this.feeds.map(feed => `
-                    <div class="feed-item">
-                        <div style="word-break: break-all;">${feed}</div>
-                        <button class="delete" onclick="app.removeFeed('${feed}')">🗑️</button>
-                    </div>
-                `).join('');
-            },
-            
-            updateThemesList: function() {
-                const list = document.getElementById('themesList');
-                if (!list) return;
-                
-                if (this.themes.length === 0) {
-                    list.innerHTML = '<div class="loading">Aucun thème configuré</div>';
-                    return;
-                }
-                
-                list.innerHTML = this.themes.map(theme => `
-                    <div class="theme-item">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <span style="width: 16px; height: 16px; background: ${theme.color}; border-radius: 50%; display: inline-block;"></span>
-                                <strong>${theme.name}</strong>
-                            </div>
-                            <small>${theme.keywords.slice(0, 3).join(', ')}...</small>
-                        </div>
-                        <button class="delete" onclick="app.removeTheme('${theme.name}')">🗑️</button>
-                    </div>
-                `).join('');
-            },
-            
-            getSentimentClass: function(score) {
-                const s = parseFloat(score) || 0;
-                if (s > 0.1) return 'positive';
-                if (s < -0.1) return 'negative';
-                return 'neutral';
-            },
-            
-            getSentimentEmoji: function(sentiment) {
-                if (sentiment === 'positive') return '😊';
-                if (sentiment === 'negative') return '😞';
-                return '😐';
-            },
-            
-            addFeed: function() {
-                const url = document.getElementById('feedUrl').value.trim();
-                if (!url) {
-                    this.showMessage('Veuillez entrer une URL', 'error');
-                    return;
-                }
-                
-                fetch(`${this.config.apiUrl}/api/feeds`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        this.showMessage('Flux ajouté!', 'success');
-                        document.getElementById('feedUrl').value = '';
-                        this.loadFeeds();
-                    }
-                })
-                .catch(err => this.showMessage('Erreur ajout flux', 'error'));
-            },
-            
-            removeFeed: function(url) {
-                fetch(`${this.config.apiUrl}/api/feeds`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        this.showMessage('Flux supprimé', 'success');
-                        this.loadFeeds();
-                    }
-                })
-                .catch(err => this.showMessage('Erreur suppression', 'error'));
-            },
-            
-            addTheme: function() {
-                const name = document.getElementById('themeName').value.trim();
-                const keywords = document.getElementById('themeKeywords').value.split(',').map(k => k.trim()).filter(k => k);
-                const color = document.getElementById('themeColor').value;
-                
-                if (!name || keywords.length === 0) {
-                    this.showMessage('Nom et mots-clés requis', 'error');
-                    return;
-                }
-                
-                fetch(`${this.config.apiUrl}/api/themes`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, keywords, color })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        this.showMessage('Thème créé!', 'success');
-                        document.getElementById('themeName').value = '';
-                        document.getElementById('themeKeywords').value = '';
-                        this.loadThemes();
-                    }
-                })
-                .catch(err => this.showMessage('Erreur création thème', 'error'));
-            },
-            
-            removeTheme: function(name) {
-                this.showMessage('Fonction en développement', 'info');
-            },
-            
-            exportData: function(format) {
-                const data = {
-                    articles: this.articles,
-                    themes: this.themes,
-                    feeds: this.feeds,
-                    exportDate: new Date().toISOString()
-                };
-                
-                let content, mimeType, filename;
-                
-                if (format === 'json') {
-                    content = JSON.stringify(data, null, 2);
-                    mimeType = 'application/json';
-                    filename = `rss-data-${new Date().toISOString().split('T')[0]}.json`;
-                } else if (format === 'csv') {
-                    const headers = ['Titre', 'Date', 'Thèmes', 'Sentiment', 'Lien'];
-                    const rows = this.articles.map(a => [
-                        `"${a.title.replace(/"/g, '""')}"`,
-                        a.pubDate,
-                        `"${(a.themes || []).join(', ')}"`,
-                        a.sentiment?.score || 0,
-                        a.link
-                    ]);
-                    content = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-                    mimeType = 'text/csv';
-                    filename = `rss-data-${new Date().toISOString().split('T')[0]}.csv`;
-                }
-                
-                const blob = new Blob([content], { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                this.showMessage(`Export ${format.toUpperCase()} réussi!`, 'success');
-            },
-            
-            showMessage: function(message, type = 'info') {
-                const container = document.getElementById('messageContainer');
-                if (!container) return;
-                
-                const messageEl = document.createElement('div');
-                messageEl.className = `message ${type}`;
-                messageEl.innerHTML = `
-                    <span>${message}</span>
-                    <button class="message-close" onclick="this.parentElement.remove()">×</button>
-                `;
-                
-                container.appendChild(messageEl);
-                setTimeout(() => messageEl.remove(), 5000);
-            },
-            
-            startAutoRefresh: function() {
-                if (this.config.autoRefresh) {
-                    setInterval(() => this.loadArticles(), this.config.refreshInterval);
-                }
-            },
-            
-            runAIAnalysis: function() {
-                this.showMessage('Fonctionnalité IA en développement', 'info');
-            },
-            
-            showLearningStats: function() {
-                this.showMessage('Statistiques en développement', 'info');
-            }
-        };
+    <!-- Modal pour les statistiques d'apprentissage -->
+    <div id="learningStatsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>📊 Statistiques d'Apprentissage</h3>
+            <div id="modalLearningStats">
+                <div class="loading">Chargement...</div>
+            </div>
+        </div>
+    </div>
 
-        // CHART MANAGER AMÉLIORÉ
-        class ChartManager {
-            constructor(appInstance) {
-                this.app = appInstance;
-                this.selectedThemes = new Set();
-                this.timeScale = 'week';
-                this.initialize();
-            }
-            
-            initialize() {
-                this.createThemeSelector();
-            }
-            
-            createThemeSelector() {
-                const container = document.getElementById('themeSelectorContainer');
-                if (!container) return;
+    <!-- NOUVEAU : Modal pour la configuration IA -->
+    <div id="iaApiKeyModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="app.closeIAApiKeyModal()">&times;</span>
+            <h3>🔑 Configuration de l'IA</h3>
+            <div class="api-key-form">
+                <div class="form-group">
+                    <label for="iaApiKey">Clé API IA :</label>
+                    <input type="password" id="iaApiKey" placeholder="sk-..." class="api-key-input">
+                </div>
                 
-                const themes = this.getAvailableThemes();
-                if (themes.length === 0) {
-                    container.innerHTML = '<div class="loading">Aucun thème disponible</div>';
-                    return;
-                }
-                
-                if (this.selectedThemes.size === 0) {
-                    themes.slice(0, 5).forEach(theme => this.selectedThemes.add(theme.name));
-                }
-                
-                container.innerHTML = `
-                    <div class="theme-selector">
-                        <h4>📊 Sélection des thèmes à afficher</h4>
-                        <div class="theme-checkboxes">
-                            ${this.generateThemeCheckboxes()}
-                        </div>
-                    </div>
-                `;
-            }
-            
-            generateThemeCheckboxes() {
-                const themes = this.getAvailableThemes();
-                return themes.map(theme => `
-                    <label class="theme-checkbox ${!this.selectedThemes.has(theme.name) ? 'disabled' : ''}">
-                        <input type="checkbox" value="${theme.name}" 
-                               ${this.selectedThemes.has(theme.name) ? 'checked' : ''}
-                               onchange="app.chartManager.toggleTheme('${theme.name}', this.checked)">
-                        <span class="theme-color" style="background-color: ${theme.color}"></span>
-                        <span class="theme-name">${theme.name}</span>
-                        <span class="theme-count">(${theme.count})</span>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="iaAutoCorrection" checked>
+                        Corrections automatiques toutes les heures
                     </label>
-                `).join('');
-            }
-            
-            updateThemeSelector() {
-                const container = document.getElementById('themeSelectorContainer');
-                if (container) {
-                    this.createThemeSelector();
-                }
-            }
-            
-            getAvailableThemes() {
-                if (!this.app.themes || !this.app.articles) return [];
+                </div>
                 
-                const themeCounts = {};
-                this.app.articles.forEach(article => {
-                    article.themes?.forEach(theme => {
-                        themeCounts[theme] = (themeCounts[theme] || 0) + 1;
-                    });
-                });
+                <div class="api-key-info">
+                    <p><strong>Fonctionnalités activées :</strong></p>
+                    <ul>
+                        <li>✅ Correction des scores de sentiment</li>
+                        <li>✅ Détection des faux positifs/négatifs</li>
+                        <li>✅ Analyse contextuelle avancée</li>
+                        <li>✅ Vérification externe par scraping</li>
+                        <li>✅ Génération de rapports PDF</li>
+                    </ul>
+                </div>
                 
-                return this.app.themes
-                    .filter(theme => themeCounts[theme.name] > 0)
-                    .map(theme => ({
-                        name: theme.name,
-                        color: theme.color,
-                        count: themeCounts[theme.name] || 0
-                    }))
-                    .sort((a, b) => b.count - a.count);
-            }
-            
-            toggleTheme(themeName, isSelected) {
-                if (isSelected) {
-                    this.selectedThemes.add(themeName);
-                } else {
-                    this.selectedThemes.delete(themeName);
-                }
-                this.updateThemeSelector();
-                this.refreshChart();
-            }
-            
-            selectAllThemes() {
-                const themes = this.getAvailableThemes();
-                this.selectedThemes = new Set(themes.map(t => t.name));
-                this.updateThemeSelector();
-                this.refreshChart();
-            }
-            
-            deselectAllThemes() {
-                this.selectedThemes.clear();
-                this.updateThemeSelector();
-                this.refreshChart();
-            }
-            
-            selectTopThemes(count) {
-                const themes = this.getAvailableThemes();
-                this.selectedThemes = new Set(themes.slice(0, count).map(t => t.name));
-                this.updateThemeSelector();
-                this.refreshChart();
-            }
-            
-            changeTimeScale(scale) {
-                this.timeScale = scale;
-                this.refreshChart();
-            }
-            
-            refreshChart() {
-                if (this.app && typeof this.app.updateTimelineChart === 'function') {
-                    const filteredData = this.prepareChartData();
-                    this.app.updateTimelineChart(filteredData);
-                }
-            }
-            
-            prepareChartData() {
-                if (!this.app.articles || this.app.articles.length === 0) {
-                    return { dates: [], themes: [] };
-                }
+                <div class="api-key-actions">
+                    <button onclick="app.saveIAApiKey()" class="save-btn">💾 Enregistrer</button>
+                    <button onclick="app.disableIA()" class="delete">🗑️ Désactiver IA</button>
+                    <button onclick="app.closeIAApiKeyModal()" class="cancel-btn">Annuler</button>
+                </div>
                 
-                const periods = this.groupByPeriod(this.app.articles);
-                const themesData = this.processThemesData(periods);
-                
-                return {
-                    dates: Object.keys(periods).sort(),
-                    themes: themesData
-                };
-            }
-            
-            groupByPeriod(articles) {
-                const periods = {};
-                
-                articles.forEach(article => {
-                    const date = new Date(article.pubDate || article.date);
-                    let periodKey;
-                    
-                    switch (this.timeScale) {
-                        case 'day':
-                            periodKey = date.toISOString().split('T')[0];
-                            break;
-                        case 'week':
-                            const weekStart = new Date(date);
-                            weekStart.setDate(date.getDate() - date.getDay());
-                            periodKey = weekStart.toISOString().split('T')[0];
-                            break;
-                        case 'month':
-                            periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                            break;
-                        default:
-                            periodKey = date.toISOString().split('T')[0];
-                    }
-                    
-                    if (!periods[periodKey]) {
-                        periods[periodKey] = { date: periodKey, themeCounts: {} };
-                    }
-                    
-                    article.themes?.forEach(theme => {
-                        periods[periodKey].themeCounts[theme] = (periods[periodKey].themeCounts[theme] || 0) + 1;
-                    });
-                });
-                
-                return periods;
-            }
-            
-            processThemesData(periods) {
-                const availableThemes = this.getAvailableThemes();
-                const themesToShow = availableThemes.filter(theme => 
-                    this.selectedThemes.has(theme.name)
-                );
-                
-                return themesToShow.map(theme => {
-                    const values = Object.keys(periods)
-                        .sort()
-                        .map(period => periods[period].themeCounts[theme.name] || 0);
-                    
-                    return {
-                        name: theme.name,
-                        color: theme.color,
-                        values: values,
-                        total: theme.count
-                    };
-                });
-            }
-        }
+                <small class="api-key-note">
+                    La clé API est stockée localement dans votre navigateur et utilisée uniquement pour les corrections IA.
+                </small>
+            </div>
+        </div>
+    </div>
 
-        // Fonctions globales
-        function showTab(tabName, event) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            const selectedTab = document.getElementById(tabName + 'Tab');
-            if (selectedTab) {
-                selectedTab.classList.add('active');
-            }
-            
-            if (event) {
-                event.currentTarget.classList.add('active');
-            }
-            
-            if (tabName === 'analysis' && app.chartManager) {
-                setTimeout(() => app.chartManager.refreshChart(), 100);
-            }
-        }
-
-        function addFeed() {
-            app.addFeed();
-        }
-
-        function addTheme() {
-            app.addTheme();
-        }
-
-        // Initialisation
-        document.addEventListener('DOMContentLoaded', function() {
-            app.init();
-        });
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
