@@ -3,606 +3,246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS Thématique + IA V.1.2</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Agrégateur RSS Thématique + IA V.2.3</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <!-- Nouveau bandeau supérieur amélioré -->
-            <div class="header-main">
-                <div class="header-title">
-                    <h1>📊 Agrégateur RSS Thématique</h1>
-                    <div class="header-subtitle">
-                        <span class="author">Olivier Henri B.</span>
-                        <span class="version">V.2.3</span>
-                    </div>
-                </div>
-                <div class="header-tagline">
-                    Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances-DeepLearning (V.2) + IA
+<div class="container">
+    <header>
+        <div class="header-main" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <div class="header-title">
+                <h1 style="margin: 0 0 8px 0; font-size: 2rem; font-weight: 700;">📊 Agrégateur RSS Thématique</h1>
+                <div class="header-subtitle" style="display: flex; align-items: center; gap: 15px; font-size: 0.9rem; opacity: 0.9; flex-wrap: wrap;">
+                    <span class="author" style="background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: 600;">Olivier Henri B.</span>
+                    <span class="version" style="background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 6px; font-family: monospace;">V.2.3</span>
                 </div>
             </div>
-
-            <!-- Bandeau de démonstration amélioré -->
-            <div class="demo-banner" role="note" aria-live="polite">
-                <div class="demo-icon">🚀</div>
-                <div class="demo-content">
-                    <div class="demo-title">Application de démonstration</div>
-                    <div class="demo-text">
-                        Avec à présent la possibilité de stocker jusqu’à 1Go de données (Merci à Render!). Attention : cela reste un serveur de test et de présentation, il se réinitialise automatiquement lorsque les quotas alloués sont atteints 
-                    </div>
-                    <div class="demo-api-info">
-                        Testez la fonction IA avec une clé API gratuite sur 
-                        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI</a>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <div id="messageContainer"></div>
-
-        <div class="status-bar">
-            <div class="last-update" id="lastUpdate">
-                Chargement...
-            </div>
-            <div class="refresh-controls">
-                <div class="auto-refresh-indicator">
-                    <span class="blink">🔄</span> Auto-actualisation
-                </div>
-                <button class="refresh" onclick="app.manualRefresh()" id="refreshBtn">
-                    🔄 Générer
-                </button>
+            <div class="header-tagline" style="font-size: 1rem; opacity: 0.9; margin-top: 8px;">
+                Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances + IA
             </div>
         </div>
 
-        <!-- Barre d'export réorganisée sur 2 lignes -->
-        <div class="export-bar">
-            <!-- Première ligne de boutons -->
-            <div class="export-row">
-                <button class="export-btn json" onclick="app.exportData('json')">
-                    📥 Export JSON
-                </button>
-                <button class="export-btn csv" onclick="app.exportData('csv')">
-                    📥 Export CSV
-                </button>
-                <button class="export-btn stats" onclick="app.showLearningStats()">
-                    📊 Stats Apprentissage
-                </button>
-            </div>
-            
-            <!-- Deuxième ligne de boutons -->
-            <div class="export-row">
-                <button class="export-btn ia" onclick="app.runAIAnalysis()" id="iaAnalyzeBtn">
-                    🧠 Analyse IA
-                </button>
-                <button class="export-btn ia-config" onclick="app.showIAApiKeyModal()" id="iaConfigBtn">
-                    ⚙️ Config IA
-                </button>
+        <div class="demo-banner" style="display: flex; align-items: flex-start; gap: 15px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 1px solid #ffeaa7; border-left: 4px solid #fdcb6e; padding: 16px; border-radius: 10px; margin-bottom: 20px;">
+            <div class="demo-icon" style="font-size: 1.5rem;">🚀</div>
+            <div class="demo-content">
+                <div class="demo-title" style="font-weight: 700; font-size: 1rem; color: #2d3436; margin-bottom: 6px;">Application de démonstration</div>
+                <div class="demo-text" style="font-size: 0.9rem; color: #636e72; line-height: 1.4; margin-bottom: 8px;">
+                    Stockage jusqu'à 1Go de données (Merci à Render!). Serveur de test qui se réinitialise automatiquement.
+                </div>
+                <div class="demo-api-info" style="font-size: 0.85rem; color: #0984e3;">
+                    Testez l'IA avec une clé gratuite sur <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #0984e3; font-weight: 600;">OpenAI</a>
+                </div>
             </div>
         </div>
+    </header>
 
-        <!-- Indicateur Corrections IA -->
-        <div id="iaStatusBar" class="status-bar" style="display: none; border-left-color: #8b5cf6;">
-            <div class="auto-refresh-indicator">
-                <span class="blink">🤖</span> 
-                <span id="iaStatusText">Corrections IA actives</span>
-            </div>
-            <div class="refresh-controls">
-                <span id="iaLastCorrection">Dernière correction: --</span>
-                <button class="refresh" onclick="app.manualIACorrection()" id="iaCorrectBtn">
-                    🔧 Corriger maintenant
-                </button>
-            </div>
-        </div>
+    <div id="messageContainer"></div>
 
-        <div class="stats-grid" id="statsGrid">
-            <div class="loading">Chargement des données...</div>
-        </div>
-
-        <div class="tab-container">
-            <div class="tabs">
-                <div class="tab active" onclick="showTab('analysis', event)">📈 Analyse</div>
-                <div class="tab" onclick="showTab('trends', event)">📊 Tendances</div>
-                <div class="tab" onclick="showTab('metrics', event)">🎯 Métriques</div>
-                <div class="tab" onclick="showTab('sentiment', event)">😊 Sentiment</div>
-                <div class="tab" onclick="showTab('learning', event)">🧠 Apprentissage</div>
-                <div class="tab" onclick="showTab('ia-corrections', event)">🤖 Corrections IA</div>
-                <div class="tab" onclick="showTab('feeds', event)">📰 Flux RSS</div>
-                <div class="tab" onclick="showTab('themes', event)">🎨 Thèmes</div>
-                <div class="tab" onclick="showTab('articles', event)">📄 Articles</div>
-            </div>
-
-            <!-- Onglet Analyse Principale -->
-            <div id="analysisTab" class="tab-content active">
-                <div class="dashboard">
-                    <div class="card">
-                        <h3>
-                            Répartition par Thème 
-                            <span class="info-icon" title="Seuls les thèmes ayant au moins une correspondance sont affichés">ℹ️</span>
-                        </h3>
-                        <canvas id="themeChart" height="250"></canvas>
-                    </div>
-                    <div class="card">
-                        <h3>Évolution Temporelle</h3>
-                        <canvas id="timelineChart" height="250"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Onglet Tendances -->
-            <div id="trendsTab" class="tab-content">
-                <div class="dashboard">
-                    <div class="card full-width">
-                        <h3>📈 Évolution des Thèmes</h3>
-                        <div id="trendsTable" class="trends-table">
-                            <div class="loading">Calcul des tendances...</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="dashboard">
-                    <div class="card">
-                        <h3>🔼 Thèmes en Croissance</h3>
-                        <div id="growthThemes" class="trends-list">
-                            <div class="loading">Analyse en cours...</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3>🔽 Thèmes en Baisse</h3>
-                        <div id="declineThemes" class="trends-list">
-                            <div class="loading">Analyse en cours...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Onglet Métriques Avancées -->
-            <div id="metricsTab" class="tab-content">
-                <div class="dashboard">
-                    <div class="card full-width">
-                        <h3>🎯 Efficacité des Mots-Clés</h3>
-                        <div id="keywordMetrics" class="metrics-table">
-                            <div class="loading">Analyse des mots-clés...</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="dashboard">
-                    <div class="card">
-                        <h3>🔄 Corrélations entre Thèmes</h3>
-                        <div id="correlationsMatrix" class="correlations-matrix">
-                            <div class="loading">Calcul des corrélations...</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3>📅 Analyse Saisonnière</h3>
-                        <div id="seasonalityAnalysis" class="seasonality-chart">
-                            <div class="loading">Analyse saisonnière...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Onglet Analyse de Sentiment -->
-            <div id="sentimentTab" class="tab-content">
-                <div class="dashboard">
-                    <div class="card full-width">
-                        <h3>📊 Aperçu du Sentiment Global</h3>
-                        <div id="sentimentOverview">
-                            <div class="loading">Analyse de sentiment en cours...</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="dashboard">
-                    <div class="card full-width">
-                        <h3>🎨 Évolution des Sentiments par Thèmes</h3>
-                        <div id="sentimentByTheme">
-                            <div class="loading">Calcul des sentiments par thème...</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="dashboard">
-                    <div class="card">
-                        <h3>😊 Articles Positifs</h3>
-                        <div id="positiveArticles" class="articles-list">
-                            <div class="loading">Chargement des articles positifs...</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3>😞 Articles Négatifs</h3>
-                        <div id="negativeArticles" class="articles-list">
-                            <div class="loading">Chargement des articles négatifs...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ONGLET : Apprentissage -->
-            <div id="learningTab" class="tab-content">
-                <div class="dashboard">
-                    <div class="card">
-                        <h3>🧠 Statistiques d'Apprentissage</h3>
-                        <div id="learningStats">
-                            <div class="loading">Chargement des statistiques...</div>
-                        </div>
-                        <div class="learning-actions">
-                            <button onclick="app.refreshLearningStats()" class="refresh">🔄 Actualiser</button>
-                            <button onclick="app.resetLearning()" class="delete">🗑️ Réinitialiser</button>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3>🎓 Apprentissage Manuel</h3>
-                        <div class="learning-form">
-                            <textarea id="learningText" placeholder="Entrez le texte à analyser..." rows="4"></textarea>
-                            <div class="score-slider">
-                                <label>Score attendu: <span id="scoreValue">0.00</span></label>
-                                <input type="range" id="expectedScore" min="-1" max="1" step="0.1" value="0">
-                                <div class="score-labels">
-                                    <span>Négatif (-1)</span>
-                                    <span>Neutre (0)</span>
-                                    <span>Positif (+1)</span>
-                                </div>
-                            </div>
-                            <button onclick="app.learnFromCorrection()" class="learn-btn">🎓 Apprendre</button>
-                            <div id="learningResult" class="learning-result"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="dashboard">
-                    <div class="card full-width">
-                        <h3>📈 Mots Appris Récemment</h3>
-                        <div id="learnedWords" class="learned-words">
-                            <div class="loading">Chargement des mots appris...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- NOUVEL ONGLET : Corrections IA -->
-            <div id="ia-correctionsTab" class="tab-content">
-                <div class="dashboard">
-                    <div class="card">
-                        <h3>🤖 État des Corrections IA</h3>
-                        <div id="iaStatusOverview">
-                            <div class="loading">Chargement des corrections IA...</div>
-                        </div>
-                        <div class="learning-actions">
-                            <button onclick="app.manualIACorrection()" class="refresh">🔧 Correction Manuelle</button>
-                            <button onclick="app.configureIA()" class="learn-btn">⚙️ Configuration IA</button>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3>📈 Statistiques des Corrections</h3>
-                        <div id="iaCorrectionsStats">
-                            <div class="loading">Calcul des statistiques...</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="dashboard">
-                    <div class="card full-width">
-                        <h3>📋 Historique des Corrections</h3>
-                        <div id="iaCorrectionsHistory" class="articles-list">
-                            <div class="loading">Chargement de l'historique...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Onglet Flux RSS -->
-            <div id="feedsTab" class="tab-content">
-                <div class="card">
-                    <h3>➕ Ajouter un Flux RSS</h3>
-                    <div class="form-group">
-                        <input type="url" id="feedUrl" placeholder="https://exemple.com/flux.rss" required>
-                        <button onclick="addFeed()">Ajouter le flux</button>
-                    </div>
-                    <small>Exemples: https://www.lemonde.fr/rss/une.xml, https://www.liberation.fr/arc/outboundfeeds/rss-all/collection/accueil-une/</small>
-                </div>
-                <div class="card">
-                    <h3>📋 Mes Flux RSS</h3>
-                    <div id="feedsList">
-                        <div class="loading">Chargement des flux...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Onglet Thèmes -->
-            <div id="themesTab" class="tab-content">
-                <div class="card">
-                    <h3>🎨 Créer un Thème</h3>
-                    <div class="form-group">
-                        <input type="text" id="themeName" placeholder="Nom du thème (ex: Joie)" required>
-                        <textarea id="themeKeywords" placeholder="Mots-clés (séparés par des virgules): joie, bonheur, succès, réussite" rows="3" required></textarea>
-                        
-                        <div class="color-picker-section">
-                            <label for="themeColor">Couleur du thème :</label>
-                            <div class="color-picker-container">
-                                <input type="color" id="themeColor" value="#6366f1" class="color-input">
-                                <div class="color-presets">
-                                    <div class="color-preset" style="background-color: #6366f1;" data-color="#6366f1"></div>
-                                    <div class="color-preset" style="background-color: #10b981;" data-color="#10b981"></div>
-                                    <div class="color-preset" style="background-color: #f59e0b;" data-color="#f59e0b"></div>
-                                    <div class="color-preset" style="background-color: #ef4444;" data-color="#ef4444"></div>
-                                    <div class="color-preset" style="background-color: #8b5cf6;" data-color="#8b5cf6"></div>
-                                    <div class="color-preset" style="background-color: #06b6d4;" data-color="#06b6d4"></div>
-                                    <div class="color-preset" style="background-color: #84cc16;" data-color="#84cc16"></div>
-                                    <div class="color-preset" style="background-color: #f97316;" data-color="#f97316"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <button onclick="addTheme()">Créer le thème</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3>🎨 Mes Thèmes</h3>
-                    <div id="themesList">
-                        <div class="loading">Chargement des thèmes...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Onglet Articles -->
-            <div id="articlesTab" class="tab-content">
-                <div class="card">
-                    <h3>📄 Derniers Articles</h3>
-                    <div class="articles-list" id="articlesList">
-                        <div class="loading">Chargement des articles...</div>
-                    </div>
-                </div>
-            </div>
+    <div class="status-bar">
+        <div class="last-update" id="lastUpdate">Chargement...</div>
+        <div class="refresh-controls">
+            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation</div>
+            <button class="refresh" id="refreshBtn">🔄 Générer</button>
         </div>
     </div>
 
-    <!-- Modal pour les statistiques d'apprentissage -->
-    <div id="learningStatsModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h3>📊 Statistiques d'Apprentissage</h3>
-            <div id="modalLearningStats">
-                <div class="loading">Chargement...</div>
-            </div>
+    <div class="export-bar" style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+        <div class="export-controls" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button class="export-btn json" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #10b981, #059669);">📥 Export JSON</button>
+            <button class="export-btn csv" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #3b82f6, #1d4ed8);">📥 Export CSV</button>
+            <button class="export-btn stats" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #06b6d4, #0891b2);">📊 Stats</button>
         </div>
     </div>
 
-    <!-- NOUVEAU : Modal pour la configuration IA -->
-    <div id="iaApiKeyModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="app.closeIAApiKeyModal()">&times;</span>
-            <h3>🔑 Configuration de l'IA</h3>
-            <div class="api-key-form">
-                <div class="form-group">
-                    <label for="iaApiKey">Clé API IA :</label>
-                    <input type="password" id="iaApiKey" placeholder="sk-..." class="api-key-input">
+    <div class="stats-grid" id="statsGrid">
+        <div class="loading">Chargement des données...</div>
+    </div>
+
+    <div class="tab-container">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('analysis', event)">📈 Analyse</div>
+            <div class="tab" onclick="showTab('trends', event)">📊 Tendances</div>
+            <div class="tab" onclick="showTab('metrics', event)">🎯 Métriques</div>
+            <div class="tab" onclick="showTab('sentiment', event)">😊 Sentiment</div>
+            <div class="tab" onclick="showTab('learning', event)">🧠 Apprentissage</div>
+            <div class="tab" onclick="showTab('feeds', event)">📰 Flux RSS</div>
+            <div class="tab" onclick="showTab('themes', event)">🎨 Thèmes</div>
+            <div class="tab" onclick="showTab('articles', event)">📄 Articles</div>
+        </div>
+
+        <!-- Onglet Analyse -->
+        <div id="analysisTab" class="tab-content active">
+            <div id="themeSelectorContainer"></div>
+            <div class="dashboard">
+                <div class="card">
+                    <h3>📊 Répartition par Thème</h3>
+                    <canvas id="themeChart" height="250"></canvas>
                 </div>
-                
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="iaAutoCorrection" checked>
-                        Corrections automatiques toutes les heures
-                    </label>
+                <div class="card">
+                    <h3>📈 Évolution Temporelle</h3>
+                    <canvas id="timelineChart" height="250"></canvas>
                 </div>
-                
-                <div class="api-key-info">
-                    <p><strong>Fonctionnalités activées :</strong></p>
-                    <ul>
-                        <li>✅ Correction des scores de sentiment</li>
-                        <li>✅ Détection des faux positifs/négatifs</li>
-                        <li>✅ Analyse contextuelle avancée</li>
-                        <li>✅ Vérification externe par scraping</li>
-                        <li>✅ Génération de rapports PDF</li>
-                    </ul>
+            </div>
+        </div>
+
+        <!-- Onglet Tendances -->
+        <div id="trendsTab" class="tab-content">
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>📈 Évolution des Thèmes</h3>
+                    <div id="trendsTable" class="trends-table">
+                        <div class="loading">Calcul des tendances...</div>
+                    </div>
                 </div>
-                
-                <div class="api-key-actions">
-                    <button onclick="app.saveIAApiKey()" class="save-btn">💾 Enregistrer</button>
-                    <button onclick="app.disableIA()" class="delete">🗑️ Désactiver IA</button>
-                    <button onclick="app.closeIAApiKeyModal()" class="cancel-btn">Annuler</button>
+            </div>
+        </div>
+
+        <!-- Onglet Métriques -->
+        <div id="metricsTab" class="tab-content">
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>🎯 Statistiques Globales</h3>
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Total Articles :</strong> <span id="m_total">—</span>
+                        </div>
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Confiance Moyenne :</strong> <span id="m_confidence">—</span>
+                        </div>
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Fiabilité Bayésienne :</strong> <span id="m_posterior">—</span>
+                        </div>
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Corroboration Moyenne :</strong> <span id="m_corro">—</span>
+                        </div>
+                    </div>
                 </div>
-                
-                <small class="api-key-note">
-                    La clé API est stockée localement dans votre navigateur et utilisée uniquement pour les corrections IA.
-                </small>
+            </div>
+
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>📈 Évolution du Sentiment (30 derniers jours)</h3>
+                    <canvas id="sentimentChart" height="280"></canvas>
+                </div>
+            </div>
+
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>🏆 Thèmes Principaux</h3>
+                    <ul id="topThemes" class="top-themes" style="list-style: none; padding: 0;"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Sentiment -->
+        <div id="sentimentTab" class="tab-content">
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>📊 Aperçu du Sentiment Global</h3>
+                    <div id="sentimentOverview"><div class="loading">Analyse de sentiment...</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Apprentissage -->
+        <div id="learningTab" class="tab-content">
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>🧠 Statistiques d'Apprentissage</h3>
+                    <div id="learningStats"><div class="loading">Chargement...</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Flux RSS -->
+        <div id="feedsTab" class="tab-content">
+            <div class="card">
+                <h3>📋 Mes Flux RSS</h3>
+                <div id="feedsList"><div class="loading">Chargement des flux...</div></div>
+            </div>
+        </div>
+
+        <!-- Onglet Thèmes -->
+        <div id="themesTab" class="tab-content">
+            <div class="card">
+                <h3>🎨 Mes Thèmes</h3>
+                <div id="themesList"><div class="loading">Chargement des thèmes...</div></div>
+            </div>
+        </div>
+
+        <!-- Onglet Articles -->
+        <div id="articlesTab" class="tab-content">
+            <div class="card full-width">
+                <h3>📄 Derniers Articles</h3>
+                <div id="articlesList"><div class="loading">Chargement des articles...</div></div>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="app.js"></script>
+<!-- Modal Apprentissage -->
+<div id="learningStatsModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background: white; margin: 5% auto; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%;">
+        <span class="close" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+        <h3>📊 Statistiques d'Apprentissage</h3>
+        <div id="modalLearningStats"><div class="loading">Chargement...</div></div>
+    </div>
+</div>
 
-    <style>
-        /* Styles pour le nouveau header */
-        .header-main {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-
-        .header-title h1 {
-            margin: 0 0 8px 0;
-            font-size: 2rem;
-            font-weight: 700;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .header-subtitle {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-
-        .header-subtitle .author {
-            background: rgba(255,255,255,0.2);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-weight: 600;
-        }
-
-        .header-subtitle .version {
-            background: rgba(255,255,255,0.15);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-family: monospace;
-        }
-
-        .header-tagline {
-            font-size: 1rem;
-            opacity: 0.9;
-            margin-top: 8px;
-            line-height: 1.4;
-        }
-
-        /* Styles pour le bandeau de démonstration amélioré */
-        .demo-banner {
-            display: flex;
-            align-items: flex-start;
-            gap: 15px;
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            border: 1px solid #ffeaa7;
-            border-left: 4px solid #fdcb6e;
-            padding: 16px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .demo-icon {
-            font-size: 1.5rem;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .demo-content {
-            flex: 1;
-        }
-
-        .demo-title {
-            font-weight: 700;
-            font-size: 1rem;
-            color: #2d3436;
-            margin-bottom: 6px;
-        }
-
-        .demo-text {
-            font-size: 0.9rem;
-            color: #636e72;
-            line-height: 1.4;
-            margin-bottom: 8px;
-        }
-
-        .demo-api-info {
-            font-size: 0.85rem;
-            color: #0984e3;
-        }
-
-        .demo-api-info a {
-            color: #0984e3;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .demo-api-info a:hover {
-            text-decoration: underline;
-        }
-
-        /* Styles pour la barre d'export réorganisée */
-        .export-bar {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .export-row {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .export-row:first-child {
-            margin-bottom: 10px;
-        }
-
-        .export-btn {
-            flex: 1;
-            min-width: 140px;
-            max-width: 200px;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .export-btn.json {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-        }
-
-        .export-btn.csv {
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            color: white;
-        }
-
-        .export-btn.ia {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            color: white;
-        }
-
-        .export-btn.ia-config {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-        }
-
-        .export-btn.stats {
-            background: linear-gradient(135deg, #06b6d4, #0891b2);
-            color: white;
-        }
-
-        .export-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .export-row {
-                flex-direction: column;
-                align-items: center;
+<script src="app.js"></script>
+<script src="chart-manager.js"></script>
+<script>
+// Patch pour initialiser le ChartManager après chargement
+window.addEventListener('load', function() {
+    console.log('🎯 DOM chargé, initialisation ChartManager...');
+    if (window.app && window.ChartManager && window.app._state) {
+        setTimeout(function() {
+            try {
+                if (!window.app.chartManager) {
+                    window.app.chartManager = new ChartManager(window.app._state);
+                    console.log('✅ ChartManager initialisé');
+                }
+            } catch(e) {
+                console.warn('⚠️ ChartManager init failed:', e);
             }
-            
-            .export-btn {
-                min-width: 100%;
-                max-width: 100%;
-            }
-            
-            .header-title h1 {
-                font-size: 1.6rem;
-            }
-            
-            .header-subtitle {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-            
-            .demo-banner {
-                flex-direction: column;
-                text-align: center;
-            }
-            
-            .demo-icon {
-                align-self: center;
-            }
-        }
-    </style>
+        }, 2000);
+    }
+});
+</script>
+
+<style>
+/* Styles additionnels inline pour garantir le rendu */
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.status-bar { background: white; border-radius: 10px; padding: 15px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.refresh-controls { display: flex; gap: 15px; align-items: center; }
+.auto-refresh-indicator { font-size: 0.85rem; color: #22c55e; font-weight: 500; }
+.blink { animation: blink 1.5s infinite; }
+@keyframes blink { 0%, 50%, 100% { opacity: 1; } 25%, 75% { opacity: 0.3; } }
+button { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.3s; }
+button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.tab-container { background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+.tabs { display: flex; background: #f8f9fa; border-bottom: 2px solid #e9ecef; overflow-x: auto; }
+.tab { padding: 15px 20px; cursor: pointer; white-space: nowrap; font-weight: 500; color: #64748b; transition: all 0.3s; border-bottom: 3px solid transparent; }
+.tab:hover { background: #e9ecef; color: #1e293b; }
+.tab.active { color: #2563eb; border-bottom-color: #2563eb; background: white; }
+.tab-content { display: none; padding: 20px; }
+.tab-content.active { display: block; }
+.dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 20px; }
+.card { background: #f8f9fa; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.card.full-width { grid-column: 1 / -1; }
+.card h3 { margin-bottom: 15px; font-size: 1.1rem; color: #1e293b; }
+.loading { text-align: center; padding: 40px; color: #64748b; font-style: italic; }
+canvas { max-height: 350px; }
+.article-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.article-card h4 { margin-bottom: 8px; }
+.article-card .meta { font-size: 0.85rem; color: #64748b; margin-bottom: 8px; }
+.themes .tag { display: inline-block; padding: 4px 8px; margin: 2px; background: #e0e7ff; border-radius: 4px; font-size: 0.75rem; }
+.theme-row { padding: 8px; border-bottom: 1px solid #e9ecef; }
+.top-themes li { padding: 8px; border-bottom: 1px solid #e9ecef; }
+@media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
+</style>
 </body>
 </html>
