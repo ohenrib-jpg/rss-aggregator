@@ -1,0 +1,37 @@
+{
+  "name": "geopolis-ia-aggregator",
+  "version": "3.0.0",
+  "description": "Agrégateur RSS Thématique avec Analyse IA - PostgreSQL Edition",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "ia-service": "python app.py",
+    "init-db": "node scripts/init-db.js", 
+    "check-db": "node scripts/check-connection.js",         
+    "migrate": "node scripts/migrate.js",
+    "fix-constraints": "node scripts/fix-unique-constraints.js",
+    "setup": "npm run fix-constraints && npm start",
+    "check-db": "node scripts/check-connection.js"         
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "rss-parser": "^3.13.0",
+    "axios": "^1.6.0",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  },
+  "keywords": [
+    "rss",
+    "aggregator",
+    "sentiment-analysis",
+    "ai",
+    "geopolitics",
+    "postgresql",
+    "render"
+  ],
+  "author": "Olivier H. B.",
+  "license": "MIT"
+}

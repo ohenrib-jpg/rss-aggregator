@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: rss-ia-analyzer
+    env: python
+    region: frankfurt
+    plan: free
+    branch: main
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-level info
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: PORT
+        value: 5051
+    healthCheckPath: /health
+    autoDeploy: true
