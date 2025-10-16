@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agrégateur RSS Thématique + IA V.2.3</title>
+    
+    <!-- Chart.js avec plugin Zoom -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background: #f5f6fa;
+            color: #222;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header-main {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .header-title h1 {
+            margin: 0 0 8px 0;
+            font-size: 2rem;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header-subtitle {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .author {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .version {
+            background: rgba(255,255,255,0.15);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+        }
+
+        .header-tagline {
+            font-size: 1rem;
+            opacity: 0.9;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+
+        /* Demo Banner */
+        .demo-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 1px solid #ffeaa7;
+            border-left: 4px solid #fdcb6e;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .demo-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .demo-content {
+            flex: 1;
+        }
+
+        .demo-title {
+            font-weight: 700;
+            font-size: 1rem;
+            color: #2d3436;
+            margin-bottom: 6px;
+        }
+
+        .demo-text {
+            font-size: 0.9rem;
+            color: #636e72;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .demo-api-info {
+            font-size: 0.85rem;
+            color: #0984e3;
+        }
+
+        .demo-api-info a {
+            color: #0984e3;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            background: white;
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .last-update {
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+
+        .refresh-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .auto-refresh-indicator {
+            font-size: 0.85rem;
+            color: #22c55e;
+            font-weight: 500;
+        }
+
+        .blink {
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.3; }
+        }
+
+        button, .refresh {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        /* Export Bar */
+        .export-bar {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .export-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .export-row:first-child {
+            margin-bottom: 10px;
+        }
+
+        .export-btn {
+            flex: 1;
+            min-width: 140px;
+            max-width: 200px;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+        }
+
+        .export-btn.json {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+
+        .export-btn.csv {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        }
+
+        .export-btn.ia {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        }
+
+        .export-btn.ia-config {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .export-btn.stats {
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 4px solid #6366f1;
+        }
+
+        .stat-card h3 {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        /* Tabs */
+        .tab-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 15px 20px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab:hover {
+            background: #e9ecef;
+            color: #1e293b;
+        }
+
+        .tab.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+            background: white;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 20px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .card h3 {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-icon {
+            cursor: help;
+            opacity: 0.6;
+            font-size: 0.9rem;
+        }
+
+        /* Chart Container */
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            margin-top: 10px;
+        }
+
+        canvas {
+            max-height: 400px;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            background: #64748b;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #475569;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        /* Articles List */
+        .articles-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .article-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+        }
+
+        .article-card h4 {
+            font-size: 1rem;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .article-card .meta {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+
+        .article-card .sentiment {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .sentiment.positive {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .sentiment.negative {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .sentiment.neutral {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #334155;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        /* Theme Selector */
+        .theme-selector {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .theme-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .theme-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .theme-checkbox:hover {
+            background: #e9ecef;
+        }
+
+        .theme-checkbox input {
+            cursor: pointer;
+        }
+
+        .theme-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        .theme-name {
+            flex: 1;
+            font-size: 0.9rem;
+        }
+
+        .theme-count {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .close {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .close:hover {
+            color: #1e293b;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-title h1 {
+                font-size: 1.5rem;
+            }
+
+            .tabs {
+                font-size: 0.85rem;
+            }
+
+            .tab {
+                padding: 12px 15px;
+            }
+
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .export-btn {
+                min-width: 100%;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-main">
+                <div class="header-title">
+                    <h1>📊 Agrégateur RSS Thématique</h1>
+                    <div class="header-subtitle">
+                        <span class="author">Olivier Henri B.</span>
+                        <span class="version">V.2.3</span>
+                    </div>
+                </div>
+                <div class="header-tagline">
+                    Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances + IA
+                </div>
+            </div>
+
+            <div class="demo-banner">
+                <div class="demo-icon">🚀</div>
+                <div class="demo-content">
+                    <div class="demo-title">Application de démonstration</div>
+                    <div class="demo-text">
+                        Avec à présent la possibilité de stocker jusqu'à 1Go de données (Merci à Render!). Attention : cela reste un serveur de test et de présentation, il se réinitialise automatiquement lorsque les quotas alloués sont atteints.
+                    </div>
+                    <div class="demo-api-info">
+                        Testez la fonction IA avec une clé API gratuite sur 
+                        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="status-bar">
+            <div class="last-update" id="lastUpdate">Chargement...</div>
+            <div class="refresh-controls">
+                <div class="auto-refresh-indicator">
+                    <span class="blink">🔄</span> Auto-actualisation
+                </div>
+                <button class="refresh" onclick="app.manualRefresh()">🔄 Générer</button>
+            </div>
+        </div>
+
+        <div class="export-bar">
+            <div class="export-row">
+                <button class="export-btn json" onclick="app.exportData('json')">📥 Export JSON</button>
+                <button class="export-btn csv" onclick="app.exportData('csv')">📥 Export CSV</button>
+                <button class="export-btn stats" onclick="app.showStats()">📊 Statistiques</button>
+            </div>
+            <div class="export-row">
+                <button class="export-btn ia" onclick="app.runAIAnalysis()">🧠 Analyse IA</button>
+                <button class="export-btn ia-config" onclick="app.showIAConfig()">⚙️ Config IA</button>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="loading">Chargement des données...</div>
+        </div>
+
+        <div class="tab-container">
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('analysis')">📈 Analyse</div>
+                <div class="tab" onclick="showTab('articles')">📄 Articles</div>
+                <div class="tab" onclick="showTab('themes')">🎨 Thèmes</div>
+                <div class="tab" onclick="showTab('feeds')">📰 Flux RSS</div>
+            </div>
+
+            <div id="analysisTab" class="tab-content active">
+                <div id="themeSelectorContainer"></div>
+                
+                <div class="dashboard">
+                    <div class="card full-width">
+                        <h3>
+                            📊 Évolution Temporelle des Thèmes
+                            <span class="info-icon" title="Graphique zoomable : utilisez la molette ou pinch pour zoomer, Shift+drag pour déplacer">ℹ️</span>
+                        </h3>
+                        <div class="chart-wrapper">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                        <div class="chart-controls">
+                            <button class="control-btn" onclick="app.resetChartZoom()">🔄 Réinitialiser zoom</button>
+                            <button class="control-btn" onclick="app.exportChartData()">📥 Exporter données</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>🎯 Répartition par Thème</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="themeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>😊 Analyse de Sentiment</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="sentimentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="articlesTab" class="tab-content">
+                <div class="card full-width">
+                    <h3>📄 Derniers Articles</h3>
+                    <div class="articles-list" id="articlesList">
+                        <div class="loading">Chargement des articles...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="themesTab" class="tab-content">
+                <div class="card">
+                    <h3>🎨 Créer un Thème</h3>
+                    <div class="form-group">
+                        <label for="themeName">Nom du thème</label>
+                        <input type="text" id="themeName" placeholder="Ex: Diplomatie">
+                    </div>
+                    <div class="form-group">
+                        <label for="themeKeywords">Mots-clés (séparés par des virgules)</label>
+                        <textarea id="themeKeywords" rows="3" placeholder="diplomatie, négociation, accord, traité"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="themeColor">Couleur</label>
+                        <input type="color" id="themeColor" value="#6366f1">
+                    </div>
+                    <button onclick="app.addTheme()">➕ Créer le thème</button>
+                </div>
+
+                <div class="card">
+                    <h3>🎨 Mes Thèmes</h3>
+                    <div id="themesList">
+                        <div class="loading">Chargement des thèmes...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="feedsTab" class="tab-content">
+                <div class="card">
+                    <h3>➕ Ajouter un Flux RSS</h3>
+                    <div class="form-group">
+                        <label for="feedUrl">URL du flux RSS</label>
+                        <input type="url" id="feedUrl" placeholder="https://exemple.com/rss">
+                    </div>
+                    <button onclick="app.addFeed()">➕ Ajouter le flux</button>
+                </div>
+
+                <div class="card">
+                    <h3>📋 Mes Flux RSS</h3>
+                    <div id="feedsList">
+                        <div class="loading">Chargement des flux...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="app.closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Application principale
+        const app = {
+            config: {
+                apiBase: '/api',
+                autoRefresh: true,
+                refreshInterval: 300000
+            },
+            articles: [],
+            themes: [],
+            charts: {},
+            chartManager: null,
+
+            async init() {
+                console.log('🚀 Initialisation de l\'application...');
+                await this.loadAll();
+                this.initChartManager();
+                
+                if (this.config.autoRefresh) {
+                    setInterval(() => this.loadAll(), this.config.refreshInterval);
+                }
+            },
+
+            async loadAll() {
+                try {
+                    await Promise.all([
+                        this.loadArticles(),
+                        this.loadThemes()
+                    ]);
+                    this.updateDashboard();
+                } catch (error) {
+                    console.error('❌ Erreur chargement données:', error);
+                }
+            },
+
+            async loadArticles() {
+                try {
+                    const response = await fetch(`${this.config.apiBase}/articles`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.articles = data.articles || [];
+                        this.analysis = data.analysis || {};
+                        this.updateLastUpdate(data.lastUpdate);
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur chargement articles:', error);
+                    this.articles = [];
+                }
+            },
+
+            async loadThemes() {
+                try {
+                    const response = await fetch(`${this.config.apiBase}/themes`);
+                    this.themes = await response.json();
+                } catch (error) {
+                    console.error('❌ Erreur chargement thèmes:', error);
+                    this.themes = [];
+                }
+            },
+
+            updateLastUpdate(timestamp) {
+                const elem = document.getElementById('lastUpdate');
+                if (elem && timestamp) {
+                    const date = new Date(timestamp);
+                    elem.textContent = `Dernière mise à jour : ${date.toLocaleString('fr-FR')}`;
+                }
+            },
+
+            updateDashboard() {
+                this.renderStats();
+                this.renderCharts();
+                this.renderArticles();
+                this.renderThemesList();
+            },
+
+            renderStats() {
+                const grid = document.getElementById('statsGrid');
+                const total = this.articles.length;
+                const avgSentiment = this.articles.length > 0
+                    ? (this.articles.reduce((sum, a) => sum + (a.sentiment?.score || 0), 0) / total).toFixed(2)
+                    : 0;
+
+                grid.innerHTML = `
+                    <div class="stat-card">
+                        <h3>Total Articles</h3>
+                        <div class="value">${total}</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #10b981;">
+                        <h3>Sentiment Moyen</h3>
+                        <div class="value">${avgSentiment}</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #f59e0b;">
+                        <h3>Thèmes Actifs</h3>
+                        <div class="value">${this.themes.length}</div>
+                    </div>
+                `;
+            },
+
+            initChartManager() {
+                if (typeof ChartManager !== 'undefined') {
+                    this.chartManager = new ChartManager(this);
+                } else {
+                    console.warn('⚠️ ChartManager non disponible');
+                }
+            },
+
+            renderCharts() {
+                this.renderTimelineChart();
+                this.renderThemeChart();
+                this.renderSentimentChart();
+            },
+
+            renderTimelineChart() {
+                const canvas = document.getElementById('timelineChart');
+                if (!canvas) return;
+
+                const ctx = canvas.getContext('2d');
+                
+                if (this.charts.timeline) {
+                    this.charts.timeline.destroy();
+                }
+
+                const data = this.prepareTimelineData();
+
+                this.charts.timeline = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.dates,
+                        datasets: data.themes
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'nearest',
+                            intersect: false
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 12,
+                                    font: { size: 11 }
+                                }
+                            },
+                            zoom: {
+                                zoom: {
+                                    wheel: { enabled: true },
+                                    pinch: { enabled: true },
+                                    mode: 'xy'
+                                },
+                                pan: {
+                                    enabled: true,
+                                    mode: 'xy',
+                                    modifierKey: 'shift'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Date' },
+                                grid: { color: 'rgba(148,163,184,0.2)' }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Occurrences' },
+                                grid: { color: 'rgba(148,163,184,0.2)' }
+                            }
+                        }
+                    }
+                });
+            },
+
+            prepareTimelineData() {
+                const dateMap = {};
+                const themeMap = {};
+
+                this.articles.forEach(article => {
+                    const date = new Date(article.pubDate).toISOString().split('T')[0];
+                    if (!dateMap[date]) dateMap[date] = {};
+
+                    (article.themes || []).forEach(theme => {
+                        if (!dateMap[date][theme]) dateMap[date][theme] = 0;
+                        dateMap[date][theme]++;
+                        themeMap[theme] = true;
+                    });
+                });
+
+                const dates = Object.keys(dateMap).sort();
+                const colors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#84cc16', '#f43f5e'];
+                
+                const themes = Object.keys(themeMap).slice(0, 8).map((theme, i) => ({
+                    label: theme,
+                    data: dates.map(date => dateMap[date][theme] || 0),
+                    borderColor: colors[i % colors.length],
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    tension: 0.35,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }));
+
+                return { dates, themes };
+            },
+
+            renderThemeChart() {
+                const canvas = document.getElementById('themeChart');
+                if (!canvas) return;
+
+                const ctx = canvas.getContext('2d');
+                
+                if (this.charts.theme) {
+                    this.charts.theme.destroy();
+                }
+
+                const themeCounts = {};
+                this.articles.forEach(article => {
+                    (article.themes || []).forEach(theme => {
+                        themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+                    });
+                });
+
+                const sortedThemes = Object.entries(themeCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+
+                this.charts.theme = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: sortedThemes.map(t => t[0]),
+                        datasets: [{
+                            data: sortedThemes.map(t => t[1]),
+                            backgroundColor: [
+                                '#6366f1', '#22c55e', '#f59e0b', '#ef4444', 
+                                '#06b6d4', '#a855f7', '#84cc16', '#f43f5e',
+                                '#64748b', '#8b5cf6'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { font: { size: 11 } }
+                            }
+                        }
+                    }
+                });
+            },
+
+            renderSentimentChart() {
+                const canvas = document.getElementById('sentimentChart');
+                if (!canvas) return;
+
+                const ctx = canvas.getContext('2d');
+                
+                if (this.charts.sentiment) {
+                    this.charts.sentiment.destroy();
+                }
+
+                const sentiments = { positive: 0, neutral: 0, negative: 0 };
+                this.articles.forEach(article => {
+                    const type = article.sentiment?.sentiment || 'neutral';
+                    sentiments[type]++;
+                });
+
+                this.charts.sentiment = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Positif', 'Neutre', 'Négatif'],
+                        datasets: [{
+                            label: 'Nombre d\'articles',
+                            data: [sentiments.positive, sentiments.neutral, sentiments.negative],
+                            backgroundColor: ['#22c55e', '#64748b', '#ef4444']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
+            },
+
+            renderArticles() {
+                const container = document.getElementById('articlesList');
+                if (!container) return;
+
+                if (this.articles.length === 0) {
+                    container.innerHTML = '<div class="loading">Aucun article disponible</div>';
+                    return;
+                }
+
+                container.innerHTML = this.articles.slice(0, 50).map(article => {
+                    const sentiment = article.sentiment || {};
+                    const sentimentClass = sentiment.sentiment || 'neutral';
+                    const sentimentLabel = {
+                        positive: '😊 Positif',
+                        neutral: '😐 Neutre',
+                        negative: '😞 Négatif'
+                    }[sentimentClass] || '😐 Neutre';
+
+                    return `
+                        <div class="article-card">
+                            <h4>${article.title || 'Sans titre'}</h4>
+                            <div class="meta">
+                                ${new Date(article.pubDate).toLocaleString('fr-FR')}
+                                ${article.feed ? `• ${article.feed}` : ''}
+                            </div>
+                            <p>${(article.content || '').substring(0, 200)}...</p>
+                            <div style="margin-top: 10px;">
+                                <span class="sentiment ${sentimentClass}">${sentimentLabel} (${sentiment.score?.toFixed(2) || '0.00'})</span>
+                                ${(article.themes || []).map(t => 
+                                    `<span style="display: inline-block; padding: 4px 8px; margin: 2px; background: #e0e7ff; border-radius: 4px; font-size: 0.75rem;">${t}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            renderThemesList() {
+                const container = document.getElementById('themesList');
+                if (!container) return;
+
+                if (this.themes.length === 0) {
+                    container.innerHTML = '<div class="loading">Aucun thème configuré</div>';
+                    return;
+                }
+
+                container.innerHTML = this.themes.map(theme => `
+                    <div class="theme-checkbox" style="margin-bottom: 10px;">
+                        <div class="theme-color" style="background-color: ${theme.color}"></div>
+                        <div class="theme-name" style="flex: 1;">
+                            <strong>${theme.name}</strong>
+                            <div style="font-size: 0.8rem; color: #64748b;">
+                                ${Array.isArray(theme.keywords) ? theme.keywords.join(', ') : theme.keywords}
+                            </div>
+                        </div>
+                        <button class="control-btn" onclick="app.deleteTheme('${theme.name}')" style="background: #ef4444;">
+                            🗑️
+                        </button>
+                    </div>
+                `).join('');
+            },
+
+            async addTheme() {
+                const name = document.getElementById('themeName').value.trim();
+                const keywords = document.getElementById('themeKeywords').value.trim();
+                const color = document.getElementById('themeColor').value;
+
+                if (!name || !keywords) {
+                    alert('Veuillez remplir tous les champs');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.config.apiBase}/themes`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name,
+                            keywords: keywords.split(',').map(k => k.trim()),
+                            color
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('✅ Thème créé avec succès');
+                        document.getElementById('themeName').value = '';
+                        document.getElementById('themeKeywords').value = '';
+                        await this.loadAll();
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur création thème:', error);
+                    alert('Erreur lors de la création du thème');
+                }
+            },
+
+            async deleteTheme(name) {
+                if (!confirm(`Supprimer le thème "${name}" ?`)) return;
+
+                try {
+                    const response = await fetch(`${this.config.apiBase}/themes`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    });
+
+                    if (response.ok) {
+                        alert('✅ Thème supprimé');
+                        await this.loadAll();
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur suppression thème:', error);
+                }
+            },
+
+            async addFeed() {
+                const url = document.getElementById('feedUrl').value.trim();
+
+                if (!url) {
+                    alert('Veuillez entrer une URL');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.config.apiBase}/feeds`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('✅ Flux ajouté avec succès');
+                        document.getElementById('feedUrl').value = '';
+                        await this.loadFeeds();
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur ajout flux:', error);
+                    alert('Erreur lors de l\'ajout du flux');
+                }
+            },
+
+            async loadFeeds() {
+                try {
+                    const response = await fetch(`${this.config.apiBase}/feeds`);
+                    const feeds = await response.json();
+                    
+                    const container = document.getElementById('feedsList');
+                    if (!container) return;
+
+                    if (feeds.length === 0) {
+                        container.innerHTML = '<div class="loading">Aucun flux configuré</div>';
+                        return;
+                    }
+
+                    container.innerHTML = feeds.map(url => `
+                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: white; border-radius: 6px; margin-bottom: 8px;">
+                            <div style="flex: 1; font-size: 0.9rem; word-break: break-all;">${url}</div>
+                            <button class="control-btn" onclick="app.deleteFeed('${url}')" style="background: #ef4444;">
+                                🗑️
+                            </button>
+                        </div>
+                    `).join('');
+                } catch (error) {
+                    console.error('❌ Erreur chargement flux:', error);
+                }
+            },
+
+            async deleteFeed(url) {
+                if (!confirm('Supprimer ce flux ?')) return;
+
+                try {
+                    const response = await fetch(`${this.config.apiBase}/feeds`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+
+                    if (response.ok) {
+                        alert('✅ Flux supprimé');
+                        await this.loadFeeds();
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur suppression flux:', error);
+                }
+            },
+
+            async manualRefresh() {
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = '⏳ Rafraîchissement...';
+
+                try {
+                    const response = await fetch(`${this.config.apiBase}/refresh`, {
+                        method: 'POST'
+                    });
+
+                    if (response.ok) {
+                        await this.loadAll();
+                        alert('✅ Données rafraîchies avec succès');
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur rafraîchissement:', error);
+                    alert('Erreur lors du rafraîchissement');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '🔄 Générer';
+                }
+            },
+
+            resetChartZoom() {
+                if (this.charts.timeline) {
+                    this.charts.timeline.resetZoom();
+                }
+            },
+
+            exportData(format) {
+                const data = {
+                    articles: this.articles,
+                    themes: this.themes,
+                    exportDate: new Date().toISOString()
+                };
+
+                let content, filename, mimeType;
+
+                if (format === 'json') {
+                    content = JSON.stringify(data, null, 2);
+                    filename = `export-${new Date().toISOString().split('T')[0]}.json`;
+                    mimeType = 'application/json';
+                } else if (format === 'csv') {
+                    const headers = ['Titre', 'Date', 'Sentiment', 'Score', 'Thèmes'];
+                    const rows = this.articles.map(a => [
+                        `"${(a.title || '').replace(/"/g, '""')}"`,
+                        new Date(a.pubDate).toISOString(),
+                        a.sentiment?.sentiment || '',
+                        a.sentiment?.score || '',
+                        `"${(a.themes || []).join(', ')}"`
+                    ]);
+                    content = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                    filename = `export-${new Date().toISOString().split('T')[0]}.csv`;
+                    mimeType = 'text/csv';
+                }
+
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+
+            exportChartData() {
+                const data = this.prepareTimelineData();
+                const headers = ['Date', ...data.themes.map(t => t.label)];
+                const rows = data.dates.map((date, i) => 
+                    [date, ...data.themes.map(t => t.data[i])]
+                );
+                
+                const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `evolution-themes-${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+
+            showStats() {
+                const total = this.articles.length;
+                const avgScore = total > 0
+                    ? (this.articles.reduce((s, a) => s + (a.sentiment?.score || 0), 0) / total).toFixed(2)
+                    : 0;
+                
+                const sentiments = { positive: 0, neutral: 0, negative: 0 };
+                this.articles.forEach(a => {
+                    sentiments[a.sentiment?.sentiment || 'neutral']++;
+                });
+
+                this.showModal(`
+                    <h2>📊 Statistiques Détaillées</h2>
+                    <div style="margin-top: 20px;">
+                        <p><strong>Total d'articles :</strong> ${total}</p>
+                        <p><strong>Score moyen :</strong> ${avgScore}</p>
+                        <p><strong>Articles positifs :</strong> ${sentiments.positive} (${((sentiments.positive/total)*100).toFixed(1)}%)</p>
+                        <p><strong>Articles neutres :</strong> ${sentiments.neutral} (${((sentiments.neutral/total)*100).toFixed(1)}%)</p>
+                        <p><strong>Articles négatifs :</strong> ${sentiments.negative} (${((sentiments.negative/total)*100).toFixed(1)}%)</p>
+                        <p><strong>Thèmes actifs :</strong> ${this.themes.length}</p>
+                    </div>
+                `);
+            },
+
+            runAIAnalysis() {
+                alert('⚠️ Fonctionnalité IA en développement.\nConnectez votre clé API OpenAI pour activer cette fonctionnalité.');
+            },
+
+            showIAConfig() {
+                this.showModal(`
+                    <h2>⚙️ Configuration IA</h2>
+                    <div style="margin-top: 20px;">
+                        <div class="form-group">
+                            <label>Clé API OpenAI</label>
+                            <input type="password" id="iaApiKey" placeholder="sk-..." style="width: 100%;">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="iaAutoCorrect" checked>
+                                Corrections automatiques
+                            </label>
+                        </div>
+                        <button onclick="app.saveIAConfig()" style="width: 100%; margin-top: 15px;">
+                            💾 Enregistrer
+                        </button>
+                    </div>
+                `);
+            },
+
+            saveIAConfig() {
+                const apiKey = document.getElementById('iaApiKey')?.value;
+                if (apiKey) {
+                    alert('✅ Configuration IA enregistrée (simulation)');
+                    this.closeModal();
+                }
+            },
+
+            showModal(content) {
+                const modal = document.getElementById('modal');
+                const modalContent = document.getElementById('modalContent');
+                modalContent.innerHTML = content;
+                modal.classList.add('show');
+            },
+
+            closeModal() {
+                const modal = document.getElementById('modal');
+                modal.classList.remove('show');
+            },
+
+            updateTimelineChart(data) {
+                if (!this.charts.timeline) return;
+                
+                this.charts.timeline.data.labels = data.dates;
+                this.charts.timeline.data.datasets = data.themes;
+                this.charts.timeline.update();
+            }
+        };
+
+        // Gestion des onglets
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+
+            // Charger les flux si onglet flux
+            if (tabName === 'feeds') {
+                app.loadFeeds();
+            }
+        }
+
+        // ChartManager basique (simplifié)
+        class ChartManager {
+            constructor(appInstance) {
+                this.app = appInstance;
+                this.selectedThemes = new Set();
+                this.initialize();
+            }
+
+            initialize() {
+                this.createThemeSelector();
+            }
+
+            createThemeSelector() {
+                const container = document.getElementById('themeSelectorContainer');
+                if (!container) return;
+
+                const themes = this.getAvailableThemes();
+                
+                if (themes.length === 0) {
+                    container.innerHTML = '<div class="loading">Aucun thème disponible</div>';
+                    return;
+                }
+
+                if (this.selectedThemes.size === 0) {
+                    themes.slice(0, 5).forEach(t => this.selectedThemes.add(t.name));
+                }
+
+                container.innerHTML = `
+                    <div class="theme-selector">
+                        <h4>📊 Sélection des thèmes à afficher</h4>
+                        <div class="theme-checkboxes">
+                            ${themes.map(theme => `
+                                <label class="theme-checkbox">
+                                    <input type="checkbox" value="${theme.name}"
+                                           ${this.selectedThemes.has(theme.name) ? 'checked' : ''}
+                                           onchange="app.chartManager.toggleTheme('${theme.name}', this.checked)">
+                                    <span class="theme-color" style="background-color: ${theme.color}"></span>
+                                    <span class="theme-name">${theme.name}</span>
+                                    <span class="theme-count">(${theme.count})</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                        <div class="chart-controls">
+                            <button onclick="app.chartManager.selectAllThemes()" class="control-btn">✓ Tout sélectionner</button>
+                            <button onclick="app.chartManager.deselectAllThemes()" class="control-btn">✗ Tout désélectionner</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getAvailableThemes() {
+                const themeCounts = {};
+                (this.app.articles || []).forEach(article => {
+                    (article.themes || []).forEach(theme => {
+                        themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+                    });
+                });
+
+                return (this.app.themes || [])
+                    .map(t => ({
+                        name: t.name,
+                        color: t.color,
+                        count: themeCounts[t.name] || 0
+                    }))
+                    .filter(t => t.count > 0)
+                    .sort((a, b) => b.count - a.count);
+            }
+
+            toggleTheme(themeName, isSelected) {
+                if (isSelected) {
+                    this.selectedThemes.add(themeName);
+                } else {
+                    this.selectedThemes.delete(themeName);
+                }
+                this.app.renderTimelineChart();
+            }
+
+            selectAllThemes() {
+                this.selectedThemes = new Set(this.getAvailableThemes().map(t => t.name));
+                this.createThemeSelector();
+                this.app.renderTimelineChart();
+            }
+
+            deselectAllThemes() {
+                this.selectedThemes.clear();
+                this.createThemeSelector();
+                this.app.renderTimelineChart();
+            }
+        }
+
+        // Initialisation au chargement
+        window.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+
+        // Fermer modal en cliquant à l'extérieur
+        window.onclick = function(event) {
+            const modal = document.getElementById('modal');
+            if (event.target === modal) {
+                app.closeModal();
+            }
+        };
+    </script>
+</body>
+</html>
