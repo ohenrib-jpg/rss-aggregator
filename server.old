@@ -17,7 +17,6 @@ const parser = new Parser({
 // ✅ CONFIGURATION RENDER
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
-const FLASK_SERVICE_URL = 'https://rss-aggregator-1-wx0b.onrender.com';
 
 // ✅ MIDDLEWARE
 app.use(cors());
@@ -267,29 +266,66 @@ class PostgreSQLManager {
     }
   }
 
-  async saveTheme(themeData) {
-    const { name, keywords, color, description } = themeData;
-    
-    try {
-      const result = await pool.query(`
-        INSERT INTO themes (name, keywords, color, description)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (name) 
-        DO UPDATE SET 
-          keywords = EXCLUDED.keywords,
-          color = EXCLUDED.color,
-          description = EXCLUDED.description
-        RETURNING *
-      `, [name, keywords, color || '#6366f1', description]);
+async saveTheme(themeData) {
+  const { name, keywords, color, description } = themeData;
+  
+  try {
+    // Essayer d'abord avec ON CONFLICT
+    const result = await pool.query(`
+      INSERT INTO themes (name, keywords, color, description)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (name) 
+      DO UPDATE SET 
+        keywords = EXCLUDED.keywords,
+        color = EXCLUDED.color,
+        description = EXCLUDED.description
+      RETURNING *
+    `, [name, keywords, color || '#6366f1', description]);
 
-      console.log(`✅ Thème "${name}" sauvegardé avec ON CONFLICT`);
-      return result.rows[0];
+    console.log(`✅ Thème "${name}" sauvegardé avec ON CONFLICT`);
+    return result.rows[0];
+    
+  } catch (error) {
+    if (error.code === '42P10') { // contrainte manquante
+      console.log(`⚠️  Contrainte manquante pour "${name}", fallback...`);
       
-    } catch (error) {
+      try {
+        // Vérifier si le thème existe
+        const existing = await pool.query(
+          'SELECT * FROM themes WHERE name = $1', 
+          [name]
+        );
+        
+        if (existing.rows.length > 0) {
+          // Mettre à jour
+          const result = await pool.query(`
+            UPDATE themes 
+            SET keywords = $2, color = $3, description = $4 
+            WHERE name = $1 
+            RETURNING *
+          `, [name, keywords, color || '#6366f1', description]);
+          console.log(`✅ Thème "${name}" mis à jour`);
+          return result.rows[0];
+        } else {
+          // Créer nouveau
+          const result = await pool.query(`
+            INSERT INTO themes (name, keywords, color, description)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+          `, [name, keywords, color || '#6366f1', description]);
+          console.log(`✅ Thème "${name}" créé`);
+          return result.rows[0];
+        }
+      } catch (fallbackError) {
+        console.error(`❌ Erreur fallback thème "${name}":`, fallbackError.message);
+        throw fallbackError;
+      }
+    } else {
       console.error(`❌ Erreur sauvegarde thème "${name}":`, error.message);
       throw error;
     }
   }
+}
 
   async getThemes() {
     try {
@@ -427,6 +463,7 @@ class PostgreSQLManager {
 const dbManager = new PostgreSQLManager();
 
 // ✅ FONCTION DE RAFRAÎCHISSEMENT DES DONNÉES
+// ✅ FONCTION DE RAFRAÎCHISSEMENT OPTIMISÉE POUR RENDER
 async function refreshData() {
   let client;
   try {
@@ -465,7 +502,7 @@ async function refreshData() {
 
               const articleData = {
                 title: item.title || 'Sans titre',
-                content: (item.contentSnippet || item.content || item['content:encoded'] || '').substring(0, 500),
+                content: (item.contentSnippet || item.content || item['content:encoded'] || '').substring(0, 500), // Limiter la taille
                 link: item.link || `#${Date.now()}`,
                 pubDate: pubDate.toISOString(),
                 feedUrl: feedUrl,
@@ -568,85 +605,6 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
-// Correction des scores d'articles
-app.post('/api/articles/correct', async (req, res) => {
-  try {
-    const { articleId, correctedScore, confidence, iaCorrected } = req.body;
-    
-    await pool.query(`
-      UPDATE articles 
-      SET sentiment_score = $1, 
-          sentiment_confidence = $2,
-          ia_corrected = $3,
-          correction_confidence = $4
-      WHERE id = $5
-    `, [correctedScore, confidence, iaCorrected, confidence, articleId]);
-
-    // Enregistrer la correction IA
-    await pool.query(`
-      INSERT INTO ia_corrections (article_id, corrected_score, confidence)
-      VALUES ($1, $2, $3)
-    `, [articleId, correctedScore, confidence]);
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('❌ Erreur correction article:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Statistiques IA
-app.get('/api/ia/stats', async (req, res) => {
-  try {
-    const correctionsResult = await pool.query(`
-      SELECT COUNT(*) as total_corrections,
-             AVG(confidence) as avg_confidence,
-             COUNT(CASE WHEN created_at > NOW() - INTERVAL '1 day' THEN 1 END) as recent_corrections
-      FROM ia_corrections
-    `);
-
-    const stats = correctionsResult.rows[0];
-    
-    res.json({
-      success: true,
-      stats: {
-        totalCorrections: parseInt(stats.total_corrections) || 0,
-        recentCorrections: parseInt(stats.recent_corrections) || 0,
-        avgConfidence: parseFloat(stats.avg_confidence) || 0
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erreur stats IA:', error);
-    res.json({ 
-      success: true, 
-      stats: {
-        totalCorrections: 0,
-        recentCorrections: 0,
-        avgConfidence: 0
-      }
-    });
-  }
-});
-
-// Test de connectivité IA
-app.get('/api/ia/status', async (req, res) => {
-  try {
-    const response = await axios.get(`${FLASK_SERVICE_URL}/health`, { timeout: 10000 });
-    
-    res.json({ 
-      success: true, 
-      flaskService: 'accessible',
-      status: response.data 
-    });
-  } catch (error) {
-    res.json({ 
-      success: false, 
-      flaskService: 'inaccessible',
-      error: error.message 
-    });
-  }
-});
-
 // Forcer le rafraîchissement
 app.post('/api/refresh', async (req, res) => {
   try {
@@ -746,9 +704,10 @@ app.post('/api/themes', async (req, res) => {
   }
 });
 
-// Santé
+// Santé - version bifidus actif
 app.get('/health', async (req, res) => {
   try {
+    // Test de connexion simple et rapide
     const result = await pool.query('SELECT 1 as test');
     
     res.json({ 
@@ -770,17 +729,15 @@ app.get('/health', async (req, res) => {
 // Route racine
 app.get('/', (req, res) => {
   res.json({
-    message: 'RSS Aggregator avec PostgreSQL et IA',
+    message: 'RSS Aggregator avec PostgreSQL',
     status: 'running',
     database: 'postgresql',
-    iaService: FLASK_SERVICE_URL,
     endpoints: {
       articles: '/api/articles',
       feeds: '/api/feeds',
       themes: '/api/themes',
       refresh: '/api/refresh (POST)',
-      health: '/health',
-      iaStatus: '/api/ia/status'
+      health: '/health'
     }
   });
 });
@@ -825,8 +782,7 @@ async function startServer() {
       console.log(`🚀 Serveur démarré sur le port ${PORT}`);
       console.log(`🌍 Environnement: ${NODE_ENV}`);
       console.log(`🗄️ Base de données: PostgreSQL`);
-      console.log(`🤖 Service IA: ${FLASK_SERVICE_URL}`);
-      console.log(`🔄 Rafraîchissement auto: 30 minutes`);
+      console.log(`🔄 Rafraîchissement auto: 15 minutes`);
     });
 
   } catch (error) {

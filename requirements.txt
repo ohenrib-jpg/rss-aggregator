@@ -1,6 +1,11 @@
-flask
-requests
-beautifulsoup4
-reportlab
-gunicorn
+Flask==2.3.3
+Flask-CORS==4.0.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+reportlab==4.0.4
+gunicorn==21.2.0
+pandas>=1.5.0
+pyarrow>=11.0.0
+rapidfuzz>=2.0.0
+python-snappy>=0.6.0
 matplotlib
