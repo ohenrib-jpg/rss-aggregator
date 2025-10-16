@@ -1,674 +1,301 @@
-// Application principale - Agrégateur RSS Thématique + IA V.2.3 (NEXTGEN)
+/* ============================================================
+   RSS AGGREGATOR FRONTEND - PostgreSQL version
+   ============================================================ */
+
 const app = {
-    // Configuration et état
-    config: {
-        apiUrl: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-            ? 'http://localhost:3000'
-            : 'https://rss-aggregator-l7qj.onrender.com',
-        refreshInterval: 300000, // 5 minutes
-        autoRefresh: true
-    },
-
-    // Données
-    articles: [],
-    themes: [],
-    feeds: [],
-    stats: {},
-    charts: {},
-    chartManager: null,
-
-    // Initialisation
-    init: function() {
-        console.log("🚀 Initialisation de l'application...");
-        this.loadData();
-        this.setupEventListeners();
-        this.initializeCharts();
-        this.startAutoRefresh();
-        this.showMessage("Application chargée avec succès!", "success");
-    },
-
-    // Chargement des données depuis l'API
-    loadData: function() {
-        this.loadThemes();
-        this.loadFeeds();
-        this.loadArticles();
-    },
-
-    loadThemes: function() {
-        fetch(`${this.config.apiUrl}/api/themes`)
-            .then(resp => resp.ok ? resp.json() : Promise.reject(resp))
-            .then(themes => {
-                this.themes = (themes || []).map(theme => ({
-                    name: theme.name,
-                    keywords: theme.keywords || [],
-                    color: theme.color || "#6366f1",
-                    description: theme.description || ""
-                }));
-                console.log(`📚 ${this.themes.length} thèmes chargés depuis PostgreSQL`);
-                this.updateThemesList();
-                if (this.chartManager && typeof this.chartManager.updateThemeSelector === 'function') {
-                    this.chartManager.updateThemeSelector();
-                }
-            })
-            .catch(err => {
-                console.error("❌ Erreur chargement thèmes:", err);
-                const savedThemes = localStorage.getItem("themes");
-                if (savedThemes) {
-                    this.themes = JSON.parse(savedThemes);
-                    console.log(`📚 ${this.themes.length} thèmes chargés depuis localStorage (fallback)`);
-                }
-            });
-    },
-
-    loadFeeds: function() {
-        fetch(`${this.config.apiUrl}/api/feeds`)
-            .then(resp => resp.ok ? resp.json() : Promise.reject(resp))
-            .then(feeds => {
-                this.feeds = feeds || [];
-                console.log(`📰 ${this.feeds.length} flux RSS chargés depuis PostgreSQL`);
-                this.updateFeedsList();
-            })
-            .catch(err => {
-                console.error("❌ Erreur chargement flux:", err);
-                const savedFeeds = localStorage.getItem("feeds");
-                if (savedFeeds) {
-                    this.feeds = JSON.parse(savedFeeds);
-                    console.log(`📰 ${this.feeds.length} flux chargés depuis localStorage (fallback)`);
-                }
-            });
-    },
-
-    loadArticles: function() {
-        fetch(`${this.config.apiUrl}/api/articles`)
-            .then(resp => resp.ok ? resp.json() : Promise.reject(resp))
-            .then(data => {
-                if (data && data.success) {
-                    this.articles = data.articles || [];
-                    this.stats = {
-                        totalArticles: data.totalArticles || this.articles.length,
-                        lastUpdate: data.lastUpdate || null
-                    };
-                    console.log(`📄 ${this.articles.length} articles chargés depuis PostgreSQL`);
-                    this.updateDashboard();
-                    this.updateLastUpdate();
-                } else if (Array.isArray(data)) {
-                    // in case API returns raw array
-                    this.articles = data;
-                    console.log(`📄 ${this.articles.length} articles chargés (API array)`);
-                    this.updateDashboard();
-                }
-            })
-            .catch(err => {
-                console.error("❌ Erreur chargement articles:", err);
-                const savedArticles = localStorage.getItem("articles");
-                if (savedArticles) {
-                    this.articles = JSON.parse(savedArticles);
-                    console.log(`📄 ${this.articles.length} articles chargés depuis localStorage (fallback)`);
-                    this.updateDashboard();
-                }
-            });
-    },
-
-    // Placeholders pour les sauvegardes (gérées côté serveur / PostgreSQL)
-    saveThemes: function() {
-        console.log("💾 Thèmes gérés par PostgreSQL");
-    },
-
-    saveFeeds: function() {
-        console.log("💾 Flux gérés par PostgreSQL");
-    },
-
-    saveArticles: function() {
-        console.log("💾 Articles gérés par PostgreSQL");
-        this.updateLastUpdate();
-    },
-
-    // Initialisation des graphiques
-    initializeCharts: function() {
-        console.log("📊 Initialisation des graphiques avancés...");
-        if (typeof initializeChartManager !== 'undefined') {
-            try {
-                this.chartManager = initializeChartManager(this);
-                console.log("✅ Gestionnaire de graphiques initialisé via initializeChartManager");
-            } catch (e) {
-                console.warn("⚠️ initializeChartManager failed:", e);
-            }
-        }
-        // fallback: if chartManager not set, try legacy constructor
-        if (!this.chartManager && typeof ChartManager !== 'undefined') {
-            try {
-                this.chartManager = new ChartManager(this);
-                console.log("✅ Gestionnaire de graphiques initialisé via ChartManager");
-            } catch (e) {
-                console.warn("⚠️ ChartManager init failed:", e);
-            }
-        }
-
-        this.createThemeChart();
-        this.createTimelineChart();
-    },
-
-    // Graphique de répartition par thème
-    createThemeChart: function() {
-        const ctx = document.getElementById("themeChart");
-        if (!ctx) return;
-
-        const themeData = this.getThemeDistribution();
-
-        if (this.charts.themeChart) {
-            try { this.charts.themeChart.destroy(); } catch (e) {}
-        }
-
-        this.charts.themeChart = new Chart(ctx, {
-            type: "doughnut",
-            data: {
-                labels: themeData.labels,
-                datasets: [{
-                    data: themeData.values,
-                    backgroundColor: themeData.colors,
-                    borderColor: "#ffffff",
-                    borderWidth: 2,
-                    hoverOffset: 15
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: "bottom",
-                        labels: { padding: 15, usePointStyle: true, font: { size: 11 } }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || "";
-                                const value = context.parsed;
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = ((value / total) * 100).toFixed(1);
-                                return `${label}: ${value} (${percentage}%)`;
-                            }
-                        }
-                    }
-                },
-                cutout: "60%"
-            }
-        });
-    },
-
-    createTimelineChart: function() {
-        const ctx = document.getElementById("timelineChart");
-        if (!ctx) return;
-
-        const chartData = this.chartManager ? this.chartManager.prepareChartData() : this.prepareBasicTimelineData();
-
-        if (this.charts.timelineChart) {
-            try { this.charts.timelineChart.destroy(); } catch (e) {}
-        }
-
-        this.charts.timelineChart = new Chart(ctx, {
-            type: "line",
-            data: {
-                labels: chartData.dates,
-                datasets: chartData.themes.map(t => ({
-                    label: t.name,
-                    data: t.values,
-                    borderColor: t.color,
-                    backgroundColor: this.hexToRgba(t.color, 0.1),
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointHoverRadius: 8,
-                    pointBackgroundColor: t.color,
-                    pointBorderColor: "#ffffff",
-                    pointBorderWidth: 2
-                }))
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: "nearest", intersect: false, axis: "x" },
-                plugins: {
-                    legend: {
-                        position: "top",
-                        labels: { usePointStyle: true, boxWidth: 12, padding: 15, font: { size: 11 } }
-                    },
-                    tooltip: {
-                        mode: "index",
-                        intersect: false,
-                        backgroundColor: "rgba(0, 0, 0, 0.8)",
-                        titleFont: { size: 12 },
-                        bodyFont: { size: 11 },
-                        padding: 10,
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.dataset.label || "";
-                                const value = context.parsed.y;
-                                return `${label}: ${value} article${value !== 1 ? "s" : ""}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: "category",
-                        title: { display: true, text: this.getTimeScaleLabel(), color: "#64748b", font: { size: 12 } },
-                        grid: { color: "rgba(0, 0, 0, 0.1)" }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        title: { display: true, text: "Nombre d'articles", color: "#64748b", font: { size: 12 } },
-                        ticks: {
-                            precision: 0,
-                            callback: function(value) { if (value % 1 === 0) return value; }
-                        },
-                        grid: { color: "rgba(0, 0, 0, 0.1)" }
-                    }
-                }
-            }
-        });
-    },
-
-    updateTimelineChart: function(chartData) {
-        if (!this.charts.timelineChart) {
-            this.createTimelineChart();
-            return;
-        }
-        this.charts.timelineChart.data.labels = chartData.dates;
-        this.charts.timelineChart.data.datasets = chartData.themes.map(t => ({
-            label: t.name,
-            data: t.values,
-            borderColor: t.color,
-            backgroundColor: this.hexToRgba(t.color, 0.1),
-            borderWidth: 3,
-            fill: true,
-            tension: 0.4,
-            pointRadius: 4,
-            pointHoverRadius: 8,
-            pointBackgroundColor: t.color,
-            pointBorderColor: "#ffffff",
-            pointBorderWidth: 2
-        }));
-        try {
-            this.charts.timelineChart.options.scales.x.title.text = this.getTimeScaleLabel();
-            this.charts.timelineChart.update("none");
-        } catch (e) {
-            console.warn("⚠️ updateTimelineChart:", e);
-            this.charts.timelineChart.update();
-        }
-    },
-
-    getTimeScaleLabel: function() {
-        if (!this.chartManager) return "Période";
-        const scales = { day: "Date", week: "Semaine", month: "Mois", quarter: "Trimestre" };
-        return scales[this.chartManager.timeScale] || "Période";
-    },
-
-    hexToRgba: function(hex, alpha) {
-        try {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-        } catch (e) {
-            return `rgba(99,102,241,${alpha})`;
-        }
-    },
-
-    prepareBasicTimelineData: function() {
-        if (!this.articles || this.articles.length === 0) return { dates: [], themes: [] };
-
-        const dateGroups = {};
-        this.articles.forEach(article => {
-            const date = new Date(article.pubDate || article.date).toISOString().split("T")[0];
-            if (!dateGroups[date]) dateGroups[date] = { themes: {} };
-            (article.themes || []).forEach(theme => {
-                dateGroups[date].themes[theme] = (dateGroups[date].themes[theme] || 0) + 1;
-            });
-        });
-
-        const dates = Object.keys(dateGroups).sort();
-        const themes = this.themes.slice(0, 8);
-
-        return {
-            dates: dates,
-            themes: themes.map(theme => ({
-                name: theme.name,
-                color: theme.color,
-                values: dates.map(date => dateGroups[date]?.themes[theme.name] || 0)
-            }))
-        };
-    },
-
-    getThemeDistribution: function() {
-        const themeCounts = {};
-        (this.articles || []).forEach(article => {
-            (article.themes || []).forEach(theme => {
-                themeCounts[theme] = (themeCounts[theme] || 0) + 1;
-            });
-        });
-
-        const themeData = (this.themes || [])
-            .filter(theme => (themeCounts[theme.name] || 0) > 0)
-            .map(theme => ({ name: theme.name, count: themeCounts[theme.name] || 0, color: theme.color }))
-            .sort((a, b) => b.count - a.count);
-
-        return {
-            labels: themeData.map(t => t.name),
-            values: themeData.map(t => t.count),
-            colors: themeData.map(t => t.color)
-        };
-    },
-
-    setupEventListeners: function() {
-        // Les écouteurs primaires sont gérés via onclick dans le HTML
-    },
-
-    manualRefresh: function() {
-        console.log("🔄 Actualisation manuelle...");
-        this.showMessage("Actualisation en cours...", "info");
-        const refreshBtn = document.getElementById("refreshBtn");
-        if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.innerHTML = "⏳ Chargement..."; }
-        fetch(`${this.config.apiUrl}/api/refresh`, { method: "POST" })
-            .then(resp => resp.ok ? resp.json() : Promise.reject(resp))
-            .then(data => { if (data && data.success) { this.showMessage("Données actualisées!", "success"); this.loadArticles(); } })
-            .catch(err => { this.showMessage("Erreur actualisation", "error"); console.error("❌ Erreur:", err); })
-            .finally(() => { if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.innerHTML = "🔄 Actualiser"; } });
-    },
-
-    updateDashboard: function() {
-        this.updateStatsGrid();
-        this.updateArticlesList();
-        this.updateFeedsList();
-        this.updateThemesList();
-
-        if (this.charts.themeChart) this.createThemeChart();
-        if (this.chartManager && typeof this.chartManager.refreshChart === "function") this.chartManager.refreshChart();
-    },
-
-    updateStatsGrid: function() {
-        const statsGrid = document.getElementById("statsGrid");
-        if (!statsGrid) return;
-
-        const sentimentDist = this.getSentimentDistribution();
-
-        statsGrid.innerHTML = `
-            <div class="stat-card">
-                <div class="stat-number">${this.articles.length}</div>
-                <div class="stat-label">Articles analysés</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${this.themes.length}</div>
-                <div class="stat-label">Thèmes actifs</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${this.feeds.length}</div>
-                <div class="stat-label">Flux RSS</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${sentimentDist.positive}</div>
-                <div class="stat-label">Articles positifs</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${sentimentDist.negative}</div>
-                <div class="stat-label">Articles négatifs</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${Object.values(this.getArticlesByTheme()).reduce((a,b)=>a+b,0)}</div>
-                <div class="stat-label">Assignations de thèmes</div>
-            </div>
-        `;
-
-        const lastUpdate = document.getElementById("lastUpdate");
-        if (lastUpdate) {
-            lastUpdate.textContent = `Dernière mise à jour: ${new Date().toLocaleString()}`;
-        }
-    },
-
-    getSentimentDistribution: function() {
-        const sentiments = (this.articles || []).map(a => parseFloat(a.sentiment?.score) || 0);
-        return {
-            positive: sentiments.filter(s => s > 0.1).length,
-            neutral: sentiments.filter(s => s >= -0.1 && s <= 0.1).length,
-            negative: sentiments.filter(s => s < -0.1).length
-        };
-    },
-
-    getArticlesByTheme: function() {
-        const distribution = {};
-        (this.themes || []).forEach(theme => {
-            distribution[theme.name] = (this.articles || []).filter(a => (a.themes || []).includes(theme.name)).length;
-        });
-        return distribution;
-    },
-
-    updateArticlesList: function() {
-        const articlesList = document.getElementById("articlesList");
-        if (!articlesList) return;
-
-        const recentArticles = (this.articles || []).slice(0, 20);
-        if (recentArticles.length === 0) {
-            articlesList.innerHTML = '<div class="loading">Aucun article disponible</div>';
-            return;
-        }
-
-        articlesList.innerHTML = recentArticles.map(article => {
-            const sentimentClass = this.getSentimentClass(article.sentiment?.score);
-            const sentimentBadge = this.getSentimentBadge(article.sentiment);
-            const themesBadges = (article.themes || []).map(theme => `<span class="theme-tag">${theme}</span>`).join("");
-
-            return `
-                <div class="article-item ${sentimentClass}">
-                    <h4><a href="${article.link}" target="_blank" rel="noopener">${article.title}</a></h4>
-                    <div class="article-meta">
-                        <small>📅 ${new Date(article.pubDate || article.date).toLocaleDateString()}</small>
-                        ${sentimentBadge}
-                    </div>
-                    <div class="theme-tags">${themesBadges}</div>
-                </div>
-            `;
-        }).join("");
-    },
-
-    updateFeedsList: function() {
-        const feedsList = document.getElementById("feedsList");
-        if (!feedsList) return;
-
-        if ((this.feeds || []).length === 0) {
-            feedsList.innerHTML = '<div class="loading">Aucun flux configuré</div>';
-            return;
-        }
-
-        feedsList.innerHTML = (this.feeds || []).map(feed => `
-            <div class="feed-item">
-                <div class="feed-url">${feed}</div>
-                <button onclick="app.removeFeed('${feed}')" class="delete">🗑️</button>
-            </div>
-        `).join("");
-    },
-
-    updateThemesList: function() {
-        const themesList = document.getElementById("themesList");
-        if (!themesList) return;
-
-        if ((this.themes || []).length === 0) {
-            themesList.innerHTML = '<div class="loading">Aucun thème configuré</div>';
-            return;
-        }
-
-        themesList.innerHTML = (this.themes || []).map(theme => `
-            <div class="theme-item" style="--theme-color: ${theme.color}">
-                <div class="theme-header">
-                    <span class="theme-color-indicator" style="background-color: ${theme.color}"></span>
-                    <span class="theme-name">${theme.name}</span>
-                </div>
-                <div class="theme-keywords">
-                    <small>Mots-clés: ${theme.keywords.slice(0,3).join(', ')}${theme.keywords.length>3 ? '...' : ''}</small>
-                </div>
-                <button onclick="app.removeTheme('${theme.name}')" class="delete">🗑️</button>
-            </div>
-        `).join("");
-    },
-
-    getSentimentClass: function(score) {
-        const s = parseFloat(score) || 0;
-        if (s > 0.1) return "positive";
-        if (s < -0.1) return "negative";
-        return "neutral";
-    },
-
-    getSentimentBadge: function(sentiment) {
-        const score = parseFloat(sentiment?.score) || 0;
-        let text = "Neutre", emoji = "😐";
-        if (score > 0.1) { text = "Positif"; emoji = "😊"; }
-        else if (score < -0.1) { text = "Négatif"; emoji = "😞"; }
-        return `<span class="sentiment-badge ${this.getSentimentClass(score)}">${emoji} ${text} (${score.toFixed(2)})</span>`;
-    },
-
-    addFeed: function() {
-        const feedUrl = document.getElementById("feedUrl").value.trim();
-        if (!feedUrl) { this.showMessage("Veuillez entrer une URL de flux RSS", "error"); return; }
-        if ((this.feeds || []).includes(feedUrl)) { this.showMessage("Ce flux est déjà configuré", "error"); return; }
-
-        fetch(`${this.config.apiUrl}/api/feeds`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: feedUrl })
-        })
-        .then(resp => resp.ok ? resp.json() : Promise.reject(resp))
-        .then(data => { if (data && data.success) { this.showMessage("Flux ajouté avec succès", "success"); document.getElementById("feedUrl").value = ""; this.loadFeeds(); } })
-        .catch(err => { this.showMessage("Erreur ajout flux", "error"); console.error("❌ Erreur:", err); });
-    },
-
-    removeFeed: function(feedUrl) {
-        fetch(`${this.config.apiUrl}/api/feeds`, {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: feedUrl })
-        })
-        .then(resp => resp.ok ? resp.json() : Promise.reject(resp))
-        .then(data => { if (data && data.success) { this.showMessage("Flux supprimé", "success"); this.loadFeeds(); } })
-        .catch(err => { this.showMessage("Erreur suppression flux", "error"); console.error("❌ Erreur:", err); });
-    },
-
-    addTheme: function() {
-        const name = document.getElementById("themeName").value.trim();
-        const keywords = document.getElementById("themeKeywords").value.split(",").map(k => k.trim()).filter(k => k);
-        const color = document.getElementById("themeColor").value || "#6366f1";
-
-        if (!name || keywords.length === 0) { this.showMessage("Veuillez remplir tous les champs", "error"); return; }
-        if ((this.themes || []).some(t => t.name === name)) { this.showMessage("Un thème avec ce nom existe déjà", "error"); return; }
-
-        fetch(`${this.config.apiUrl}/api/themes`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, keywords, color })
-        })
-        .then(resp => resp.ok ? resp.json() : Promise.reject(resp))
-        .then(data => {
-            if (data && data.success) {
-                this.showMessage("Thème créé avec succès", "success");
-                document.getElementById("themeName").value = "";
-                document.getElementById("themeKeywords").value = "";
-                this.loadThemes();
-                if (this.chartManager && typeof this.chartManager.updateThemeSelector === 'function') {
-                    this.chartManager.updateThemeSelector();
-                }
-            }
-        })
-        .catch(err => { this.showMessage("Erreur création thème", "error"); console.error("❌ Erreur:", err); });
-    },
-
-    removeTheme: function(themeName) {
-        this.showMessage("Fonction en développement", "info");
-    },
-
-    exportData: function(format) {
-        const data = { articles: this.articles, themes: this.themes, feeds: this.feeds, stats: this.stats, exportDate: new Date().toISOString() };
-        let content, mimeType, filename;
-        if (format === "json") {
-            content = JSON.stringify(data, null, 2);
-            mimeType = "application/json";
-            filename = `rss-aggregator-${new Date().toISOString().split("T")[0]}.json`;
-        } else if (format === "csv") {
-            content = this.convertToCSV(data);
-            mimeType = "text/csv";
-            filename = `rss-aggregator-${new Date().toISOString().split("T")[0]}.csv`;
-        } else return;
-
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        this.showMessage(`Données exportées en ${format.toUpperCase()}`, "success");
-    },
-
-    convertToCSV: function(data) {
-        const headers = ["Titre", "Date", "Thèmes", "Sentiment", "Lien"];
-        const rows = (data.articles || []).map(article => [
-            `"${(article.title || "").replace(/"/g, '""')}"`,
-            article.pubDate || article.date || "",
-            `"${(article.themes || []).join(", ")}"`,
-            article.sentiment?.score || 0,
-            article.link || ""
-        ]);
-        return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    },
-
-    showMessage: function(message, type = "info") {
-        const container = document.getElementById("messageContainer");
-        if (!container) return;
-        const messageEl = document.createElement("div");
-        messageEl.className = `message ${type}`;
-        messageEl.innerHTML = `
-            <span class="message-icon">${this.getMessageIcon(type)}</span>
-            <span class="message-text">${message}</span>
-            <button class="message-close" onclick="this.parentElement.remove()">×</button>
-        `;
-        container.appendChild(messageEl);
-        setTimeout(() => { if (messageEl.parentElement) messageEl.remove(); }, 5000);
-    },
-
-    getMessageIcon: function(type) {
-        const icons = { success: "✅", error: "❌", warning: "⚠️", info: "ℹ️" };
-        return icons[type] || "ℹ️";
-    },
-
-    startAutoRefresh: function() {
-        if (this.config.autoRefresh) {
-            setInterval(() => { console.log("🔄 Actualisation automatique..."); this.loadArticles(); }, this.config.refreshInterval);
-        }
-    },
-
-    runAIAnalysis: function() {
-        this.showMessage("Fonctionnalité IA en cours de développement", "info");
-    },
-
-    showLearningStats: function() {
-        this.showMessage("Statistiques en cours de développement", "info");
+  config: {
+    apiBase: "/api",             
+    autoRefresh: true,
+    refreshInterval: 300000,     
+  },
+
+  articles: [],
+  themes: [],
+  charts: {},
+  initialized: false,
+
+  /* -------------------- INITIALISATION -------------------- */
+  init() {
+    console.log("App initialization started");
+    this.cacheDOM();
+    this.bindEvents();
+    this.loadAll();
+    if (this.config.autoRefresh) {
+      setInterval(() => this.loadAll(), this.config.refreshInterval);
     }
-};
+  },
 
-// Fonctions globales
-function showTab(tabName, event) {
-    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    const selectedTab = document.getElementById(tabName + "Tab");
-    if (selectedTab) selectedTab.classList.add("active");
-    if (event) event.currentTarget.classList.add("active");
-    if (tabName === "articles") app.updateArticlesList();
-    else if (tabName === "feeds") app.updateFeedsList();
-    else if (tabName === "themes") app.updateThemesList();
-    else if (tabName === "analysis" && app.chartManager) setTimeout(() => app.chartManager.refreshChart(), 100);
+  cacheDOM() {
+    this.dom = {
+      refreshBtn: document.getElementById("refresh-btn"),
+      themesContainer: document.getElementById("themes-container"),
+      articlesContainer: document.getElementById("articles-container"),
+      summaryContainer: document.getElementById("summary-container"),
+      chartCanvas: document.getElementById("chart-themes"),
+    };
+  },
+
+  bindEvents() {
+    if (this.dom.refreshBtn) {
+      this.dom.refreshBtn.addEventListener("click", () => this.manualRefresh());
+    }
+  },
+
+  /* -------------------- LOADERS -------------------- */
+  async loadAll() {
+    try {
+      await Promise.all([
+        this.loadThemes(),
+        this.loadArticles(),
+        this.loadSummary()
+      ]);
+      this.updateDashboard();
+    } catch (err) {
+      console.error("Error loading data:", err);
+    }
+  },
+
+  async loadThemes() {
+    try {
+      const res = await fetch(`${this.config.apiBase}/themes`);
+      if (!res.ok) throw new Error("Themes fetch failed");
+      this.themes = await res.json();
+    } catch (err) {
+      console.warn("No themes available", err);
+      this.themes = [];
+    }
+  },
+
+  async loadArticles() {
+    try {
+      const res = await fetch(`${this.config.apiBase}/articles`);
+      if (!res.ok) throw new Error("Articles fetch failed");
+      const data = await res.json();
+      if (data && data.success) {
+        this.articles = data.articles || [];
+      } else {
+        this.articles = [];
+      }
+    } catch (err) {
+      console.error("Error fetching articles:", err);
+      this.articles = [];
+    }
+  },
+
+  async loadSummary() {
+    try {
+      const res = await fetch(`${this.config.apiBase}/summaries`);
+      if (!res.ok) throw new Error("Summary fetch failed");
+      const data = await res.json();
+      this.summary = data;
+    } catch (err) {
+      console.warn("Summary unavailable", err);
+      this.summary = {};
+    }
+  },
+
+  /* -------------------- REFRESH -------------------- */
+  async manualRefresh() {
+    try {
+      const res = await fetch(`${this.config.apiBase}/refresh`, { method: "POST" });
+      if (res.ok) {
+        console.log("Manual refresh triggered");
+        await this.loadAll();
+      }
+    } catch (err) {
+      console.error("Manual refresh failed", err);
+    }
+  },
+
+  /* -------------------- DASHBOARD -------------------- */
+  updateDashboard() {
+    this.displayThemes();
+    this.displayArticles();
+    this.displaySummary();
+    this.renderChart();
+  },
+
+  displayThemes() {
+    if (!this.dom.themesContainer) return;
+    this.dom.themesContainer.innerHTML = "";
+    this.themes.forEach(t => {
+      const div = document.createElement("div");
+      div.className = "theme-item";
+      div.style.borderLeft = `5px solid ${t.color || "#6366f1"}`;
+      div.innerHTML = `
+        <strong>${t.name}</strong>
+        <span class="theme-count">${t.count}</span>
+      `;
+      this.dom.themesContainer.appendChild(div);
+    });
+  },
+
+  displayArticles() {
+    if (!this.dom.articlesContainer) return;
+    this.dom.articlesContainer.innerHTML = "";
+    const articles = this.articles.slice(0, 20); // limit
+    if (articles.length === 0) {
+      this.dom.articlesContainer.innerHTML = "<p>Aucun article disponible.</p>";
+      return;
+    }
+    articles.forEach(a => {
+      const card = document.createElement("div");
+      card.className = "article-card";
+      const confidence = (a.bayesian_posterior || a.confidence || 0).toFixed(2);
+      card.innerHTML = `
+        <h4>${a.title || "Sans titre"}</h4>
+        <p class="meta">${a.source || "Inconnu"} | ${new Date(a.date || a.pubDate).toLocaleString()}</p>
+        <p>${a.summary || ""}</p>
+        <p class="confidence">Confiance : ${confidence}</p>
+      `;
+      this.dom.articlesContainer.appendChild(card);
+    });
+  },
+
+  displaySummary() {
+    if (!this.dom.summaryContainer) return;
+    const s = this.summary || {};
+    this.dom.summaryContainer.innerHTML = `
+      <div class="summary-item"><b>Articles total :</b> ${s.total_articles || 0}</div>
+      <div class="summary-item"><b>Confiance moyenne :</b> ${(s.avg_confidence || 0).toFixed(2)}</div>
+      <div class="summary-item"><b>Fiabilité bayésienne :</b> ${(s.avg_posterior || 0).toFixed(2)}</div>
+      <div class="summary-item"><b>Corroboration moyenne :</b> ${(s.avg_corroboration || 0).toFixed(2)}</div>
+    `;
+  },
+
+  /* -------------------- GRAPHIQUE -------------------- */
+renderChart() {
+  if (!this.dom.chartCanvas || typeof Chart === "undefined") return;
+
+  const ctx = this.dom.chartCanvas.getContext("2d");
+  if (this.charts.main) {
+    this.charts.main.destroy();
+  }
+
+  const data = this.prepareChartData();
+  if (!data || data.dates.length === 0) {
+    console.warn("Aucune donnée pour le graphique");
+    return;
+  }
+
+  this.charts.main = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: data.dates,
+      datasets: data.themes.map(t => ({
+        label: t.name,
+        data: t.values,
+        borderColor: t.color || "#2563eb",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        tension: 0.35,
+        fill: false,
+        pointRadius: 2.5,
+        pointHoverRadius: 5
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "nearest", intersect: false },
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            boxWidth: 12,
+            color: "#1e293b",
+            font: { size: 12, weight: 500 }
+          }
+        },
+        tooltip: {
+          backgroundColor: "rgba(30,41,59,0.9)",
+          titleFont: { size: 13, weight: "bold" },
+          bodyFont: { size: 12 },
+          padding: 10,
+          displayColors: false
+        },
+        zoom: {
+          zoom: {
+            wheel: { enabled: true },     // Zoom molette
+            pinch: { enabled: true },     // Zoom tactile
+            mode: "xy"
+          },
+          pan: {
+            enabled: true,
+            mode: "xy",
+            modifierKey: "shift"          // Pan avec SHIFT + drag
+          },
+          limits: {
+            y: { min: 0 }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: "Date",
+            color: "#334155",
+            font: { size: 13, weight: "bold" }
+          },
+          ticks: { color: "#475569" },
+          grid: { color: "rgba(148,163,184,0.2)" }
+        },
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: "Occurrences par thème",
+            color: "#334155",
+            font: { size: 13, weight: "bold" }
+          },
+          ticks: { color: "#475569" },
+          grid: { color: "rgba(148,163,184,0.2)" }
+        }
+      }
+    }
+  });
+
+  // bouton de réinitialisation du zoom zoom toyoto
+  const resetBtn = document.getElementById("resetZoomBtn");
+  if (resetBtn) {
+    resetBtn.onclick = () => this.charts.main.resetZoom();
+  }
 }
 
-function addFeed() { app.addFeed(); }
-function addTheme() { app.addTheme(); }
+  prepareChartData() {
+    if (!this.articles || this.articles.length === 0) {
+      return { dates: [], themes: [] };
+    }
 
-// Initialisation DOM ready
-document.addEventListener("DOMContentLoaded", function() { app.init(); });
+    const dateSet = new Set();
+    this.articles.forEach(a => {
+      const d = new Date(a.date || a.pubDate);
+      if (!isNaN(d)) dateSet.add(d.toISOString().split("T")[0]);
+    });
+    const dates = Array.from(dateSet).sort();
 
-// Export global pour debug
-window.app = app;
+    const themeCounts = {};
+    this.articles.forEach(a => {
+      const day = new Date(a.date || a.pubDate).toISOString().split("T")[0];
+      (a.themes || []).forEach(t => {
+        if (!themeCounts[t]) themeCounts[t] = {};
+        themeCounts[t][day] = (themeCounts[t][day] || 0) + 1;
+      });
+    });
+
+    const themeList = Object.keys(themeCounts).slice(0, 8);
+    const colorPalette = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#a855f7", "#84cc16", "#f43f5e"];
+
+    const themes = themeList.map((t, i) => ({
+      name: t,
+      color: colorPalette[i % colorPalette.length],
+      values: dates.map(d => themeCounts[t][d] || 0)
+    }));
+
+    return { dates, themes };
+  },
+};
+
+/* -------------------- BOOTSTRAP -------------------- */
+window.addEventListener("DOMContentLoaded", () => app.init());

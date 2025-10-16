@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
         /* Reset et base */
         * {
@@ -685,6 +685,8 @@
             <button class="export-btn csv" onclick="app.exportData('csv')">📥 Export CSV</button>
             <button class="export-btn stats" onclick="app.showLearningStats()">📊 Stats</button>
             <button class="export-btn ia" onclick="app.runAIAnalysis()">🧠 Analyse IA</button>
+            <button id="resetZoomBtn" onclick="app.charts.main.resetZoom()">Réinitialiser le zoom</button>
+
         </div>
 
         <div class="stats-grid" id="statsGrid">

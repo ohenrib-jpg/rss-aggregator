@@ -126,39 +126,39 @@ class ChartManager {
     }
 
     prepareChartData() {
-        if (!this.app.articles || !this.app.themes || this.app.articles.length === 0) {
-            return { dates: ["Aucune donnée"], themes: [] };
-        }
-        const periods = this.groupByPeriod(this.app.articles);
-        const themesData = this.processThemesData(periods);
-        return { dates: Object.keys(periods).sort(), themes: themesData };
+    if (!this.app.articles || !this.app.themes || this.app.articles.length === 0) {
+        return { dates: [], themes: [] };
     }
 
-    groupByPeriod(articles) {
-        const periods = {};
-        articles.forEach(article => {
-            const date = new Date(article.pubDate || article.date);
-            let periodKey;
-            switch (this.timeScale) {
-                case "day": periodKey = date.toISOString().split("T")[0]; break;
-                case "week": {
-                    const weekStart = new Date(date); weekStart.setDate(date.getDate() - date.getDay());
-                    periodKey = weekStart.toISOString().split("T")[0];
-                    break;
-                }
-                case "month": periodKey = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`; break;
-                case "quarter": {
-                    const quarter = Math.floor(date.getMonth()/3) + 1;
-                    periodKey = `${date.getFullYear()}-Q${quarter}`; break;
-                }
-                default: periodKey = date.toISOString().split("T")[0];
-            }
-            if (!periods[periodKey]) periods[periodKey] = { date: periodKey, articles: [], themeCounts: {} };
-            periods[periodKey].articles.push(article);
-            (article.themes || []).forEach(theme => { periods[periodKey].themeCounts[theme] = (periods[periodKey].themeCounts[theme] || 0) + 1; });
+    // Construire un set of dates (ISO date strings)
+    const dateSet = new Set();
+    this.app.articles.forEach(a => {
+        const d = new Date(a.pubDate || a.date);
+        if (!isNaN(d)) dateSet.add(d.toISOString().split("T")[0]);
+    });
+    const dates = Array.from(dateSet).sort();
+
+    // Assurer liste des Themes
+    const availableThemes = this.getAvailableThemes();
+    const chosen = availableThemes.filter(t => this.selectedThemes.has(t.name));
+    const MAX = 8;
+    let themesToShow = chosen.length ? chosen : availableThemes.slice(0, MAX);
+
+    // Caler les dates et les themes (sql, je te deteste)
+    const themeObjects = themesToShow.map(t => {
+        const values = dates.map(date => {
+            // count articles on this date that include theme.name
+            const count = (this.app.articles || []).filter(a => {
+                const d = new Date(a.pubDate || a.date).toISOString().split("T")[0];
+                return d === date && (a.themes || []).includes(t.name);
+            }).length;
+            return count;
         });
-        return periods;
-    }
+        return { name: t.name, color: t.color, values: values, total: values.reduce((a,b)=>a+b,0) };
+    });
+
+    return { dates: dates, themes: themeObjects };
+}
 
     processThemesData(periods) {
         const availableThemes = this.getAvailableThemes();
