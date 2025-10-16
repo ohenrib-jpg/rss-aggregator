@@ -669,173 +669,180 @@ window.app = (function () {
     m.style.padding = msg ? '10px' : '0';
   }
 
-  // ========== FONCTIONS D'EXPORT ==========
-  function toCSV(arr) {
-    if (!Array.isArray(arr)) return "";
-    const headers = ["id","date","title","link","sentiment","confidence","themes","summary"];
-    const rows = arr.map(a => headers.map(h => {
-      let v = a[h] !== undefined ? a[h] : (h === "themes" ? (Array.isArray(a.themes) ? a.themes.join(";") : "") : "");
-      if (v === null || v === undefined) v = "";
-      if (typeof v === 'object') v = JSON.stringify(v);
-      return `"${String(v).replace(/"/g, '""')}"`;
-    }).join(","));
-    return [headers.join(","), ...rows].join("\n");
-  }
+// ========== FONCTIONS D'EXPORT ==========
+function toCSV(arr) {
+  if (!Array.isArray(arr)) return "";
+  const headers = ["id","date","title","link","sentiment","confidence","themes","summary"];
+  const rows = arr.map(a => headers.map(h => {
+    let v = a[h] !== undefined ? a[h] : (h === "themes" ? (Array.isArray(a.themes) ? a.themes.join(";") : "") : "");
+    if (v === null || v === undefined) v = "";
+    if (typeof v === 'object') v = JSON.stringify(v);
+    return `"${String(v).replace(/"/g, '""')}"`;
+  }).join(","));
+  return [headers.join(","), ...rows].join("\n");
+}
 
-  function downloadBlob(blob, filename) { 
-    const url = URL.createObjectURL(blob); 
-    const a = document.createElement("a"); 
-    a.href = url; 
-    a.download = filename; 
-    document.body.appendChild(a); 
-    a.click(); 
-    a.remove(); 
-    setTimeout(() => URL.revokeObjectURL(url), 1000); 
-  }
+function downloadBlob(blob, filename) { 
+  const url = URL.createObjectURL(blob); 
+  const a = document.createElement("a"); 
+  a.href = url; 
+  a.download = filename; 
+  document.body.appendChild(a); 
+  a.click(); 
+  a.remove(); 
+  setTimeout(() => URL.revokeObjectURL(url), 1000); 
+}
 
-  function exportData(type = "json") {
-    const payload = { 
-      generatedAt: new Date().toISOString(), 
-      summary: state.summary || {}, 
-      metrics: state.metrics || {}, 
-      articles: state.articles || [] 
-    };
-    if (type === "json") {
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      downloadBlob(blob, `rss-aggregator-export-${new Date().toISOString().slice(0,10)}.json`);
-    } else {
-      const csv = toCSV(state.articles || []);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      downloadBlob(blob, `rss-aggregator-export-${new Date().toISOString().slice(0,10)}.csv`);
-    }
-  }
-
-  async function showLearningStats() {
-    const modal = qs("#learningStatsModal");
-    const container = qs("#modalLearningStats") || qs("#learningStats");
-    if (!container) return;
-    try {
-      const stats = await apiGET("/learning-stats");
-      container.innerHTML = `
-        <div style="padding: 20px;">
-          <h4>Statistiques d'Apprentissage IA</h4>
-          <p>Articles traités: ${stats.total_articles_processed}</p>
-          <p>Précision du sentiment: ${(stats.sentiment_accuracy * 100).toFixed(1)}%</p>
-          <p>Précision des thèmes: ${(stats.theme_detection_accuracy * 100).toFixed(1)}%</p>
-          <p>Temps de traitement moyen: ${stats.avg_processing_time}s</p>
-          <p>Version du modèle: ${stats.model_version}</p>
-        </div>
-      `;
-    } catch (e) {
-      container.innerHTML = "<div class='loading'>Statistiques d'apprentissage non disponibles</div>";
-    }
-    if (modal) modal.style.display = "block";
-  }
-
-  // ========== GESTION DE L'UI ==========
-  window.showTab = function (target, ev) {
-    const mapping = { 
-      analysis: "#analysisTab", trends: "#trendsTab", metrics: "#metricsTab", 
-      sentiment: "#sentimentTab", learning: "#learningTab", feeds: "#feedsTab", 
-      themes: "#themesTab", articles: "#articlesTab" 
-    };
-    const sel = mapping[target] || `#${target}Tab`;
-    const tabs = qsa(".tab");
-    tabs.forEach(t => t.classList.remove("active"));
-    const elms = tabs.filter(t => {
-      try {
-        return (t.getAttribute("onclick") || "").includes("'" + target + "'");
-      } catch (e) { return false; }
-    });
-    if (elms.length) elms[0].classList.add("active");
-    const sections = qsa(".tab-content");
-    sections.forEach(s => s.classList.remove("active"));
-    const targetSection = qs(sel);
-    if (targetSection) targetSection.classList.add("active");
-    
-    if (target === "metrics") loadMetrics().then(() => renderMetricsUI()).catch(() => {});
-    if (target === "analysis") { renderThemeChart(); renderTimelineChart(); }
-    if (target === "feeds") loadFeeds();
-    if (target === "themes") loadThemes();
+function exportData(type = "json") {
+  const payload = { 
+    generatedAt: new Date().toISOString(), 
+    summary: state.summary || {}, 
+    metrics: state.metrics || {}, 
+    articles: state.articles || [] 
   };
+  if (type === "json") {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    downloadBlob(blob, `rss-aggregator-export-${new Date().toISOString().slice(0,10)}.json`);
+  } else {
+    const csv = toCSV(state.articles || []);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    downloadBlob(blob, `rss-aggregator-export-${new Date().toISOString().slice(0,10)}.csv`);
+  }
+}
 
-  function attachUIBindings() {
-    const jsonBtn = qs(".export-btn.json");
-    const csvBtn = qs(".export-btn.csv");
-    const statsBtn = qs(".export-btn.stats");
-    if (jsonBtn) jsonBtn.addEventListener("click", () => exportData("json"));
-    if (csvBtn) csvBtn.addEventListener("click", () => exportData("csv"));
-    if (statsBtn) statsBtn.addEventListener("click", () => showLearningStats());
-    
-    const refreshBtn = qs("#refreshBtn");
-    if (refreshBtn) refreshBtn.addEventListener("click", manualRefresh);
-    
-    const modal = qs("#learningStatsModal");
-    if (modal) {
-      const close = modal.querySelector(".close");
-      if (close) close.addEventListener("click", () => modal.style.display = "none");
-      window.addEventListener("click", (e) => { if (e.target === modal) modal.style.display = "none"; });
-    }
-    
-    qsa(".tab").forEach(t => {
-      t.addEventListener("click", (ev) => {
-        const onclick = t.getAttribute("onclick");
-        if (onclick) {
-          const match = onclick.match(/showTab\(['"]([^'"]+)['"]/);
-          if (match) {
-            showTab(match[1], ev);
-            return;
-          }
+async function showLearningStats() {
+  const modal = qs("#learningStatsModal");
+  const container = qs("#modalLearningStats") || qs("#learningStats");
+  if (!container) return;
+  try {
+    const stats = await apiGET("/learning-stats");
+    container.innerHTML = `
+      <div style="padding: 20px;">
+        <h4>Statistiques d'Apprentissage IA</h4>
+        <p>Articles traités: ${stats.total_articles_processed}</p>
+        <p>Précision du sentiment: ${(stats.sentiment_accuracy * 100).toFixed(1)}%</p>
+        <p>Précision des thèmes: ${(stats.theme_detection_accuracy * 100).toFixed(1)}%</p>
+        <p>Temps de traitement moyen: ${stats.avg_processing_time}s</p>
+        <p>Version du modèle: ${stats.model_version}</p>
+      </div>
+    `;
+  } catch (e) {
+    container.innerHTML = "<div class='loading'>Statistiques d'apprentissage non disponibles</div>";
+  }
+  if (modal) modal.style.display = "block";
+}
+
+// ========== GESTION DE L'UI ==========
+window.showTab = function (target, ev) {
+  const mapping = { 
+    analysis: "#analysisTab", trends: "#trendsTab", metrics: "#metricsTab", 
+    sentiment: "#sentimentTab", learning: "#learningTab", feeds: "#feedsTab", 
+    themes: "#themesTab", articles: "#articlesTab" 
+  };
+  const sel = mapping[target] || `#${target}Tab`;
+  const tabs = qsa(".tab");
+  tabs.forEach(t => t.classList.remove("active"));
+  const elms = tabs.filter(t => {
+    try {
+      return (t.getAttribute("onclick") || "").includes("'" + target + "'");
+    } catch (e) { return false; }
+  });
+  if (elms.length) elms[0].classList.add("active");
+  const sections = qsa(".tab-content");
+  sections.forEach(s => s.classList.remove("active"));
+  const targetSection = qs(sel);
+  if (targetSection) targetSection.classList.add("active");
+  
+  if (target === "metrics") loadMetrics().then(() => renderMetricsUI()).catch(() => {});
+  if (target === "analysis") { renderThemeChart(); renderTimelineChart(); }
+  if (target === "feeds") loadFeeds();
+  if (target === "themes") loadThemes();
+};
+
+function attachUIBindings() {
+  const jsonBtn = qs(".export-btn.json");
+  const csvBtn = qs(".export-btn.csv");
+  const statsBtn = qs(".export-btn.stats");
+  if (jsonBtn) jsonBtn.addEventListener("click", () => exportData("json"));
+  if (csvBtn) csvBtn.addEventListener("click", () => exportData("csv"));
+  if (statsBtn) statsBtn.addEventListener("click", () => showLearningStats());
+  
+  const refreshBtn = qs("#refreshBtn");
+  if (refreshBtn) refreshBtn.addEventListener("click", manualRefresh);
+  
+  const modal = qs("#learningStatsModal");
+  if (modal) {
+    const close = modal.querySelector(".close");
+    if (close) close.addEventListener("click", () => modal.style.display = "none");
+    window.addEventListener("click", (e) => { if (e.target === modal) modal.style.display = "none"; });
+  }
+  
+  qsa(".tab").forEach(t => {
+    t.addEventListener("click", (ev) => {
+      const onclick = t.getAttribute("onclick");
+      if (onclick) {
+        const match = onclick.match(/showTab\(['"]([^'"]+)['"]/);
+        if (match) {
+          showTab(match[1], ev);
+          return;
         }
-      });
+      }
     });
-  }
+  });
+}
 
-  // ========== INITIALISATION ==========
-  async function init() {
-    console.log("🚀 Initialisation de l'application...");
-    console.log("🔧 Configuration API:", state.apiBase);
+// ========== INITIALISATION ==========
+async function init() {
+  console.log("🚀 Initialisation de l'application...");
+  console.log("🔧 Configuration API:", state.apiBase);
+  
+  attachUIBindings();
+  
+  try {
+    console.log("📥 Chargement des articles...");
+    await loadArticles();
     
-    attachUIBindings();
+    console.log("🎨 Chargement des thèmes...");
+    await loadThemes();
     
-    try {
-      console.log("📥 Chargement des articles...");
-      await loadArticles();
-      
-      console.log("🎨 Chargement des thèmes...");
-      await loadThemes();
-      
-      console.log("📰 Chargement des flux...");
-      await loadFeeds();
-      
-      console.log("📊 Chargement des métriques...");
-      await loadMetrics();
-      
-      console.log("📈 Rendu des graphiques...");
-      renderThemeChart();
-      renderTimelineChart();
-      renderMetricsUI();
-      
-      startAutoRefresh();
-      
-      console.log("✅ Application initialisée avec succès");
-      console.log("📊 Données chargées:", {
-        articles: state.articles.length,
-        themes: state.themes.length,
-        metrics: !!state.metrics
-      });
-      
-    } catch (error) {
-      console.error("❌ Erreur lors de l'initialisation:", error);
-      setMessage("Erreur lors du chargement des données");
-    }
+    console.log("📰 Chargement des flux...");
+    await loadFeeds();
+    
+    console.log("📊 Chargement des métriques...");
+    await loadMetrics();
+    
+    console.log("📈 Rendu des graphiques...");
+    renderThemeChart();
+    renderTimelineChart();
+    renderMetricsUI();
+    
+    startAutoRefresh();
+    
+    console.log("✅ Application initialisée avec succès");
+    console.log("📊 Données chargées:", {
+      articles: state.articles.length,
+      themes: state.themes.length,
+      metrics: !!state.metrics
+    });
+    
+  } catch (error) {
+    console.error("❌ Erreur lors de l'initialisation:", error);
+    setMessage("Erreur lors du chargement des données");
   }
+}
 
-  return {
-    init, manualRefresh, exportData, showLearningStats, 
-    loadArticles, loadMetrics, loadThemes, loadFeeds,
-    _state: state
-  };
+// ========== EXPORT DES FONCTIONS ==========
+return {
+  init, 
+  manualRefresh, 
+  exportData, 
+  showLearningStats, 
+  loadArticles, 
+  loadMetrics, 
+  loadThemes, 
+  loadFeeds,
+  _state: state
+};
 })();
 
 window.addEventListener("load", () => { 
