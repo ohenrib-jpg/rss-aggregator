@@ -280,6 +280,8 @@ def api_refresh():
         logger.exception("api_refresh failed")
         return json_error("refresh failed: " + str(e))
 
+print("Routes Flask disponibles:")
+print(app.url_map)
 
 # --- main ---
 if __name__ == "__main__":
