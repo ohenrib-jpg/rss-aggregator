@@ -1,60 +1,79 @@
-import os, glob, datetime
-import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
+import json
+import datetime
+from typing import List, Dict, Any
+from modules.db_manager import get_connection, init_db
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'analyses')
+# Appelé une seule fois au lancement de l’appli
+init_db()
 
-def ensure_data_dir():
-    d = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'analyses'))
-    os.makedirs(d, exist_ok=True)
-    return d
 
-def save_analysis_batch(batch):
-    """Append to a daily parquet file"""
-    ensure_data_dir()
+def save_analysis_batch(batch: List[Dict[str, Any]]) -> None:
+    """
+    Sauvegarde une liste d'analyses dans la base PostgreSQL.
+    Chaque élément du batch est un dictionnaire contenant les clés principales.
+    """
     if not batch:
         return
-    df = pd.DataFrame(batch)
-    date = datetime.datetime.utcnow().strftime('%Y-%m-%d')
-    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'analyses', f'{date}.parquet'))
-    try:
-        if os.path.exists(path):
-            table_old = pq.read_table(path)
-            df_old = table_old.to_pandas()
-            df_out = pd.concat([df_old, df], ignore_index=True)
-        else:
-            df_out = df
-        table = pa.Table.from_pandas(df_out)
-        pq.write_table(table, path, compression='snappy')
-    except Exception as e:
-        fallback = path + '.csv.gz'
-        df.to_csv(fallback, index=False, compression='gzip')
 
-def load_recent_analyses(days=7):
-    ensure_data_dir()
-    dirpath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'analyses'))
-    files = sorted(glob.glob(os.path.join(dirpath, '*.parquet')), reverse=True)
-    if not files:
-        return None
-    tables = []
-    for p in files[:days]:
-        try:
-            t = pq.read_table(p)
-            tables.append(t.to_pandas())
-        except Exception:
-            continue
-    if not tables:
-        return None
-    import pandas as pd
-    return pd.concat(tables, ignore_index=True)
+    conn = get_connection()
+    cur = conn.cursor()
 
-def summarize_analyses(df):
-    if df is None or len(df)==0:
-        return {}
-    out = {}
-    out['count'] = len(df)
-    out['mean_confidence'] = float(df.get('confidence', df.get('confidence', None)).mean()) if 'confidence' in df else None
-    out['median_confidence'] = float(df.get('confidence', df.get('confidence', None)).median()) if 'confidence' in df else None
-    out['mean_bayesian'] = float(df.get('bayesian_posterior', df.get('bayesian_posterior', None)).mean()) if 'bayesian_posterior' in df else None
-    return out
+    for analysis in batch:
+        cur.execute("""
+            INSERT INTO analyses
+            (title, source, date, summary, confidence,
+             corroboration_count, corroboration_strength, bayesian_posterior, raw)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            analysis.get("title"),
+            analysis.get("source"),
+            analysis.get("date", datetime.datetime.utcnow()),
+            analysis.get("summary"),
+            float(analysis.get("confidence", 0)),
+            int(analysis.get("corroboration_count", 0)),
+            float(analysis.get("corroboration_strength", 0)),
+            float(analysis.get("bayesian_posterior", 0)),
+            json.dumps(analysis, ensure_ascii=False)
+        ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def load_recent_analyses(days: int = 7) -> list[dict]:
+    """
+    Charge les analyses effectuées dans les X derniers jours.
+    Retourne une liste de dictionnaires.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT * FROM analyses
+        WHERE date > NOW() - INTERVAL '%s days'
+        ORDER BY date DESC
+    """, (days,))
+    results = cur.fetchall()
+    cur.close()
+    conn.close()
+    return results
+
+
+def summarize_analyses() -> dict:
+    """
+    Calcule des métriques agrégées globales.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT
+            COUNT(*) AS total_articles,
+            AVG(confidence) AS avg_confidence,
+            AVG(bayesian_posterior) AS avg_posterior,
+            AVG(corroboration_strength) AS avg_corroboration
+        FROM analyses;
+    """)
+    summary = cur.fetchone()
+    cur.close()
+    conn.close()
+    return summary or {}
