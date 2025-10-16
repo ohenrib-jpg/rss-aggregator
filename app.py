@@ -11,8 +11,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
-from flask import Flask, request, jsonify
+from flask impdbdort Flask, request, jsonify
 from flask_cors import CORS
+
+from modules.feed_scraper import refresh_all_feeds, get_all_feeds
+from modules.scheduler import start_scheduler
 
 # Modules internes (doivent exister dans rss_aggregator/modules/)
 from modules.db_manager import init_db, get_database_url, get_connection, put_connection
@@ -36,6 +39,106 @@ try:
 except Exception as e:
     DB_CONFIGURED = False
     logger.exception("Erreur init_db: %s", e)
+
+# Ajouter après l'initialisation DB
+@app.before_first_request
+def startup_tasks():
+    """Tâches de démarrage"""
+    try:
+        # Démarrer le scheduler
+        start_scheduler()
+        logger.info("✅ Scheduler démarré")
+    except Exception as e:
+        logger.error(f"❌ Erreur démarrage scheduler: {e}")
+
+# Mettre à jour api_refresh
+@app.route("/api/refresh", methods=["POST"])
+def api_refresh():
+    """Endpoint pour déclencher un refresh manuel"""
+    try:
+        logger.info("🔄 Refresh manuel déclenché via API")
+        
+        # Lancer l'actualisation
+        saved_count = refresh_all_feeds()
+        
+        return json_ok({
+            "success": True, 
+            "message": f"Refresh terminé - {saved_count} nouveaux articles",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        logger.exception("api_refresh failed")
+        return json_error("refresh failed: " + str(e))
+
+# Mettre à jour api_feeds pour gérer les flux réels
+@app.route("/api/feeds", methods=["GET", "POST", "DELETE"])
+def api_feeds():
+    """Gestion complète des flux RSS"""
+    try:
+        if request.method == "GET":
+            feeds = get_all_feeds()
+            return json_ok({"success": True, "feeds": feeds})
+            
+        data = request.get_json(force=True, silent=True) or {}
+        
+        if request.method == "POST":
+            # Ajouter un nouveau flux
+            new_feed_url = data.get("url", "").strip()
+            if not new_feed_url:
+                return json_error("URL de flux manquante", 400)
+                
+            conn = None
+            try:
+                conn = get_connection()
+                cur = conn.cursor()
+                cur.execute(
+                    "INSERT INTO feeds (url, title, is_active) VALUES (%s, %s, %s)",
+                    (new_feed_url, data.get("title", ""), True)
+                )
+                conn.commit()
+                cur.close()
+                
+                logger.info(f"✅ Nouveau flux ajouté: {new_feed_url}")
+                return json_ok({"success": True, "message": "Flux ajouté avec succès"})
+                
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                logger.error(f"❌ Erreur ajout flux: {e}")
+                return json_error(f"Erreur ajout flux: {e}")
+            finally:
+                if conn:
+                    put_connection(conn)
+                    
+        if request.method == "DELETE":
+            # Supprimer un flux
+            feed_url = data.get("url", "").strip()
+            if not feed_url:
+                return json_error("URL de flux manquante", 400)
+                
+            conn = None
+            try:
+                conn = get_connection()
+                cur = conn.cursor()
+                cur.execute("DELETE FROM feeds WHERE url = %s", (feed_url,))
+                conn.commit()
+                cur.close()
+                
+                logger.info(f"✅ Flux supprimé: {feed_url}")
+                return json_ok({"success": True, "message": "Flux supprimé avec succès"})
+                
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                logger.error(f"❌ Erreur suppression flux: {e}")
+                return json_error(f"Erreur suppression flux: {e}")
+            finally:
+                if conn:
+                    put_connection(conn)
+                    
+    except Exception as e:
+        logger.exception("api_feeds failed")
+        return json_error("feeds error: " + str(e))
 
 
 # ------- Helpers internes -------
