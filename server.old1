@@ -1,11 +1,9 @@
-// server.js - Version améliorée basée sur VOTRE code existant
+// server.js - Backend Node.js complet pour RSS Aggregator
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Parser = require('rss-parser');
 const { pool, initializeDatabase } = require('./db/database');
-const sqlStorage = require('./modules/sql_storage_manager');
-const axios = require('axios');
 
 const app = express();
 const parser = new Parser({
@@ -15,17 +13,33 @@ const parser = new Parser({
   }
 });
 
-// ✅ VOTRE CONFIGURATION EXISTANTE
+// Configuration
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 
-// ✅ VOTRE MIDDLEWARE EXISTANT
+// Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static('public'));
 
-// ✅ VOTRE SYSTÈME D'ANALYSE DE SENTIMENT EXISTANT (conservé intégralement)
+// Initialisation de la base de données
+let dbInitialized = false;
+
+async function ensureDatabaseInitialized() {
+  if (!dbInitialized) {
+    try {
+      await initializeDatabase();
+      dbInitialized = true;
+      console.log('✅ Base de données PostgreSQL prête');
+    } catch (error) {
+      console.error('❌ Erreur initialisation base de données:', error);
+      throw error;
+    }
+  }
+}
+
+// Système d'analyse de sentiment
 class SelfLearningSentiment {
   constructor() {
     this.lexicon = new Map();
@@ -138,34 +152,18 @@ class SelfLearningSentiment {
       emotionalIntensity: Math.abs(normalizedScore)
     };
   }
-
-  async updateWordStats(word, score) {
-    try {
-      await pool.query(`
-        INSERT INTO sentiment_lexicon (word, score, usage_count, total_score, consistency)
-        VALUES ($1, $2, 1, $3, 0.5)
-        ON CONFLICT (word) 
-        DO UPDATE SET 
-          usage_count = sentiment_lexicon.usage_count + 1,
-          total_score = sentiment_lexicon.total_score + $3,
-          last_used = CURRENT_TIMESTAMP
-      `, [word, score, score]);
-    } catch (error) {
-      console.error('❌ Erreur mise à jour stats mot:', error);
-    }
-  }
 }
 
 // Initialiser l'analyseur de sentiment
 const sentimentAnalyzer = new SelfLearningSentiment();
 
-// ✅ VOTRE GESTIONNAIRE POSTGRESQL EXISTANT (amélioré)
+// Gestionnaire de données PostgreSQL
 class PostgreSQLManager {
   constructor() {
     this.sentimentAnalyzer = sentimentAnalyzer;
   }
 
-  // ARTICLES - VOTRE CODE EXISTANT
+  // Articles
   async saveArticle(articleData) {
     const { title, content, link, pubDate, feedUrl, sentiment } = articleData;
     
@@ -180,11 +178,7 @@ class PostgreSQLManager {
           pub_date = EXCLUDED.pub_date,
           sentiment_score = EXCLUDED.sentiment_score,
           sentiment_type = EXCLUDED.sentiment_type,
-          sentiment_confidence = EXCLUDED.sentiment_confidence,
-          created_at = CASE 
-            WHEN articles.created_at IS NULL THEN CURRENT_TIMESTAMP 
-            ELSE articles.created_at 
-          END
+          sentiment_confidence = EXCLUDED.sentiment_confidence
         RETURNING *
       `, [
         title, content, link, pubDate, feedUrl, 
@@ -260,7 +254,7 @@ class PostgreSQLManager {
         RETURNING *
       `, [name, keywords, color || '#6366f1', description]);
 
-      console.log(`✅ Thème "${name}" sauvegardé avec ON CONFLICT`);
+      console.log(`✅ Thème "${name}" sauvegardé`);
       return result.rows[0];
     } catch (error) {
       console.error(`❌ Erreur sauvegarde thème "${name}":`, error.message);
@@ -319,7 +313,7 @@ class PostgreSQLManager {
 // Initialiser le gestionnaire PostgreSQL
 const dbManager = new PostgreSQLManager();
 
-// ✅ VOTRE FONCTION DE RAFRAÎCHISSEMENT EXISTANTE (conservée)
+// Fonction de rafraîchissement des données
 async function refreshData() {
   let client;
   try {
@@ -412,9 +406,17 @@ async function refreshData() {
   }
 }
 
-// ========== ROUTES API CORRIGÉES ==========
+// ========== ROUTES API ==========
 
-// ✅ TOUTES LES ROUTES AVEC PRÉFIXE /api/ EXPLICITE
+// Middleware pour initialisation base de données
+app.use(async (req, res, next) => {
+  try {
+    await ensureDatabaseInitialized();
+    next();
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Base de données non disponible' });
+  }
+});
 
 // 1. Articles
 app.get('/api/articles', async (req, res) => {
@@ -448,6 +450,31 @@ app.get('/api/themes', async (req, res) => {
   }
 });
 
+app.post('/api/themes', async (req, res) => {
+  try {
+    const { name, keywords, color, description } = req.body;
+    
+    if (!name || !keywords) {
+      return res.status(400).json({ success: false, error: 'Nom et mots-clés requis' });
+    }
+
+    const themeData = {
+      name,
+      keywords: Array.isArray(keywords) ? keywords : keywords.split(',').map(k => k.trim()),
+      color,
+      description
+    };
+
+    await dbManager.saveTheme(themeData);
+    const themes = await dbManager.getThemes();
+    
+    res.json({ success: true, themes: themes });
+  } catch (error) {
+    console.error('❌ Erreur API themes POST:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 3. Flux RSS
 app.get('/api/feeds', async (req, res) => {
   try {
@@ -455,6 +482,42 @@ app.get('/api/feeds', async (req, res) => {
     res.json(feeds);
   } catch (error) {
     console.error('❌ Erreur API feeds GET:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/feeds', async (req, res) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL requise' });
+    }
+
+    await dbManager.saveFeed(url);
+    const feeds = await dbManager.getFeeds();
+    
+    res.json({ success: true, feeds: feeds });
+  } catch (error) {
+    console.error('❌ Erreur API feeds POST:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/feeds', async (req, res) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL requise' });
+    }
+
+    await dbManager.deleteFeed(url);
+    const feeds = await dbManager.getFeeds();
+    
+    res.json({ success: true, feeds: feeds });
+  } catch (error) {
+    console.error('❌ Erreur API feeds DELETE:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -475,7 +538,7 @@ app.post('/api/refresh', async (req, res) => {
   }
 });
 
-// 5. Routes manquantes pour le frontend
+// 5. Statistiques de sentiment (route manquante)
 app.get('/api/sentiment/stats', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -505,11 +568,14 @@ app.get('/api/sentiment/stats', async (req, res) => {
     console.error('❌ Erreur stats sentiment:', error);
     res.json({
       success: true,
-      stats: { total: 0, positive: 0, negative: 0, neutral: 0, average_score: 0 }
+      stats: {
+        total: 0, positive: 0, negative: 0, neutral: 0, average_score: 0
+      }
     });
   }
 });
 
+// 6. Rapport géopolitique (route manquante)
 app.get('/api/geopolitical/report', async (req, res) => {
   try {
     const report = {
@@ -523,7 +589,8 @@ app.get('/api/geopolitical/report', async (req, res) => {
         },
         crisisZones: [
           {country: "Ukraine", riskLevel: "high", riskScore: 0.89, mentions: 45},
-          {country: "Middle East", riskLevel: "high", riskScore: 0.78, mentions: 32}
+          {country: "Middle East", riskLevel: "high", riskScore: 0.78, mentions: 32},
+          {country: "Taiwan Strait", riskLevel: "medium", riskScore: 0.65, mentions: 28}
         ]
       }
     };
@@ -534,11 +601,13 @@ app.get('/api/geopolitical/report', async (req, res) => {
   }
 });
 
+// 7. Zones de crise (route manquante)
 app.get('/api/geopolitical/crisis-zones', async (req, res) => {
   try {
     const zones = [
       {id: 1, name: "Ukraine", risk_level: "high", score: 0.89},
-      {id: 2, name: "Gaza Strip", risk_level: "high", score: 0.82}
+      {id: 2, name: "Gaza Strip", risk_level: "high", score: 0.82},
+      {id: 3, name: "Taiwan Strait", risk_level: "medium", score: 0.65}
     ];
     res.json({ success: true, zones: zones });
   } catch (error) {
@@ -547,11 +616,13 @@ app.get('/api/geopolitical/crisis-zones', async (req, res) => {
   }
 });
 
+// 8. Relations géopolitiques (route manquante)
 app.get('/api/geopolitical/relations', async (req, res) => {
   try {
     const relations = [
       {country1: "USA", country2: "China", relation: "tense", score: -0.7},
-      {country1: "Russia", country2: "EU", relation: "conflict", score: -0.9}
+      {country1: "Russia", country2: "EU", relation: "conflict", score: -0.9},
+      {country1: "France", country2: "Germany", relation: "cooperative", score: 0.8}
     ];
     res.json({ success: true, relations: relations });
   } catch (error) {
@@ -560,6 +631,7 @@ app.get('/api/geopolitical/relations', async (req, res) => {
   }
 });
 
+// 9. Statistiques d'apprentissage (route manquante)
 app.get('/api/learning-stats', async (req, res) => {
   try {
     const stats = {
@@ -577,10 +649,11 @@ app.get('/api/learning-stats', async (req, res) => {
   }
 });
 
-// Santé
+// 10. Santé de l'application
 app.get('/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT 1 as test');
+    
     res.json({ 
       status: 'OK', 
       database: 'connected',
@@ -597,7 +670,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Route racine
+// 11. Route racine
 app.get('/', (req, res) => {
   res.json({
     message: 'RSS Aggregator avec PostgreSQL et IA',
@@ -617,10 +690,10 @@ app.get('/', (req, res) => {
   });
 });
 
-// ✅ DÉMARRAGE DU SERVEUR (VOTRE CODE EXISTANT)
+// Démarrage du serveur
 async function startServer() {
   try {
-    await initializeDatabase();
+    await ensureDatabaseInitialized();
     
     // Charger les données par défaut
     try {
@@ -664,7 +737,15 @@ async function startServer() {
       console.log(`🌍 Environnement: ${NODE_ENV}`);
       console.log(`🗄️ Base de données: PostgreSQL`);
       console.log(`🔄 Rafraîchissement auto: 30 minutes`);
-      console.log(`📊 Routes API disponibles avec préfixe /api/`);
+      console.log(`📊 Routes disponibles:`);
+      console.log(`   - GET  /api/articles`);
+      console.log(`   - GET  /api/themes`);
+      console.log(`   - GET  /api/feeds`);
+      console.log(`   - POST /api/refresh`);
+      console.log(`   - GET  /api/sentiment/stats`);
+      console.log(`   - GET  /api/geopolitical/*`);
+      console.log(`   - GET  /api/learning-stats`);
+      console.log(`   - GET  /health`);
     });
 
   } catch (error) {
