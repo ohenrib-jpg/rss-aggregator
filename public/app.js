@@ -34,64 +34,98 @@ const app = {
         this.loadArticles();
     },
     
-    // Chargement des thèmes depuis PostgreSQL
     loadThemes: function() {
-        fetch(`${this.config.apiUrl}/api/themes`)
-            .then(response => response.json())
-            .then(themes => {
-                this.themes = themes.map(theme => ({
-                    name: theme.name,
-                    keywords: theme.keywords,
-                    color: theme.color || '#6366f1',
-                    description: theme.description || ''
-                }));
-                console.log(`📚 ${this.themes.length} thèmes chargés depuis PostgreSQL`);
-                this.updateThemesList();
-                if (this.chartManager) {
-                    this.chartManager.updateThemeSelector();
-                }
-            })
-            .catch(error => {
-                console.error('❌ Erreur chargement thèmes:', error);
-                this.showMessage('Erreur chargement thèmes', 'error');
-            });
-    },
+    fetch(`${this.config.apiUrl}/api/themes`)
+        .then(response => response.json())
+        .then(themes => {
+            this.themes = themes.map(theme => ({
+                name: theme.name,
+                keywords: theme.keywords || [],
+                color: theme.color || '#6366f1',
+                description: theme.description || ''
+            }));
+            console.log(`📚 ${this.themes.length} thèmes chargés depuis PostgreSQL`);
+            this.updateThemesList();
+            if (this.chartManager) {
+                this.chartManager.updateThemeSelector();
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erreur chargement thèmes:', error);
+            // Fallback vers localStorage si API échoue
+            const savedThemes = localStorage.getItem('themes');
+            if (savedThemes) {
+                this.themes = JSON.parse(savedThemes);
+                console.log(`📚 ${this.themes.length} thèmes chargés depuis localStorage (fallback)`);
+            }
+        });
+},
     
-    // Chargement des flux RSS
-    loadFeeds: function() {
-        fetch(`${this.config.apiUrl}/api/feeds`)
-            .then(response => response.json())
-            .then(feeds => {
-                this.feeds = feeds;
-                console.log(`📰 ${this.feeds.length} flux RSS chargés`);
-                this.updateFeedsList();
-            })
-            .catch(error => {
-                console.error('❌ Erreur chargement flux:', error);
-                this.showMessage('Erreur chargement flux RSS', 'error');
-            });
-    },
-    
-    // Chargement des articles depuis PostgreSQL
-    loadArticles: function() {
-        fetch(`${this.config.apiUrl}/api/articles`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    this.articles = data.articles;
-                    this.stats = {
-                        totalArticles: data.totalArticles,
-                        lastUpdate: data.lastUpdate
-                    };
-                    console.log(`📄 ${this.articles.length} articles chargés depuis PostgreSQL`);
-                    this.updateDashboard();
-                }
-            })
-            .catch(error => {
-                console.error('❌ Erreur chargement articles:', error);
-                this.showMessage('Erreur chargement articles', 'error');
-            });
-    },
+    // Chargement des flux RSS depuis PostgreSQL (au lieu de localStorage)
+loadFeeds: function() {
+    fetch(`${this.config.apiUrl}/api/feeds`)
+        .then(response => response.json())
+        .then(feeds => {
+            this.feeds = feeds;
+            console.log(`📰 ${this.feeds.length} flux RSS chargés depuis PostgreSQL`);
+            this.updateFeedsList();
+        })
+        .catch(error => {
+            console.error('❌ Erreur chargement flux:', error);
+            // Fallback vers localStorage si API échoue
+            const savedFeeds = localStorage.getItem('feeds');
+            if (savedFeeds) {
+                this.feeds = JSON.parse(savedFeeds);
+                console.log(`📰 ${this.feeds.length} flux chargés depuis localStorage (fallback)`);
+            }
+        });
+},
+
+// Chargement des articles depuis PostgreSQL (au lieu de localStorage)
+loadArticles: function() {
+    fetch(`${this.config.apiUrl}/api/articles`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.articles = data.articles;
+                this.stats = {
+                    totalArticles: data.totalArticles,
+                    lastUpdate: data.lastUpdate
+                };
+                console.log(`📄 ${this.articles.length} articles chargés depuis PostgreSQL`);
+                this.updateDashboard();
+                this.updateLastUpdate();
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erreur chargement articles:', error);
+            // Fallback vers localStorage si API échoue
+            const savedArticles = localStorage.getItem('articles');
+            if (savedArticles) {
+                this.articles = JSON.parse(savedArticles);
+                console.log(`📄 ${this.articles.length} articles chargés depuis localStorage (fallback)`);
+                this.updateDashboard();
+            }
+        });
+},
+
+// === fonctions saveThemes et saveFeeds ===
+
+saveThemes: function() {
+    // Ne plus sauvegarder dans localStorage, c'est géré par PostgreSQL
+    console.log('💾 Thèmes gérés par PostgreSQL');
+},
+
+saveFeeds: function() {
+    // Ne plus sauvegarder dans localStorage, c'est géré par PostgreSQL
+    console.log('💾 Flux gérés par PostgreSQL');
+},
+
+saveArticles: function() {
+    // Ne plus sauvegarder dans localStorage, c'est géré par PostgreSQL
+    console.log('💾 Articles gérés par PostgreSQL');
+    this.updateLastUpdate();
+},
     
     // Initialisation des graphiques
     initializeCharts: function() {

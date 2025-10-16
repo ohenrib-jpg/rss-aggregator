@@ -310,6 +310,68 @@ class ChartManager {
     }
 }
 
+// === NOUVELLE FONCTION pour ce smurks de sql de mes===
+
+processThemesData(periods) {
+    const availableThemes = this.getAvailableThemes();
+    const totalArticles = this.app.articles.length;
+    
+    // Filtrer les thèmes sélectionnés
+    let themesToShow = availableThemes.filter(theme => 
+        this.selectedThemes.has(theme.name)
+    );
+    
+    // 🎯 AMÉLIORATION : Grouper les thèmes mineurs si trop nombreux
+    const MAX_THEMES_DISPLAY = 8; // Maximum de courbes à afficher
+    
+    if (themesToShow.length > MAX_THEMES_DISPLAY) {
+        // Trier par nombre d'articles (décroissant)
+        themesToShow.sort((a, b) => b.count - a.count);
+        
+        // Garder les N premiers thèmes
+        const majorThemes = themesToShow.slice(0, MAX_THEMES_DISPLAY - 1);
+        const minorThemes = themesToShow.slice(MAX_THEMES_DISPLAY - 1);
+        
+        // Grouper les thèmes mineurs en une seule courbe "Autres"
+        if (minorThemes.length > 0) {
+            majorThemes.push({
+                name: `Autres (${minorThemes.length} thèmes)`,
+                color: '#94a3b8',
+                isGrouped: true,
+                componentThemes: minorThemes,
+                count: minorThemes.reduce((sum, t) => sum + t.count, 0)
+            });
+        }
+        
+        themesToShow = majorThemes;
+        
+        console.log(`📊 Graphique optimisé : ${MAX_THEMES_DISPLAY - 1} thèmes principaux + ${minorThemes.length} groupés en "Autres"`);
+    }
+    
+    // Préparer les données pour chaque thème
+    return themesToShow.map(theme => {
+        const values = Object.keys(periods)
+            .sort()
+            .map(period => {
+                if (theme.isGrouped) {
+                    // Somme des thèmes groupés
+                    return theme.componentThemes.reduce((sum, compTheme) => {
+                        return sum + (periods[period].themeCounts[compTheme.name] || 0);
+                    }, 0);
+                } else {
+                    return periods[period].themeCounts[theme.name] || 0;
+                }
+            });
+        
+        return {
+            name: theme.name,
+            color: theme.color,
+            values: values,
+            total: theme.count || values.reduce((a, b) => a + b, 0)
+        };
+    });
+}
+
 // Initialisation globale
 let chartManager;
 
