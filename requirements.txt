@@ -5,4 +5,5 @@ rapidfuzz==3.5.2
 feedparser==6.0.11
 requests==2.31.0
 dotenv==0.9.9
-charts
+gunicorn==23.0.0
+charts.js==4.5.1
