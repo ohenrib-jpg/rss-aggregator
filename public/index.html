@@ -1067,55 +1067,55 @@ async function loadSentimentOverview() {
     }
 }
 
-// Améliorer la fonction showTab pour charger les données
-const originalShowTab = window.showTab;
-window.showTab = function(target, ev) {
-    if (originalShowTab) {
-        originalShowTab(target, ev);
-    }
-    
-    // Charger les données spécifiques à l'onglet
-    if (target === 'geopolitical') {
-        loadGeopoliticalData();
-    } else if (target === 'learning') {
-        loadLearningData();
-    } else if (target === 'sentiment') {
-        loadSentimentOverview();
-    }
-};
-
-// Initialisation au chargement
-window.addEventListener('load', function() {
-    console.log('🎯 Interface UI avancée chargée');
-    
-    // Charger les paramètres
-    loadSettings();
-    
-    // Vérifier le statut backend
-    checkBackendStatus();
-    setInterval(checkBackendStatus, 30000); // Toutes les 30s
-    
-    // Initialiser le ChartManager après app.js
-    setTimeout(function() {
-        if (window.app && window.ChartManager && window.app._state) {
-            try {
-                if (!window.app.chartManager) {
-                    window.app.chartManager = new ChartManager(window.app._state);
-                    console.log('✅ ChartManager initialisé avec zoom/pan');
-                }
-            } catch(e) {
-                console.warn('⚠️ ChartManager init failed:', e);
-            }
+    // Améliorer la fonction showTab pour charger les données
+    const originalShowTab = window.showTab;
+    window.showTab = function(target, ev) {
+        if (originalShowTab) {
+            originalShowTab(target, ev);
         }
-    }, 2000);
-    
-    // Fermer les modals en cliquant à l'extérieur
-    window.onclick = function(event) {
-        if (event.target.classList.contains('modal')) {
-            event.target.style.display = 'none';
+        
+        // Charger les données spécifiques à l'onglet
+        if (target === 'geopolitical') {
+            loadGeopoliticalData();
+        } else if (target === 'learning') {
+            loadLearningData();
+        } else if (target === 'sentiment') {
+            loadSentimentOverview();
         }
     };
-});
+
+    // Initialisation au chargement
+    window.addEventListener('load', function() {
+        console.log('🎯 Interface UI avancée chargée');
+        
+        // Charger les paramètres
+        loadSettings();
+        
+        // Vérifier le statut backend
+        checkBackendStatus();
+        setInterval(checkBackendStatus, 30000); // Toutes les 30s
+        
+        // Initialiser le ChartManager après app.js
+        setTimeout(function() {
+            if (window.app && window.ChartManager && window.app._state) {
+                try {
+                    if (!window.app.chartManager) {
+                        window.app.chartManager = new ChartManager(window.app._state);
+                        console.log('✅ ChartManager initialisé avec zoom/pan');
+                    }
+                } catch(e) {
+                    console.warn('⚠️ ChartManager init failed:', e);
+                }
+            }
+        }, 2000);
+        
+        // Fermer les modals en cliquant à l'extérieur
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        };
+    });
 </script>
 </body>
 </html>
