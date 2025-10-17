@@ -16,6 +16,9 @@ from psycopg2.extras import RealDictCursor
 # --- Flask setup ---
 app = Flask(__name__)
 CORS(app)
+
+init_db()
+
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), 'reports')
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
@@ -500,13 +503,11 @@ class AdvancedIAAnalyzer:
             'confidence': 0.9,
             'analyse_contextuelle': context,
             'recherche_web': web,
-            'analyse_thematique': thematic,
+            'aanalyse_thematique': thematic,
             'analyse_biases': biases,
             'recommandations_globales': ['Analyse complète effectuée']
         }
 
 # --- Lancement de l'application ---
 if __name__ == '__main__':
-    init_db()
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
