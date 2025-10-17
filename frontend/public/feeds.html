@@ -1,0 +1,51 @@
+
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gestion des Flux — GEOPOLIS</title>
+  <link rel="stylesheet" href="admin.css">
+  <script src="ui-manager.js" defer></script>
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-left"><a href="index.html">Accueil</a><span class="branding">Agrégateur RSS amélioré V.3.2 - toujours en construction - bases de donnees sql - Deeplearning V.2 - Prêt pour l'IA locale ou distante</span></div>
+  <div class="nav-right">
+    <a href="themes.html">Thèmes</a>
+    <a href="feeds.html">Flux</a>
+    <a href="ai.html">Analyse IA</a>
+  </div>
+</nav>
+<main class="container">
+  <div class="card">
+    <h2>Gérer les flux RSS</h2>
+    <div id="feeds-notice"></div>
+    <form id="feed-form" onsubmit="event.preventDefault(); if(this.querySelector('[name=id]').value) updateFeedFromForm(this, document.getElementById('feeds-notice')); else createFeedFromForm(this, document.getElementById('feeds-notice'));">
+      <input type="hidden" name="id" value="">
+      <div class="form-row">
+        <input class="input" name="title" placeholder="Titre (optionnel)">
+        <input class="input" name="url" placeholder="URL du flux (ex: https://...)">
+      </div>
+      <div class="form-row">
+        <select class="input" name="theme_id" id="feed-theme-select"></select>
+        <label class="small"><input type="checkbox" name="enabled" checked> Activer</label>
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+      </div>
+    </form>
+    <div class="card" style="margin-top:12px;"><div class="table-controls"><input class="search-input" id="feeds-search" placeholder="Recherche (titre, url)"><div id="feeds-pager"></div></div>
+      <table class="table">
+        <thead><tr><th>Titre</th><th>URL</th><th>Thème</th><th>Actif</th><th>Actions</th></tr></thead>
+        <tbody id="feeds-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+document.addEventListener('DOMContentLoaded', async ()=>{
+  await loadThemesInto(document.getElementById('feed-theme-select')); const feedsTbody = document.getElementById('feeds-tbody'); const feedsNotice = document.getElementById('feeds-notice'); const feedsSearch = document.getElementById('feeds-search'); let feedsPage=1; feedsSearch.addEventListener('input', ()=>{ feedsPage=1; refreshFeedsTable(feedsTbody, feedsNotice, {page:feedsPage, per:10, search: feedsSearch.value}); }); await refreshFeedsTable(feedsTbody, feedsNotice, {page:feedsPage, per:10, search: ''});
+  await refreshFeedsTable(document.getElementById('feeds-tbody'), document.getElementById('feeds-notice'));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Analyse IA — GEOPOLIS</title>
+  <link rel="stylesheet" href="admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="ui-manager.js" defer></script>
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-left"><a href="index.html">Accueil</a></div>
+  <div class="nav-right">
+    <a href="themes.html">Thèmes</a>
+    <a href="feeds.html">Flux</a>
+    <a href="ai.html">Analyse IA</a>
+  </div>
+</nav>
+<main class="container">
+  <div class="card">
+    <h2>Analyse IA</h2>
+    <div id="ai-notice"></div>
+    <div class="form-row">
+      <select id="ai-source-select" class="input"></select>
+      <button class="btn btn-primary" id="analyze-btn">Analyser</button>
+      <button class="btn btn-ghost" id="analyze-all-btn">Analyser tout</button>
+    </div>
+    <div id="ai-result" class="card" style="margin-top:12px; display:none;"></div>
+    <canvas id="ai-chart" style="max-width:700px; margin-top:12px;"></canvas>
+  </div>
+</main>
+<script>
+async function loadSources(){
+  const themes = await apiFetch('/api/themes');
+  const feeds = await apiFetch('/api/feeds');
+  const sel = document.getElementById('ai-source-select');
+  sel.innerHTML = '<option value="">-- sélectionner thème ou flux --</option>';
+  (themes||[]).forEach(t=>{ const o=document.createElement('option'); o.value='theme:'+t.id; o.text='Thème: '+t.name; sel.appendChild(o); });
+  (feeds||[]).forEach(f=>{ const o=document.createElement('option'); o.value='feed:'+f.id; o.text='Flux: '+(f.title||f.url); sel.appendChild(o); });
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  await loadSources();
+  document.getElementById('analyze-btn').addEventListener('click', async ()=>{
+    const v = document.getElementById('ai-source-select').value;
+    if(!v) return alert('Sélectionner une source');
+    const [type,id] = v.split(':');
+    const res = await apiFetch('/api/analyze', {method:'POST', body: JSON.stringify({type, id})});
+    showAIResult(res);
+  });
+  document.getElementById('analyze-all-btn').addEventListener('click', async ()=>{
+    const res = await apiFetch('/api/analyze_all', {method:'POST', body: JSON.stringify({})});
+    showAIResult(res);
+  });
+});
+
+function showAIResult(res){
+  const box = document.getElementById('ai-result');
+  box.style.display='block';
+  box.innerHTML = '<pre style="white-space:pre-wrap">'+JSON.stringify(res, null, 2)+'</pre>';
+  // if scores available, plot
+  if(res && res.scores){
+    const ctx = document.getElementById('ai-chart').getContext('2d');
+    if(window.__aiChart) window.__aiChart.destroy();
+    window.__aiChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: Object.keys(res.scores), datasets: [{ label: 'Scores', data: Object.values(res.scores) }] },
+      options: { plugins: { zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode:'x' } } } }
+    });
+  }
+}
+</script>
+</body>
+</html>

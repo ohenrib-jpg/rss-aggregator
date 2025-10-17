@@ -1,0 +1,250 @@
+/* ============================================================
+   STYLE PRINCIPAL - GEOPOLIS RSS AGGREGATOR
+   Version PostgreSQL - Chart.js + Zoom
+   ============================================================ */
+
+/* ----- Réinitialisation basique ----- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: #f5f6fa;
+  color: #222;
+  overflow-x: hidden;
+}
+
+/* ----- Barre supérieure ----- */
+header {
+  background: #1e293b;
+  color: #fff;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+header h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+button,
+.header-buttons button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+  background: #1d4ed8;
+  transform: scale(1.04);
+}
+
+/* ----- Conteneur principal ----- */
+main {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 3fr 1.2fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ----- Tableau de bord gauche (graphiques, résumés) ----- */
+.dashboard {
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.dashboard h2 {
+  margin-bottom: 12px;
+  font-size: 1.2rem;
+  color: #1e293b;
+  border-left: 4px solid #2563eb;
+  padding-left: 8px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.summary-item {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-width: 160px;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.summary-item b {
+  color: #334155;
+}
+
+/* ----- Graphique principal ----- */
+.chart-container {
+  position: relative;
+  height: 420px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+canvas#chart-themes {
+  width: 100% !important;
+  height: 420px !important;
+  border-radius: 12px;
+  background: #fafafa;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+  padding: 5px;
+}
+
+/* Effet zoom visuel */
+canvas#chart-themes:active {
+  cursor: grabbing;
+}
+canvas#chart-themes:hover {
+  cursor: grab;
+}
+
+/* ----- Liste des thèmes ----- */
+#themes-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.theme-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f1f5f9;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.theme-item:hover {
+  background: #e2e8f0;
+  transform: scale(1.02);
+}
+
+.theme-count {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+/* ----- Liste des articles ----- */
+#articles-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 15px;
+  overflow-y: auto;
+  max-height: 700px;
+}
+
+.article-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+  transition: transform 0.2s;
+}
+
+.article-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+}
+
+.article-card h4 {
+  font-size: 1.05rem;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.article-card .meta {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.article-card .confidence {
+  font-size: 0.85rem;
+  color: #0ea5e9;
+  font-weight: 500;
+}
+
+/* ----- Scrollbars ----- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #64748b;
+}
+
+/* ----- Pied de page ----- */
+footer {
+  text-align: center;
+  color: #94a3b8;
+  padding: 10px 0 20px 0;
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   OPTIONS DE ZOOM / DÉZOOM POUR CHART.JS
+   ============================================================ */
+
+/*
+  Chart.js Zoom plugin permet :
+  - Zoom molette souris ou pinch tactile
+  - Pan (déplacement) avec clic ou drag
+*/
+.chart-container canvas {
+  cursor: crosshair;
+}
+
+/* Bouton reset zoom */
+#resetZoomBtn {
+  background: #334155;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-top: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+#resetZoomBtn:hover {
+  background: #1e293b;
+}

@@ -1,0 +1,46 @@
+
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gestion des Thèmes — GEOPOLIS</title>
+  <link rel="stylesheet" href="admin.css">
+  <script src="ui-manager.js" defer></script>
+</head>
+<body>
+<nav class="topnav">
+  <div class="nav-left"><a href="index.html">Accueil</a><span class="branding">Agrégateur RSS amélioré V.3.2 - toujours en construction - bases de donnees sql - Deeplearning V.2 - Prêt pour l'IA locale ou distante</span></div>
+  <div class="nav-right">
+    <a href="themes.html">Thèmes</a>
+    <a href="feeds.html">Flux</a>
+    <a href="ai.html">Analyse IA</a>
+  </div>
+</nav>
+<main class="container">
+  <div class="card">
+    <h2>Gérer les thèmes</h2>
+    <div id="themes-notice"></div>
+    <form id="theme-form" onsubmit="event.preventDefault(); if(this.querySelector('[name=id]').value) updateThemeFromForm(this, document.getElementById('themes-notice')); else createThemeFromForm(this, document.getElementById('themes-notice'));">
+      <input type="hidden" name="id" value="">
+      <div class="form-row">
+        <input class="input" name="name" placeholder="Nom du thème">
+        <input class="input" name="keywords" placeholder="Mots-clés (séparés par , )">
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+      </div>
+    </form>
+    <div class="card" style="margin-top:12px;"><div class="table-controls"><input class="search-input" id="themes-search" placeholder="Recherche (nom, mots-clés)"><div id="themes-pager"></div></div>
+      <table class="table">
+        <thead><tr><th>Nom</th><th>Mots-clés</th><th>Actif</th><th>Actions</th></tr></thead>
+        <tbody id="themes-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+document.addEventListener('DOMContentLoaded', async ()=>{
+  const themesTbody = document.getElementById('themes-tbody'); const themesNotice = document.getElementById('themes-notice'); const themesSearch = document.getElementById('themes-search'); let themesPage=1; themesSearch.addEventListener('input', ()=>{ themesPage=1; refreshThemesTable(themesTbody, themesNotice, {page:themesPage, per:10, search: themesSearch.value}); }); await refreshThemesTable(themesTbody, themesNotice, {page:themesPage, per:10, search: ''});
+});
+</script>
+</body>
+</html>
