@@ -1,0 +1,811 @@
+{
+  "corrections": [
+    {
+      "articleId": "https://www.lemonde.fr/politique/live/2025/10/13/en-direct-gouvernement-lecornu-marine-le-pen-annonce-que-le-rn-va-deposer-une-motion-de-censure-des-lundi_6645554_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.684234",
+      "title": "EN DIRECT, gouvernement Lecornu : Le RN et La France insoumise annoncent qu’ils vont déposer chacun une motion de censure dès lundi"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/les-decodeurs/article/2025/10/13/qui-sont-les-35-ministres-du-gouvernement-lecornu-ii_6646042_4355770.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0.5,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.684234",
+      "title": "Qui sont les 35 ministres du gouvernement Lecornu II ?"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/13/gouvernement-lecornu-les-ministres-les-republicains-exclus-du-parti-pour-avoir-brave-les-consignes-de-bruno-retailleau_6646044_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.684234",
+      "title": "Gouvernement Lecornu : les ministres Les Républicains exclus du parti pour avoir bravé les consignes de Bruno Retailleau"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/11/du-gouvernement-lecornu-i-a-lecornu-ii-la-semaine-ou-edouard-philippe-a-consomme-la-rupture-avec-emmanuel-macron_6645754_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0.2,
+          "nouveauté": 0.25,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.685247",
+      "title": "Du gouvernement Lecornu I à Lecornu II, la semaine où Edouard Philippe a consommé la rupture avec Emmanuel Macron"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/international/live/2025/10/12/en-direct-gaza-israel-et-le-hamas-se-preparent-a-la-liberation-des-otages-prevue-lundi_6645703_3210.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.685247",
+      "title": "EN DIRECT, Gaza : Israël et le Hamas se préparent à la libération des otages prévue lundi"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/13/legislatives-partielles-les-deux-scrutins-de-dimanche-ne-modifient-pas-les-equilibres-a-l-assemblee-nationale_6646041_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.685247",
+      "title": "Législatives partielles : les deux scrutins de dimanche ne modifient pas les équilibres à l’Assemblée nationale"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/intimites/article/2025/10/12/elles-menent-de-front-maternite-et-lutte-contre-le-cancer-du-sein-c-est-epuisant-de-faire-semblant-d-aller-bien_6645956_6190330.html",
+      "confidence": 0.7,
+      "correctedScore": 0.9359999999999999,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": 0.9359999999999999,
+        "score_original": 1.2
+      },
+      "originalScore": 1.2,
+      "timestamp": "2025-10-13T02:18:04.685247",
+      "title": "Elles mènent de front maternité et lutte contre le cancer du sein : « C’est épuisant de faire semblant d’aller bien »"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/livres/article/2025/10/12/lydie-salvayre-la-fiction-est-souvent-un-camouflage-commode_6645933_3260.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.686246",
+      "title": "Lydie Salvayre : « La fiction est souvent un camouflage commode »"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/international/live/2025/10/12/en-direct-guerre-en-ukraine-si-la-russie-persiste-dans-son-obstination-belliciste-elle-devra-en-payer-le-prix-declare-emmanuel-macron_6645867_3210.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0.2,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.686246",
+      "title": "EN DIRECT, guerre en Ukraine : « Si la Russie persiste dans son obstination belliciste, elle devra en payer le prix », déclare Emmanuel Macron"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/12/philippe-de-villiers-l-aiguillon-de-vincent-bollore-en-vue-de-2027_6645890_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:04.686246",
+      "title": "Philippe de Villiers, l’aiguillon de Vincent Bolloré en vue de 2027"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/live/2025/10/13/en-direct-gouvernement-lecornu-marine-le-pen-annonce-que-le-rn-va-deposer-une-motion-de-censure-des-lundi_6645554_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.859164",
+      "title": "EN DIRECT, gouvernement Lecornu : Le RN et La France insoumise annoncent qu’ils vont déposer chacun une motion de censure dès lundi"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/les-decodeurs/article/2025/10/13/qui-sont-les-35-ministres-du-gouvernement-lecornu-ii_6646042_4355770.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0.5,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.860164",
+      "title": "Qui sont les 35 ministres du gouvernement Lecornu II ?"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/13/gouvernement-lecornu-les-ministres-les-republicains-exclus-du-parti-pour-avoir-brave-les-consignes-de-bruno-retailleau_6646044_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.860164",
+      "title": "Gouvernement Lecornu : les ministres Les Républicains exclus du parti pour avoir bravé les consignes de Bruno Retailleau"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/11/du-gouvernement-lecornu-i-a-lecornu-ii-la-semaine-ou-edouard-philippe-a-consomme-la-rupture-avec-emmanuel-macron_6645754_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0.2,
+          "nouveauté": 0.25,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.860164",
+      "title": "Du gouvernement Lecornu I à Lecornu II, la semaine où Edouard Philippe a consommé la rupture avec Emmanuel Macron"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/international/live/2025/10/12/en-direct-gaza-israel-et-le-hamas-se-preparent-a-la-liberation-des-otages-prevue-lundi_6645703_3210.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.861164",
+      "title": "EN DIRECT, Gaza : Israël et le Hamas se préparent à la libération des otages prévue lundi"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/13/legislatives-partielles-les-deux-scrutins-de-dimanche-ne-modifient-pas-les-equilibres-a-l-assemblee-nationale_6646041_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "national",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.861164",
+      "title": "Législatives partielles : les deux scrutins de dimanche ne modifient pas les équilibres à l’Assemblée nationale"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/intimites/article/2025/10/12/elles-menent-de-front-maternite-et-lutte-contre-le-cancer-du-sein-c-est-epuisant-de-faire-semblant-d-aller-bien_6645956_6190330.html",
+      "confidence": 0.7,
+      "correctedScore": 0.9359999999999999,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": 0.9359999999999999,
+        "score_original": 1.2
+      },
+      "originalScore": 1.2,
+      "timestamp": "2025-10-13T02:18:27.861164",
+      "title": "Elles mènent de front maternité et lutte contre le cancer du sein : « C’est épuisant de faire semblant d’aller bien »"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/livres/article/2025/10/12/lydie-salvayre-la-fiction-est-souvent-un-camouflage-commode_6645933_3260.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.861164",
+      "title": "Lydie Salvayre : « La fiction est souvent un camouflage commode »"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/international/live/2025/10/12/en-direct-guerre-en-ukraine-si-la-russie-persiste-dans-son-obstination-belliciste-elle-devra-en-payer-le-prix-declare-emmanuel-macron_6645867_3210.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0.2,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.862194",
+      "title": "EN DIRECT, guerre en Ukraine : « Si la Russie persiste dans son obstination belliciste, elle devra en payer le prix », déclare Emmanuel Macron"
+    },
+    {
+      "articleId": "https://www.lemonde.fr/politique/article/2025/10/12/philippe-de-villiers-l-aiguillon-de-vincent-bollore-en-vue-de-2027_6645890_823448.html",
+      "confidence": 0.7,
+      "correctedScore": -0.11999999999999997,
+      "deepAnalysis": {
+        "analyse_biases": {
+          "biais_détectés": [
+            "Source à vérifier"
+          ],
+          "recommandations": [
+            "Recouper avec des sources fiables"
+          ],
+          "score_credibilite": 0.7
+        },
+        "analyse_contextuelle": {
+          "controverses": [],
+          "impact": 0,
+          "nouveauté": 0,
+          "portée": "local",
+          "urgence": 0
+        },
+        "analyse_thematique": {},
+        "confiance": 0.7,
+        "recherche_web": {
+          "coherence": 1,
+          "faits_cles": [],
+          "recommendations": [
+            "Écart sentiment détecté - vérification recommandée"
+          ],
+          "sentiment_moyen": -1,
+          "sources_consultées": 2
+        },
+        "recommandations_globales": [],
+        "score_corrigé": -0.11999999999999997,
+        "score_original": 0
+      },
+      "originalScore": 0,
+      "timestamp": "2025-10-13T02:18:27.862194",
+      "title": "Philippe de Villiers, l’aiguillon de Vincent Bolloré en vue de 2027"
+    }
+  ],
+  "lastCorrection": "2025-10-13T01:18:28.120Z",
+  "stats": {
+    "totalCorrections": 20,
+    "accuracyImprovement": 0,
+    "falsePositivesCorrected": 0,
+    "contextImprovements": 0
+  }
+}

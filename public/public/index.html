@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Agrégateur RSS Thématique + IA V.1.2</title>
+    <link rel="stylesheet" href="public/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    
+</head>
+<body>
+
+<header>
+  <h1>RSS Aggregator — GEOPOLIS</h1>
+  <div class="header-buttons">
+    <button id="refresh-btn">🔄 Actualiser</button>
+    <button id="resetZoomBtn">🔍 Réinitialiser zoom</button>
+  </div>
+</header>
+
+<main>
+  <section class="dashboard">
+    <h2>Évolution des thèmes</h2>
+    <div class="chart-container">
+      <canvas id="chart-themes"></canvas>
+    </div>
+    <div id="summary-container" class="summary"></div>
+  </section>
+
+  <aside class="sidebar">
+    <div class="card">
+      <h3>Thèmes</h3>
+      <div id="themes-container"></div>
+    </div>
+
+    <div class="card">
+      <h3>Articles récents</h3>
+      <div id="articles-container"></div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <small>© GEOPOLIS — RSS Aggregator</small>
+</footer>
+
+<script src="public/chart-manager.js"></script>
+<script src="public/app.js"></script>
+</body>
+</html>
+    

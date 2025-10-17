@@ -98,7 +98,7 @@ def test_all_endpoints():
     
     results = {}
     for endpoint, method in endpoints:
-        print(f"Test {endpoint}...", end=" ")
+        print(f"Test {endpoint}# TODO: complete logic", end=" ")
         success, data = test_endpoint(endpoint, method)
         results[endpoint] = {"success": success, "data": data}
         
