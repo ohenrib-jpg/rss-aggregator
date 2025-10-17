@@ -93,7 +93,7 @@ window.app = (function () {
 
   // ========== FONCTIONS DE CHARGEMENT ==========
   async function loadArticles() {
-    setMessage("Chargement des articles...");
+    setMessage("Chargement des articles");
     try {
       const json = await apiGET("/articles");
       
@@ -237,7 +237,7 @@ window.app = (function () {
   }
 
   async function loadMetrics(days = 30) {
-    setMessage("Chargement des métriques...");
+    setMessage("Chargement des métriques");
     try {
       let sentimentStats = null;
       
@@ -301,10 +301,10 @@ window.app = (function () {
     const btn = qs("#refreshBtn");
     if (btn) {
       btn.disabled = true;
-      btn.textContent = "⏳ Rafraîchissement...";
+      btn.textContent = "⏳ Rafraîchissement";
     }
     
-    setMessage("Rafraîchissement manuel en cours...");
+    setMessage("Rafraîchissement manuel en cours");
     try {
       await apiPOST("/refresh", {});
       await Promise.all([loadArticles(), loadFeeds(), loadThemes()]);
@@ -397,7 +397,7 @@ window.app = (function () {
           <small>Confiance: ${Number(sentimentConfidence || a.confidence || 0).toFixed(2)}</small> • 
           <small>${sentimentEmoji} ${sentimentType} (${sentimentScore.toFixed(2)})</small>
         </div>
-        <p>${escapeHtml((a.summary || "").substring(0, 200))}${a.summary && a.summary.length > 200 ? '...' : ''}</p>
+        <p>${escapeHtml((a.summary || "").substring(0, 200))}${a.summary && a.summary.length > 200 ? '' : ''}</p>
         <div class="themes">${(a.themes||[]).map(t => '<span class="tag">'+escapeHtml(t)+'</span>').join(" ")}</div>
       `;
       container.appendChild(card);
@@ -679,7 +679,7 @@ function toCSV(arr) {
     if (typeof v === 'object') v = JSON.stringify(v);
     return `"${String(v).replace(/"/g, '""')}"`;
   }).join(","));
-  return [headers.join(","), ...rows].join("\n");
+  return [headers.join(","), rows].join("\n");
 }
 
 function downloadBlob(blob, filename) { 
@@ -793,25 +793,25 @@ function attachUIBindings() {
 
 // ========== INITIALISATION ==========
 async function init() {
-  console.log("🚀 Initialisation de l'application...");
+  console.log("🚀 Initialisation de l'application");
   console.log("🔧 Configuration API:", state.apiBase);
   
   attachUIBindings();
   
   try {
-    console.log("📥 Chargement des articles...");
+    console.log("📥 Chargement des articles");
     await loadArticles();
     
-    console.log("🎨 Chargement des thèmes...");
+    console.log("🎨 Chargement des thèmes");
     await loadThemes();
     
-    console.log("📰 Chargement des flux...");
+    console.log("📰 Chargement des flux");
     await loadFeeds();
     
-    console.log("📊 Chargement des métriques...");
+    console.log("📊 Chargement des métriques");
     await loadMetrics();
     
-    console.log("📈 Rendu des graphiques...");
+    console.log("📈 Rendu des graphiques");
     renderThemeChart();
     renderTimelineChart();
     renderMetricsUI();

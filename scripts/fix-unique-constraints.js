@@ -3,7 +3,7 @@ const { pool } = require('../db/database');
 async function fixUniqueConstraints() {
   let client;
   try {
-    console.log('🔧 Réparation des contraintes UNIQUE...');
+    console.log('🔧 Réparation des contraintes UNIQUE');
     
     client = await pool.connect();
     

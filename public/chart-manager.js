@@ -201,10 +201,10 @@ class ChartManager {
     }
 
     convertToCSV(data) {
-        const headers = ["Date", ...data.themes.map(theme => `"${theme.name}"`)];
+        const headers = ["Date", data.themes.map(theme => `"${theme.name}"`)];
         const rows = [headers.join(",")];
         data.dates.forEach((date, idx) => {
-            const row = [date, ...data.themes.map(theme => theme.values[idx] || 0)];
+            const row = [date, data.themes.map(theme => theme.values[idx] || 0)];
             rows.push(row.join(","));
         });
         return rows.join("\n");

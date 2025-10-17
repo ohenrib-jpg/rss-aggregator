@@ -38,11 +38,11 @@ pool.on('remove', () => {
 
 // Test de connexion avec meilleur debug
 async function testConnectionWithRetry(maxRetries = 5) {
-  console.log(`🔍 Test de connexion à PostgreSQL (${maxRetries} tentatives max)...`);
+  console.log(`🔍 Test de connexion à PostgreSQL (${maxRetries} tentatives max)`);
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🔄 Tentative ${attempt}/${maxRetries}...`);
+      console.log(`🔄 Tentative ${attempt}/${maxRetries}`);
       const client = await pool.connect();
       console.log(`✅ Connexion PostgreSQL réussie!`);
       
@@ -59,7 +59,7 @@ async function testConnectionWithRetry(maxRetries = 5) {
       
       if (attempt < maxRetries) {
         const delay = attempt * 2000; // Backoff exponentiel
-        console.log(`⏳ Nouvelle tentative dans ${delay/1000}s...`);
+        console.log(`⏳ Nouvelle tentative dans ${delay/1000}s`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -70,7 +70,7 @@ async function testConnectionWithRetry(maxRetries = 5) {
 // Fonction pour créer les contraintes UNIQUE manquantes
 async function ensureUniqueConstraints() {
   try {
-    console.log('🔍 Vérification des contraintes UNIQUE...');
+    console.log('🔍 Vérification des contraintes UNIQUE');
     
     const constraints = [
       { table: 'themes', column: 'name', name: 'themes_name_key' },
@@ -157,7 +157,7 @@ async function ensureUniqueConstraints() {
 // Initialiser la base de données
 async function initializeDatabase() {
   try {
-    console.log('🔄 Initialisation de la base de données...');
+    console.log('🔄 Initialisation de la base de données');
     
     const connectionOk = await testConnectionWithRetry();
     if (!connectionOk) {
@@ -279,11 +279,11 @@ async function initializeDatabase() {
     console.log('✅ Table usage_stats créée');
 
     // 🔥 CRÉER LES CONTRAINTES UNIQUE APRÈS LES TABLES
-    console.log('🔧 Création des contraintes UNIQUE...');
+    console.log('🔧 Création des contraintes UNIQUE');
     await ensureUniqueConstraints();
 
     // Créer les index pour les performances
-    console.log('📊 Création des index...');
+    console.log('📊 Création des index');
     try {
       await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_pub_date ON articles(pub_date)');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_sentiment ON articles(sentiment_score)');

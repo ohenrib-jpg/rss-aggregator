@@ -5,7 +5,7 @@ const path = require('path');
 
 async function migrateFromJSON() {
   try {
-    console.log('🚀 Début de la migration depuis JSON vers PostgreSQL...');
+    console.log('🚀 Début de la migration depuis JSON vers PostgreSQL');
 
     // S'assurer que la base est initialisée
     await initDatabase();
@@ -14,7 +14,7 @@ async function migrateFromJSON() {
     const themesPath = path.join(__dirname, '..', 'themes.json');
     if (fs.existsSync(themesPath)) {
       const themesData = JSON.parse(fs.readFileSync(themesPath, 'utf8'));
-      console.log(`📚 Migration de ${themesData.themes.length} thèmes...`);
+      console.log(`📚 Migration de ${themesData.themes.length} thèmes`);
       
       for (const theme of themesData.themes) {
         try {
@@ -30,7 +30,7 @@ async function migrateFromJSON() {
     const configPath = path.join(__dirname, '..', 'config.json');
     if (fs.existsSync(configPath)) {
       const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      console.log(`📡 Migration de ${configData.feeds.length} flux RSS...`);
+      console.log(`📡 Migration de ${configData.feeds.length} flux RSS`);
       
       let migratedFeeds = 0;
       for (const feedUrl of configData.feeds.slice(0, 20)) { // Limiter pour le test

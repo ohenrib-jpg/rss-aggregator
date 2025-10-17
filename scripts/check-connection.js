@@ -1,7 +1,7 @@
 const { pool, testConnectionWithRetry } = require('../db/database');
 
 async function checkConnection() {
-  console.log('🔍 Vérification de la connexion PostgreSQL...');
+  console.log('🔍 Vérification de la connexion PostgreSQL');
   
   const isConnected = await testConnectionWithRetry();
   

@@ -2,7 +2,7 @@ const { pool, initializeDatabase } = require('../db/database');
 
 async function initDatabase() {
   try {
-    console.log('🚀 Initialisation de la base de données PostgreSQL...');
+    console.log('🚀 Initialisation de la base de données PostgreSQL');
     
     // Test de connexion
     const client = await pool.connect();

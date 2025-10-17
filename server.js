@@ -217,7 +217,7 @@ const dbManager = new PostgreSQLManager();
 // ============ REFRESH FLUX RSS ============
 async function refreshData() {
   try {
-    console.log('🔄 Rafraîchissement des flux RSS...');
+    console.log('🔄 Rafraîchissement des flux RSS');
     const feeds = await dbManager.getFeeds();
     
     if (feeds.length === 0) {
