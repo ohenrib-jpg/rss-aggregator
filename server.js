@@ -1,36 +1,38 @@
-// server.js - Version améliorée basée sur VOTRE code existant
+// server.js - Version avec proxy vers Flask IA
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Parser = require('rss-parser');
-const { pool, initializeDatabase } = require('./db/database');
-const sqlStorage = require('./modules/sql_storage_manager');
 const axios = require('axios');
+const { pool, initializeDatabase } = require('./db/database');
 
 const app = express();
 const parser = new Parser({
   timeout: 10000,
-  customFields: {
-    item: ['content:encoded']
-  }
+  customFields: { item: ['content:encoded'] }
 });
 
-// ✅ VOTRE CONFIGURATION EXISTANTE
+// Configuration
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
+const FLASK_API_URL = process.env.FLASK_API_URL || 'https://rss-aggregator-2.onrender.com';
 
-// ✅ VOTRE MIDDLEWARE EXISTANT
+console.log(`🔧 Configuration:`);
+console.log(`   - Node.js port: ${PORT}`);
+console.log(`   - Flask API: ${FLASK_API_URL}`);
+console.log(`   - Environment: ${NODE_ENV}`);
+
+// Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static('public'));
 
-// ✅ VOTRE SYSTÈME D'ANALYSE DE SENTIMENT EXISTANT (conservé intégralement)
+// ============ ANALYSEUR DE SENTIMENT (LOCAL) ============
 class SelfLearningSentiment {
   constructor() {
     this.lexicon = new Map();
     this.loadLexicon();
-    
     this.negations = ['pas', 'non', 'ne', 'ni', 'aucun', 'rien', 'jamais', 'sans', 'guère'];
     this.intensifiers = {
       'très': 1.3, 'extrêmement': 1.5, 'vraiment': 1.2, 'particulièrement': 1.3,
@@ -46,7 +48,7 @@ class SelfLearningSentiment {
       });
       console.log(`📚 Lexique chargé: ${this.lexicon.size} mots`);
     } catch (error) {
-      console.error('❌ Erreur chargement lexique:', error);
+      console.warn('⚠️ Lexique DB non disponible, utilisation du lexique par défaut');
       this.loadDefaultLexicon();
     }
   }
@@ -62,7 +64,6 @@ class SelfLearningSentiment {
       'crise': -1.0, 'danger': -1.0, 'menace': -1.0, 'guerre': -2.0,
       'conflit': -1.8, 'violence': -1.8, 'sanction': -1.3, 'tension': -1.3
     };
-
     Object.entries(defaultWords).forEach(([word, score]) => {
       this.lexicon.set(word, score);
     });
@@ -78,10 +79,6 @@ class SelfLearningSentiment {
       .filter(word => word.length > 1);
   }
 
-  getWordScore(word) {
-    return this.lexicon.get(word) || 0;
-  }
-
   analyze(text) {
     if (!text || text.length < 10) {
       return { score: 0, sentiment: 'neutral', confidence: 0.05, wordCount: 0 };
@@ -90,15 +87,13 @@ class SelfLearningSentiment {
     const words = this.preprocessText(text);
     let totalScore = 0;
     let significantWords = 0;
-    let modifier = 1.0;
 
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
-      let wordScore = this.getWordScore(word);
-
+      let wordScore = this.lexicon.get(word) || 0;
       if (Math.abs(wordScore) < 0.1) continue;
 
-      // Gestion des négations
+      // Négations
       for (let j = Math.max(0, i - 2); j < i; j++) {
         if (this.negations.includes(words[j])) {
           wordScore *= -1.2;
@@ -106,7 +101,7 @@ class SelfLearningSentiment {
         }
       }
 
-      // Gestion des intensificateurs
+      // Intensificateurs
       for (let j = Math.max(0, i - 2); j < i; j++) {
         if (this.intensifiers[words[j]]) {
           wordScore *= this.intensifiers[words[j]];
@@ -118,12 +113,7 @@ class SelfLearningSentiment {
       significantWords++;
     }
 
-    let normalizedScore = 0;
-    if (significantWords > 0) {
-      normalizedScore = totalScore / significantWords;
-    }
-
-    // Déterminer le sentiment
+    let normalizedScore = significantWords > 0 ? totalScore / significantWords : 0;
     let sentiment = 'neutral';
     if (normalizedScore > 0.1) sentiment = 'positive';
     else if (normalizedScore < -0.1) sentiment = 'negative';
@@ -134,63 +124,31 @@ class SelfLearningSentiment {
       score: Math.round(normalizedScore * 100) / 100,
       sentiment: sentiment,
       confidence: Math.round(confidence * 100) / 100,
-      wordCount: significantWords,
-      emotionalIntensity: Math.abs(normalizedScore)
+      wordCount: significantWords
     };
-  }
-
-  async updateWordStats(word, score) {
-    try {
-      await pool.query(`
-        INSERT INTO sentiment_lexicon (word, score, usage_count, total_score, consistency)
-        VALUES ($1, $2, 1, $3, 0.5)
-        ON CONFLICT (word) 
-        DO UPDATE SET 
-          usage_count = sentiment_lexicon.usage_count + 1,
-          total_score = sentiment_lexicon.total_score + $3,
-          last_used = CURRENT_TIMESTAMP
-      `, [word, score, score]);
-    } catch (error) {
-      console.error('❌ Erreur mise à jour stats mot:', error);
-    }
   }
 }
 
-// Initialiser l'analyseur de sentiment
 const sentimentAnalyzer = new SelfLearningSentiment();
 
-// ✅ VOTRE GESTIONNAIRE POSTGRESQL EXISTANT (amélioré)
+// ============ GESTIONNAIRE POSTGRESQL ============
 class PostgreSQLManager {
-  constructor() {
-    this.sentimentAnalyzer = sentimentAnalyzer;
-  }
-
-  // ARTICLES - VOTRE CODE EXISTANT
   async saveArticle(articleData) {
     const { title, content, link, pubDate, feedUrl, sentiment } = articleData;
-    
     try {
       const result = await pool.query(`
         INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (link) 
-        DO UPDATE SET 
+        ON CONFLICT (link) DO UPDATE SET 
           title = EXCLUDED.title,
           content = EXCLUDED.content,
           pub_date = EXCLUDED.pub_date,
           sentiment_score = EXCLUDED.sentiment_score,
           sentiment_type = EXCLUDED.sentiment_type,
-          sentiment_confidence = EXCLUDED.sentiment_confidence,
-          created_at = CASE 
-            WHEN articles.created_at IS NULL THEN CURRENT_TIMESTAMP 
-            ELSE articles.created_at 
-          END
+          sentiment_confidence = EXCLUDED.sentiment_confidence
         RETURNING *
-      `, [
-        title, content, link, pubDate, feedUrl, 
-        sentiment?.score || 0, sentiment?.sentiment || 'neutral', sentiment?.confidence || 0
-      ]);
-
+      `, [title, content, link, pubDate, feedUrl, 
+          sentiment?.score || 0, sentiment?.sentiment || 'neutral', sentiment?.confidence || 0]);
       return result.rows[0];
     } catch (error) {
       console.error('❌ Erreur sauvegarde article:', error);
@@ -201,8 +159,7 @@ class PostgreSQLManager {
   async getArticles(limit = 50, offset = 0) {
     try {
       const result = await pool.query(`
-        SELECT 
-          a.*,
+        SELECT a.*, 
           ARRAY(
             SELECT DISTINCT t.name 
             FROM theme_analyses ta 
@@ -226,45 +183,11 @@ class PostgreSQLManager {
           sentiment: row.sentiment_type,
           confidence: parseFloat(row.sentiment_confidence)
         },
-        themes: row.themes || [],
-        iaCorrected: row.ia_corrected
+        themes: row.themes || []
       }));
     } catch (error) {
       console.error('❌ Erreur récupération articles:', error);
       return [];
-    }
-  }
-
-  async getArticlesCount() {
-    try {
-      const result = await pool.query('SELECT COUNT(*) FROM articles');
-      return parseInt(result.rows[0].count);
-    } catch (error) {
-      console.error('❌ Erreur comptage articles:', error);
-      return 0;
-    }
-  }
-
-  async saveTheme(themeData) {
-    const { name, keywords, color, description } = themeData;
-    
-    try {
-      const result = await pool.query(`
-        INSERT INTO themes (name, keywords, color, description)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (name) 
-        DO UPDATE SET 
-          keywords = EXCLUDED.keywords,
-          color = EXCLUDED.color,
-          description = EXCLUDED.description
-        RETURNING *
-      `, [name, keywords, color || '#6366f1', description]);
-
-      console.log(`✅ Thème "${name}" sauvegardé avec ON CONFLICT`);
-      return result.rows[0];
-    } catch (error) {
-      console.error(`❌ Erreur sauvegarde thème "${name}":`, error.message);
-      throw error;
     }
   }
 
@@ -278,23 +201,6 @@ class PostgreSQLManager {
     }
   }
 
-  async saveFeed(feedUrl) {
-    try {
-      const result = await pool.query(`
-        INSERT INTO feeds (url, is_active)
-        VALUES ($1, true)
-        ON CONFLICT (url) 
-        DO UPDATE SET is_active = true
-        RETURNING *
-      `, [feedUrl]);
-
-      return result.rows[0];
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde flux:', error);
-      throw error;
-    }
-  }
-
   async getFeeds() {
     try {
       const result = await pool.query('SELECT url FROM feeds WHERE is_active = true');
@@ -304,371 +210,298 @@ class PostgreSQLManager {
       return [];
     }
   }
-
-  async deleteFeed(feedUrl) {
-    try {
-      await pool.query('UPDATE feeds SET is_active = false WHERE url = $1', [feedUrl]);
-      return true;
-    } catch (error) {
-      console.error('❌ Erreur suppression flux:', error);
-      throw error;
-    }
-  }
 }
 
-// Initialiser le gestionnaire PostgreSQL
 const dbManager = new PostgreSQLManager();
 
-// ✅ VOTRE FONCTION DE RAFRAÎCHISSEMENT EXISTANTE (conservée)
+// ============ REFRESH FLUX RSS ============
 async function refreshData() {
-  let client;
   try {
-    console.log('🔄 Rafraîchissement des données depuis les flux RSS...');
-    
+    console.log('🔄 Rafraîchissement des flux RSS...');
     const feeds = await dbManager.getFeeds();
-    const allArticles = [];
-
+    
     if (feeds.length === 0) {
       console.log('⚠️ Aucun flux RSS configuré');
       return [];
     }
 
-    client = await pool.connect();
+    const allArticles = [];
     const limitedFeeds = feeds.slice(0, 5);
-    console.log(`📥 Traitement de ${limitedFeeds.length} flux...`);
-
+    
     for (const feedUrl of limitedFeeds) {
       try {
         console.log(`📥 Récupération: ${feedUrl}`);
         const feed = await parser.parseURL(feedUrl);
         const limitedItems = feed.items.slice(0, 10);
         
-        const articles = await Promise.all(
-          limitedItems.map(async (item) => {
-            try {
-              const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
-              const fullText = (item.title || '') + ' ' + (item.contentSnippet || item.content || '');
-              const sentimentResult = sentimentAnalyzer.analyze(fullText);
+        for (const item of limitedItems) {
+          const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
+          const fullText = (item.title || '') + ' ' + (item.contentSnippet || item.content || '');
+          const sentimentResult = sentimentAnalyzer.analyze(fullText);
 
-              const articleData = {
-                title: item.title || 'Sans titre',
-                content: (item.contentSnippet || item.content || item['content:encoded'] || '').substring(0, 500),
-                link: item.link || `#${Date.now()}`,
-                pubDate: pubDate.toISOString(),
-                feedUrl: feedUrl,
-                sentiment: sentimentResult
-              };
+          const articleData = {
+            title: item.title || 'Sans titre',
+            content: (item.contentSnippet || item.content || '').substring(0, 500),
+            link: item.link || `#${Date.now()}`,
+            pubDate: pubDate.toISOString(),
+            feedUrl: feedUrl,
+            sentiment: sentimentResult
+          };
 
-              const result = await client.query(`
-                INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (link) 
-                DO UPDATE SET 
-                  title = EXCLUDED.title,
-                  content = EXCLUDED.content,
-                  pub_date = EXCLUDED.pub_date,
-                  sentiment_score = EXCLUDED.sentiment_score,
-                  sentiment_type = EXCLUDED.sentiment_type,
-                  sentiment_confidence = EXCLUDED.sentiment_confidence
-                RETURNING id
-              `, [
-                articleData.title, articleData.content, articleData.link, 
-                articleData.pubDate, articleData.feedUrl, 
-                articleData.sentiment?.score || 0, 
-                articleData.sentiment?.sentiment || 'neutral', 
-                articleData.sentiment?.confidence || 0
-              ]);
-
-              return {
-                ...articleData,
-                id: result.rows[0].id
-              };
-            } catch (error) {
-              console.error('❌ Erreur traitement article:', error.message);
-              return null;
-            }
-          })
-        );
-
-        const validArticles = articles.filter(article => article !== null);
-        allArticles.push(...validArticles);
-        console.log(`✅ ${validArticles.length} articles de ${feed.title || feedUrl}`);
-
+          await dbManager.saveArticle(articleData);
+          allArticles.push(articleData);
+        }
+        
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (error) {
         console.error(`❌ Erreur flux ${feedUrl}:`, error.message);
       }
     }
 
-    console.log(`🎉 Rafraîchissement terminé: ${allArticles.length} articles traités`);
+    console.log(`✅ ${allArticles.length} articles rafraîchis`);
     return allArticles;
   } catch (error) {
-    console.error('❌ Erreur rafraîchissement données:', error);
+    console.error('❌ Erreur rafraîchissement:', error);
     return [];
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 }
 
-// ========== ROUTES API CORRIGÉES ==========
+// ============ ROUTES API LOCALES (NODE.JS) ============
 
-// ✅ TOUTES LES ROUTES AVEC PRÉFIXE /api/ EXPLICITE
-
-// 1. Articles
 app.get('/api/articles', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
-    
     const articles = await dbManager.getArticles(limit, offset);
-    const totalArticles = await dbManager.getArticlesCount();
-
+    
     res.json({
       success: true,
       articles: articles,
-      totalArticles: totalArticles,
+      totalArticles: articles.length,
       lastUpdate: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Erreur API articles:', error);
+    console.error('❌ Erreur /api/articles:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 2. Thèmes
 app.get('/api/themes', async (req, res) => {
   try {
     const themes = await dbManager.getThemes();
     res.json(themes);
   } catch (error) {
-    console.error('❌ Erreur API themes GET:', error);
+    console.error('❌ Erreur /api/themes:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 3. Flux RSS
 app.get('/api/feeds', async (req, res) => {
   try {
     const feeds = await dbManager.getFeeds();
     res.json(feeds);
   } catch (error) {
-    console.error('❌ Erreur API feeds GET:', error);
+    console.error('❌ Erreur /api/feeds:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 4. Refresh manuel
 app.post('/api/refresh', async (req, res) => {
   try {
     const articles = await refreshData();
     res.json({
       success: true,
-      message: 'Données rafraîchies avec succès',
+      message: 'Données rafraîchies',
       articlesCount: articles.length,
       lastUpdate: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Erreur rafraîchissement:', error);
+    console.error('❌ Erreur /api/refresh:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 5. Routes manquantes pour le frontend
+// ============ ROUTES PROXY VERS FLASK (IA) ============
+
+// Helper pour appeler Flask
+async function callFlask(endpoint, method = 'GET', data = null) {
+  try {
+    const url = `${FLASK_API_URL}${endpoint}`;
+    console.log(`🔗 Proxy Flask: ${method} ${url}`);
+    
+    const config = {
+      method: method,
+      url: url,
+      timeout: 30000,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    
+    if (data && method === 'POST') {
+      config.data = data;
+    }
+    
+    const response = await axios(config);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Erreur proxy Flask ${endpoint}:`, error.message);
+    throw error;
+  }
+}
+
+// Stats de sentiment (via Flask pour analyse avancée)
 app.get('/api/sentiment/stats', async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(CASE WHEN sentiment_type = 'positive' THEN 1 END) as positive,
-        COUNT(CASE WHEN sentiment_type = 'negative' THEN 1 END) as negative,
-        COUNT(CASE WHEN sentiment_type = 'neutral' THEN 1 END) as neutral,
-        AVG(sentiment_score) as average_score
-      FROM articles
-      WHERE pub_date > NOW() - INTERVAL '7 days'
-    `);
-
-    const stats = result.rows[0];
-    
-    res.json({
-      success: true,
-      stats: {
-        total: parseInt(stats.total) || 0,
-        positive: parseInt(stats.positive) || 0,
-        negative: parseInt(stats.negative) || 0,
-        neutral: parseInt(stats.neutral) || 0,
-        average_score: parseFloat(stats.average_score) || 0
-      }
-    });
+    const days = req.query.days || 7;
+    const data = await callFlask(`/api/sentiment/stats?days=${days}`);
+    res.json(data);
   } catch (error) {
-    console.error('❌ Erreur stats sentiment:', error);
-    res.json({
-      success: true,
-      stats: { total: 0, positive: 0, negative: 0, neutral: 0, average_score: 0 }
-    });
+    // Fallback local si Flask indisponible
+    console.warn('⚠️ Flask indisponible, calcul local du sentiment');
+    try {
+      const result = await pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(CASE WHEN sentiment_type = 'positive' THEN 1 END) as positive,
+          COUNT(CASE WHEN sentiment_type = 'negative' THEN 1 END) as negative,
+          COUNT(CASE WHEN sentiment_type = 'neutral' THEN 1 END) as neutral,
+          AVG(sentiment_score) as average_score
+        FROM articles
+        WHERE pub_date > NOW() - INTERVAL '${req.query.days || 7} days'
+      `);
+      res.json({ success: true, stats: result.rows[0] });
+    } catch (dbError) {
+      res.status(500).json({ success: false, error: 'Service indisponible' });
+    }
   }
 });
 
+// Métriques avancées (Flask IA)
+app.get('/api/metrics', async (req, res) => {
+  try {
+    const days = req.query.days || 30;
+    const data = await callFlask(`/api/metrics?days=${days}`);
+    res.json(data);
+  } catch (error) {
+    console.error('❌ Erreur /api/metrics:', error);
+    res.status(500).json({ success: false, error: 'Metrics service unavailable' });
+  }
+});
+
+// Analyse géopolitique (Flask IA)
 app.get('/api/geopolitical/report', async (req, res) => {
   try {
-    const report = {
-      success: true,
-      report: {
-        summary: {
-          totalCountries: 12,
-          highRiskZones: 3,
-          activeRelations: 8,
-          totalOrganizations: 5
-        },
-        crisisZones: [
-          {country: "Ukraine", riskLevel: "high", riskScore: 0.89, mentions: 45},
-          {country: "Middle East", riskLevel: "high", riskScore: 0.78, mentions: 32}
-        ]
-      }
-    };
-    res.json(report);
+    const data = await callFlask('/api/geopolitical/report');
+    res.json(data);
   } catch (error) {
-    console.error('❌ Erreur rapport géopolitique:', error);
+    console.error('❌ Erreur /api/geopolitical/report:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.get('/api/geopolitical/crisis-zones', async (req, res) => {
   try {
-    const zones = [
-      {id: 1, name: "Ukraine", risk_level: "high", score: 0.89},
-      {id: 2, name: "Gaza Strip", risk_level: "high", score: 0.82}
-    ];
-    res.json({ success: true, zones: zones });
+    const data = await callFlask('/api/geopolitical/crisis-zones');
+    res.json(data);
   } catch (error) {
-    console.error('❌ Erreur zones de crise:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.get('/api/geopolitical/relations', async (req, res) => {
   try {
-    const relations = [
-      {country1: "USA", country2: "China", relation: "tense", score: -0.7},
-      {country1: "Russia", country2: "EU", relation: "conflict", score: -0.9}
-    ];
-    res.json({ success: true, relations: relations });
+    const data = await callFlask('/api/geopolitical/relations');
+    res.json(data);
   } catch (error) {
-    console.error('❌ Erreur relations géopolitiques:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// Stats d'apprentissage (Flask IA)
 app.get('/api/learning-stats', async (req, res) => {
   try {
-    const stats = {
-      success: true,
-      total_articles_processed: 1250,
-      sentiment_accuracy: 0.87,
-      theme_detection_accuracy: 0.79,
-      avg_processing_time: 2.3,
-      model_version: "2.3"
-    };
-    res.json(stats);
+    const data = await callFlask('/api/learning-stats');
+    res.json(data);
   } catch (error) {
-    console.error('❌ Erreur stats apprentissage:', error);
+    console.error('❌ Erreur /api/learning-stats:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Santé
+// Analyse approfondie d'un article (Flask IA)
+app.post('/api/analyze', async (req, res) => {
+  try {
+    const data = await callFlask('/api/analyze', 'POST', req.body);
+    res.json(data);
+  } catch (error) {
+    console.error('❌ Erreur /api/analyze:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ROUTES UTILITAIRES ============
+
 app.get('/health', async (req, res) => {
   try {
-    const result = await pool.query('SELECT 1 as test');
+    const dbTest = await pool.query('SELECT 1');
+    let flaskStatus = 'disconnected';
+    try {
+      await axios.get(`${FLASK_API_URL}/api/health`, { timeout: 5000 });
+      flaskStatus = 'connected';
+    } catch (e) {
+      flaskStatus = 'disconnected';
+    }
+    
     res.json({ 
       status: 'OK', 
       database: 'connected',
+      flask: flaskStatus,
       timestamp: new Date().toISOString(),
       environment: NODE_ENV
     });
   } catch (error) {
-    console.error('❌ Health check failed:', error.message);
-    res.status(500).json({ 
-      status: 'ERROR', 
-      database: 'disconnected',
-      error: 'Database connection failed'
-    });
+    res.status(500).json({ status: 'ERROR', error: error.message });
   }
 });
 
-// Route racine
 app.get('/', (req, res) => {
   res.json({
-    message: 'RSS Aggregator avec PostgreSQL et IA',
+    message: 'RSS Aggregator v2.3 - Node.js + Flask IA',
     status: 'running',
-    database: 'postgresql',
-    version: '2.3',
+    architecture: 'Node.js (frontend/RSS) + Flask (IA analysis)',
     endpoints: {
-      articles: '/api/articles',
-      feeds: '/api/feeds',
-      themes: '/api/themes',
-      refresh: '/api/refresh (POST)',
-      health: '/health',
-      sentiment: '/api/sentiment/stats',
-      geopolitical: '/api/geopolitical/*',
-      learning: '/api/learning-stats'
+      local: ['/api/articles', '/api/feeds', '/api/themes', '/api/refresh'],
+      flask_proxy: ['/api/metrics', '/api/sentiment/stats', '/api/analyze', '/api/geopolitical/*', '/api/learning-stats']
     }
   });
 });
 
-// ✅ DÉMARRAGE DU SERVEUR (VOTRE CODE EXISTANT)
+// ============ DÉMARRAGE ============
 async function startServer() {
   try {
     await initializeDatabase();
+    console.log('✅ Base de données initialisée');
     
-    // Charger les données par défaut
-    try {
-      const themesPath = require('path').join(__dirname, 'themes.json');
-      if (require('fs').existsSync(themesPath)) {
-        const themesData = require(themesPath);
-        for (const theme of themesData.themes) {
-          await dbManager.saveTheme(theme);
-        }
-        console.log(`✅ ${themesData.themes.length} thèmes chargés`);
-      }
-    } catch (error) {
-      console.log('ℹ️ Aucun fichier themes.json trouvé');
-    }
-
-    try {
-      const configPath = require('path').join(__dirname, 'config.json');
-      if (require('fs').existsSync(configPath)) {
-        const configData = require(configPath);
-        for (const feedUrl of configData.feeds.slice(0, 10)) {
-          await dbManager.saveFeed(feedUrl);
-        }
-        console.log(`✅ ${configData.feeds.length} flux chargés`);
-      }
-    } catch (error) {
-      console.log('ℹ️ Aucun fichier config.json trouvé');
-    }
-
-    // Premier rafraîchissement
+    // Premier refresh après 5s
     setTimeout(async () => {
       await refreshData();
     }, 5000);
-
-    // Rafraîchissement automatique
+    
+    // Refresh auto toutes les 30min
     setInterval(async () => {
       await refreshData();
     }, 30 * 60 * 1000);
 
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-      console.log(`🌍 Environnement: ${NODE_ENV}`);
-      console.log(`🗄️ Base de données: PostgreSQL`);
-      console.log(`🔄 Rafraîchissement auto: 30 minutes`);
-      console.log(`📊 Routes API disponibles avec préfixe /api/`);
+      console.log('═══════════════════════════════════════');
+      console.log('🚀 RSS Aggregator v2.3 - DÉMARRÉ');
+      console.log(`📡 Node.js: http://0.0.0.0:${PORT}`);
+      console.log(`🧠 Flask IA: ${FLASK_API_URL}`);
+      console.log(`🔄 Auto-refresh: 30 minutes`);
+      console.log('═══════════════════════════════════════');
     });
 
   } catch (error) {
-    console.error('❌ Erreur démarrage serveur:', error);
+    console.error('❌ Erreur démarrage:', error);
     process.exit(1);
   }
 }
