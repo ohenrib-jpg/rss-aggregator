@@ -7,12 +7,12 @@ const path = require('path');
 const axios = require('axios');
 
 // Proxy setup to forward /api/* to Flask backend when needed
+
+const app = express();
 const flaskProxyApp = require(path.join(__dirname, 'modules', 'proxy-setup'));
 // Mount the proxy app early so /api routes are forwarded to Flask when appropriate
 app.use(flaskProxyApp);
 
-
-const app = express();
 const parser = new Parser({
   timeout: 10000,
   customFields: {

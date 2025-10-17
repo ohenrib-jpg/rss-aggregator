@@ -10,5 +10,6 @@ rapidfuzz>=2.0.0
 python-snappy>=0.6.0
 matplotlib>=3.10.7
 psycopg2>=2.9.11
+charts>=0.4.6
 feedparser
 schedule
