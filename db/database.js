@@ -5,7 +5,7 @@ const path = require('path');
 
 // Configuration optimisée pour Render
 const poolConfig = {
-  connectionString: process.env.DABASE_URL,
+  connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 5, // TRÈS IMPORTANT: réduit le nombre de connexions
   idleTimeoutMillis: 30000,
