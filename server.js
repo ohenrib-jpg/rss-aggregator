@@ -8,6 +8,9 @@ const nodemailer = require('nodemailer'); // npm install nodemailer
 const { pool, initializeDatabase } = require('./db/database');
 
 const app = express();
+
+app.use(cors());
+app.use(bodyParser.json());
 const parser = new Parser({
   timeout: 10000,
   customFields: { item: ['content:encoded'] }
@@ -276,6 +279,33 @@ app.post('/api/manual-export', async (req, res) => {
   }
 });
 
+// ===Route GET pour l'export manuel (en plus de la POST existante)===
+app.get('/api/manual-export', async (req, res) => {
+  try {
+    console.log('📧 Export manuel demandé (GET)');
+    
+    const exportData = await exportDataToFile();
+    const emailSent = await sendExportEmail(exportData);
+    
+    if (emailSent) {
+      res.json({
+        success: true,
+        message: 'Export envoyé par email',
+        statistics: exportData.statistics
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Email non configuré ou erreur d\'envoi'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erreur export manuel:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ ANALYSEUR DE SENTIMENT (LOCAL) ============
 class SelfLearningSentiment {
   constructor() {
@@ -512,4 +542,863 @@ async function refreshData() {
   }
 }
 
-// ============ ROUTES API (suite dans le prochain message) ============
+// ============ ROUTES PRINCIPALES ============
+
+// Route pour obtenir les articles
+app.get('/api/articles', async (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const articles = await dbManager.getArticles(parseInt(limit), parseInt(offset));
+    
+    res.json({
+      success: true,
+      articles: articles,
+      total: articles.length
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération articles:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Route pour rafraîchir les données
+app.post('/api/refresh', async (req, res) => {
+  try {
+    console.log('🔄 Rafraîchissement manuel demandé');
+    const articles = await refreshData();
+    
+    res.json({
+      success: true,
+      message: `${articles.length} articles rafraîchis`,
+      articles: articles
+    });
+  } catch (error) {
+    console.error('❌ Erreur rafraîchissement manuel:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Route de santé
+app.get('/api/health', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    client.release();
+    
+    let flaskStatus = 'unknown';
+    try {
+      const flaskResponse = await axios.get(`${FLASK_API_URL}/api/health`, { timeout: 5000 });
+      flaskStatus = flaskResponse.data.ok ? 'connected' : 'error';
+    } catch (e) {
+      flaskStatus = 'disconnected';
+    }
+    
+    res.json({
+      ok: true,
+      service: 'Node.js RSS Aggregator',
+      database: 'connected',
+      flask: flaskStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+// ============ GESTION DES FLUX RSS ============
+
+// Obtenir tous les flux avec statut
+app.get('/api/feeds/manager', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT id, url, title, is_active, last_fetched, created_at 
+      FROM feeds 
+      ORDER BY created_at DESC
+    `);
+    client.release();
+    
+    res.json({
+      success: true,
+      feeds: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Route /api/feeds existante (la garder)
+app.get('/api/feeds', async (req, res) => {
+  try {
+    const feeds = await dbManager.getFeeds();
+    
+    // Si pas de flux en base, renvoyer quelques flux par défaut depuis config.json
+    if (feeds.length === 0) {
+      const config = require('./config.json');
+      const defaultFeeds = config.feeds.slice(0, 10);
+      return res.json(defaultFeeds);
+    }
+    
+    res.json(feeds);
+  } catch (error) {
+    console.error('❌ Erreur route /api/feeds:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Ajouter un nouveau flux
+app.post('/api/feeds', async (req, res) => {
+  try {
+    const { url, title } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL requise' });
+    }
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `INSERT INTO feeds (url, title) VALUES ($1, $2) 
+       ON CONFLICT (url) DO UPDATE SET is_active = true
+       RETURNING *`,
+      [url, title || new URL(url).hostname]
+    );
+    client.release();
+    
+    // Sauvegarder aussi dans config.json pour backup
+    await saveFeedToConfig(url);
+    
+    res.json({
+      success: true,
+      message: 'Flux ajouté avec succès',
+      feed: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur ajout flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Modifier un flux
+app.put('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { url, title, is_active } = req.body;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `UPDATE feeds SET url = $1, title = $2, is_active = $3 
+       WHERE id = $4 RETURNING *`,
+      [url, title, is_active, id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Flux modifié avec succès',
+      feed: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur modification flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Supprimer un flux
+app.delete('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      'DELETE FROM feeds WHERE id = $1 RETURNING *',
+      [id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Flux supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur suppression flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ GESTION DES THÈMES ============
+
+// Route /api/themes existante (la garder)  
+app.get('/api/themes', async (req, res) => {
+  try {
+    const themes = await dbManager.getThemes();
+    
+    // Si pas de thèmes en base, renvoyer des thèmes par défaut
+    if (themes.length === 0) {
+      const defaultThemes = [
+        { id: 1, name: 'Politique', keywords: ['politique', 'gouvernement', 'élection'], color: '#3b82f6', count: 0 },
+        { id: 2, name: 'Économie', keywords: ['économie', 'bourse', 'finance'], color: '#10b981', count: 0 },
+        { id: 3, name: 'Santé', keywords: ['santé', 'médecine', 'hôpital'], color: '#ef4444', count: 0 }
+      ];
+      return res.json(defaultThemes);
+    }
+    
+    res.json(themes);
+  } catch (error) {
+    console.error('❌ Erreur route /api/themes:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Obtenir tous les thèmes avec votre structure
+app.get('/api/themes/manager', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT id, name, keywords, color, description, created_at 
+      FROM themes 
+      ORDER BY name
+    `);
+    client.release();
+    
+    // Formater selon votre structure
+    const themes = result.rows.map(theme => ({
+      id: theme.id,
+      name: theme.name,
+      keywords: theme.keywords || [],
+      color: theme.color,
+      description: theme.description,
+      created_at: theme.created_at
+    }));
+    
+    res.json({
+      success: true,
+      themes: themes
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération thèmes:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Importer les thèmes depuis votre fichier JSON
+app.post('/api/themes/import', async (req, res) => {
+  try {
+    const fs = require('fs').promises;
+    const themesData = JSON.parse(await fs.readFile('./themes.json', 'utf8'));
+    
+    const client = await pool.connect();
+    let importedCount = 0;
+    
+    for (const theme of themesData.themes) {
+      try {
+        await client.query(
+          `INSERT INTO themes (id, name, keywords, color, description) 
+           VALUES ($1, $2, $3, $4, $5) 
+           ON CONFLICT (id) DO UPDATE SET 
+           name = $2, keywords = $3, color = $4, description = $5`,
+          [theme.id, theme.name, theme.keywords, theme.color, theme.description]
+        );
+        importedCount++;
+        console.log(`✅ Thème importé: ${theme.name}`);
+      } catch (e) {
+        console.warn(`⚠️ Erreur import thème ${theme.name}:`, e.message);
+      }
+    }
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      message: `${importedCount} thèmes importés avec succès`,
+      total: themesData.themes.length,
+      imported: importedCount
+    });
+  } catch (error) {
+    console.error('❌ Erreur import thèmes:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Ajouter un nouveau thème
+app.post('/api/themes', async (req, res) => {
+  try {
+    const { id, name, keywords, color, description } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Nom requis' });
+    }
+    
+    const themeId = id || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `INSERT INTO themes (id, name, keywords, color, description) 
+       VALUES ($1, $2, $3, $4, $5) 
+       ON CONFLICT (id) DO UPDATE SET 
+       name = $2, keywords = $3, color = $4, description = $5
+       RETURNING *`,
+      [themeId, name, keywords || [], color || '#6366f1', description]
+    );
+    client.release();
+    
+    res.json({
+      success: true,
+      message: 'Thème ajouté avec succès',
+      theme: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur ajout thème:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Modifier un thème
+app.put('/api/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, keywords, color, description } = req.body;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `UPDATE themes SET name = $1, keywords = $2, color = $3, description = $4 
+       WHERE id = $5 RETURNING *`,
+      [name, keywords, color, description, id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Thème modifié avec succès',
+      theme: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur modification thème:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Supprimer un thème
+app.delete('/api/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const client = await pool.connect();
+    
+    // Supprimer d'abord les relations
+    await client.query('DELETE FROM theme_analyses WHERE theme_id = $1', [id]);
+    
+    // Puis supprimer le thème
+    const result = await client.query(
+      'DELETE FROM themes WHERE id = $1 RETURNING *',
+      [id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Thème supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur suppression thème:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ FONCTIONS UTILITAIRES ============
+
+async function saveFeedToConfig(url) {
+  try {
+    const fs = require('fs').promises;
+    const configPath = './config.json';
+    
+    const data = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(data);
+    
+    if (!config.feeds.includes(url)) {
+      config.feeds.push(url);
+      await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+      console.log(`✅ Flux sauvegardé dans config.json: ${url}`);
+    }
+  } catch (error) {
+    console.warn('⚠️ Impossible de sauvegarder le flux dans config.json:', error.message);
+  }
+}
+
+// ============ FONCTIONS D'INITIALISATION ============
+
+async function initializeThemes() {
+  try {
+    const client = await pool.connect();
+    
+    // Vérifier si des thèmes existent déjà
+    const result = await client.query('SELECT COUNT(*) as count FROM themes');
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📋 Chargement des thèmes depuis themes.json...');
+      
+      try {
+        const fs = require('fs').promises;
+        const themesData = JSON.parse(await fs.readFile('./themes.json', 'utf8'));
+        
+        for (const theme of themesData.themes) {
+          await client.query(
+            `INSERT INTO themes (id, name, keywords, color, description) 
+             VALUES ($1, $2, $3, $4, $5) 
+             ON CONFLICT (id) DO NOTHING`,
+            [theme.id, theme.name, theme.keywords, theme.color, theme.description]
+          );
+        }
+        console.log(`✅ ${themesData.themes.length} thèmes chargés dans la base`);
+      } catch (e) {
+        console.warn('⚠️ Impossible de charger themes.json, utilisation des thèmes par défaut');
+        // Thèmes par défaut
+        const defaultThemes = [
+          ['geo_politique', 'Politique', ['politique', 'gouvernement'], '#3b82f6', 'Actualités politiques'],
+          ['geo_economie', 'Économie', ['économie', 'bourse'], '#10b981', 'Actualités économiques'],
+          ['geo_sante', 'Santé', ['santé', 'médecine'], '#ef4444', 'Actualités sanitaires']
+        ];
+        
+        for (const theme of defaultThemes) {
+          await client.query(
+            'INSERT INTO themes (id, name, keywords, color, description) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING',
+            theme
+          );
+        }
+        console.log('✅ Thèmes par défaut chargés');
+      }
+    } else {
+      console.log(`✅ ${result.rows[0].count} thèmes déjà présents en base`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.error('❌ Erreur initialisation thèmes:', error);
+  }
+}
+
+async function initializeFeeds() {
+  try {
+    const client = await pool.connect();
+    
+    // Vérifier si des flux existent déjà
+    const result = await client.query('SELECT COUNT(*) as count FROM feeds');
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📋 Chargement des flux depuis config.json...');
+      
+      try {
+        const fs = require('fs').promises;
+        const config = JSON.parse(await fs.readFile('./config.json', 'utf8'));
+        
+        for (const feedUrl of config.feeds.slice(0, 10)) {
+          await client.query(
+            `INSERT INTO feeds (url, title) VALUES ($1, $2) ON CONFLICT (url) DO NOTHING`,
+            [feedUrl, new URL(feedUrl).hostname]
+          );
+        }
+        console.log(`✅ ${config.feeds.length} flux chargés dans la base`);
+      } catch (e) {
+        console.warn('⚠️ Impossible de charger config.json, utilisation des flux par défaut');
+        // Flux par défaut
+        const defaultFeeds = [
+          'https://www.lemonde.fr/rss/une.xml',
+          'https://www.lefigaro.fr/rss/figaro_actualites.xml'
+        ];
+        
+        for (const feedUrl of defaultFeeds) {
+          await client.query(
+            'INSERT INTO feeds (url, title) VALUES ($1, $2) ON CONFLICT (url) DO NOTHING',
+            [feedUrl, new URL(feedUrl).hostname]
+          );
+        }
+        console.log('✅ Flux par défaut chargés');
+      }
+    } else {
+      console.log(`✅ ${result.rows[0].count} flux déjà présents en base`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.error('❌ Erreur initialisation flux:', error);
+  }
+}
+
+async function initializeSentimentLexicon() {
+  try {
+    const client = await pool.connect();
+    
+    // Vérifier si le lexique existe déjà
+    const result = await client.query('SELECT COUNT(*) as count FROM sentiment_lexicon');
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📚 Initialisation du lexique de sentiment...');
+      
+      // Mots de base pour le lexique
+      const baseWords = [
+        ['excellent', 2.0], ['exceptionnel', 2.0], ['formidable', 2.0], ['parfait', 2.0],
+        ['génial', 1.8], ['fantastique', 1.8], ['merveilleux', 1.8], ['superbe', 1.8],
+        ['bon', 1.0], ['bien', 1.0], ['positif', 1.0], ['succès', 1.0], ['réussite', 1.0],
+        ['paix', 1.8], ['accord', 1.5], ['coopération', 1.5], ['dialogue', 1.2],
+        ['catastrophe', -2.0], ['désastre', -2.0], ['horrible', -2.0], ['terrible', -2.0],
+        ['mauvais', -1.0], ['négatif', -1.0], ['problème', -1.0], ['échec', -1.0],
+        ['crise', -1.0], ['danger', -1.0], ['menace', -1.0], ['guerre', -2.0],
+        ['conflit', -1.8], ['violence', -1.8], ['sanction', -1.3], ['tension', -1.3]
+      ];
+      
+      for (const [word, score] of baseWords) {
+        await client.query(
+          'INSERT INTO sentiment_lexicon (word, score) VALUES ($1, $2) ON CONFLICT (word) DO NOTHING',
+          [word, score]
+        );
+      }
+      
+      console.log(`✅ ${baseWords.length} mots ajoutés au lexique`);
+    } else {
+      console.log(`✅ Lexique déjà initialisé (${result.rows[0].count} mots)`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.error('❌ Erreur initialisation lexique:', error);
+  }
+}
+
+async function initializeData() {
+  console.log('🚀 Initialisation des données...');
+  
+  try {
+    // Initialiser la base de données
+    await initializeDatabase();
+    console.log('✅ Base de données initialisée');
+    
+    // Initialiser les thèmes
+    await initializeThemes();
+    
+    // Initialiser les flux RSS
+    await initializeFeeds();
+    
+    // Initialiser le lexique de sentiment
+    await initializeSentimentLexicon();
+    
+    // Rafraîchir les données initiales
+    console.log('🔄 Chargement des données initiales...');
+    await refreshData();
+    
+    console.log('✅ Initialisation terminée avec succès');
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'initialisation:', error);
+    throw error;
+  }
+}
+
+// Verifier les indexes
+app.get('/api/debug/indexes', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT tablename, indexname, indexdef 
+      FROM pg_indexes 
+      WHERE schemaname = 'public'
+      ORDER BY tablename, indexname
+    `);
+    client.release();
+    
+    res.json({
+      success: true,
+      indexes: result.rows
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Route debug database corrigée
+app.get('/api/debug/database', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+// VERSION CORRIGÉE 18/10- Compatible PostgreSQL
+    const tablesStats = await client.query(`
+      SELECT 
+        (SELECT count(*) FROM articles) as articles_count,
+        (SELECT count(*) FROM themes) as themes_count,
+        (SELECT count(*) FROM feeds) as feeds_count,
+        (SELECT count(*) FROM sentiment_lexicon) as lexicon_count
+    `);
+    
+    // Index existants
+    const indexes = await client.query(`
+      SELECT COUNT(*) as index_count 
+      FROM pg_indexes 
+      WHERE schemaname = 'public' 
+      AND indexname LIKE 'idx_%'
+    `);
+    
+    // Performance des requêtes
+    const performance = await client.query(`
+      SELECT 
+        schemaname,
+        relname as tablename,
+        seq_scan,
+        seq_tup_read,
+        idx_scan,
+        idx_tup_fetch
+      FROM pg_stat_user_tables 
+      WHERE relname IN ('articles', 'themes', 'feeds')
+    `);
+    
+    // Détails des index
+    const indexDetails = await client.query(`
+      SELECT 
+        indexname,
+        tablename,
+        indexdef
+      FROM pg_indexes 
+      WHERE schemaname = 'public'
+      AND indexname LIKE 'idx_%'
+      ORDER BY tablename, indexname
+      LIMIT 20
+    `);
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      database: {
+        connection: '✅ Connecté',
+        statistics: tablesStats.rows[0],
+        indexes: indexes.rows[0],
+        performance: performance.rows,
+        index_details: indexDetails.rows
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur debug database:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// ============ DÉMARRAGE DU SERVEUR ============
+
+async function startServer() {
+  try {
+    console.log('🚀 Démarrage du serveur...');
+    
+    // Initialiser les données
+    await initializeData();
+    
+    // Démarrer le serveur
+    app.listen(PORT, () => {
+      console.log(`✅ Serveur démarré sur le port ${PORT}`);
+      console.log(`📊 Interface: http://localhost:${PORT}`);
+      console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
+      console.log(`💾 Mode: ${NODE_ENV}`);
+      console.log(`📧 Email: ${EMAIL_CONFIG.user ? '✅ Configuré' : '❌ Non configuré'}`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur démarrage serveur:', error);
+    process.exit(1);
+  }
+}
+
+// Gestion propre de l'arrêt
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Arrêt du serveur...');
+  try {
+    await pool.end();
+    console.log('✅ Connexions DB fermées');
+  } catch (error) {
+    console.error('❌ Erreur fermeture DB:', error);
+  }
+  process.exit(0);
+});
+
+// Route temporaire pour recréer les index manquants
+app.post('/api/fix-indexes', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    // Index CRITIQUE manquant de database 18/10
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_articles_pub_date_desc 
+      ON articles(pub_date DESC)
+    `);
+    
+    // Index composite pour la pagination
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_articles_loading_speed 
+      ON articles(pub_date DESC, id DESC)
+    `);
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      message: 'Index critiques créés',
+      indexes: ['idx_articles_pub_date_desc', 'idx_articles_loading_speed']
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ROUTES MANQUANTES ============
+
+// Stats de sentiment
+app.get('/api/sentiment/stats', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        sentiment_type,
+        COUNT(*) as count,
+        AVG(sentiment_score) as avg_score,
+        AVG(sentiment_confidence) as avg_confidence
+      FROM articles 
+      WHERE sentiment_type IS NOT NULL
+      GROUP BY sentiment_type
+      ORDER BY count DESC
+    `);
+    client.release();
+    
+    res.json({
+      success: true,
+      stats: result.rows,
+      total: result.rows.reduce((sum, row) => sum + parseInt(row.count), 0)
+    });
+  } catch (error) {
+    console.error('❌ Erreur stats sentiment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ROUTE COMPTEUR D'ARTICLES ============
+
+app.get('/api/articles/count', async (req, res) => {
+  try {
+    console.log('🔢 Comptage des articles...');
+    
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as total FROM articles');
+    client.release();
+    
+    const total = parseInt(result.rows[0].total);
+    
+    console.log(`✅ ${total} articles comptabilisés`);
+    
+    res.json({
+      success: true,
+      total: total,
+      message: `${total} articles dans la base de données`
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur comptage articles:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Stats d'apprentissage
+app.get('/api/learning-stats', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    const lexiconCount = await client.query('SELECT COUNT(*) FROM sentiment_lexicon');
+    const themesCount = await client.query('SELECT COUNT(*) FROM themes');
+    const articlesCount = await client.query('SELECT COUNT(*) FROM articles');
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      stats: {
+        lexicon_words: parseInt(lexiconCount.rows[0].count),
+        themes_count: parseInt(themesCount.rows[0].count),
+        articles_analyzed: parseInt(articlesCount.rows[0].count),
+        analysis_confidence: 'high'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur stats apprentissage:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Export JSON direct (téléchargement)
+app.get('/api/export/json', async (req, res) => {
+  try {
+    console.log('📥 Export JSON demandé');
+    const exportData = await exportDataToFile();
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.json"');
+    
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (error) {
+    console.error('❌ Erreur export JSON:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Export CSV direct (téléchargement)
+app.get('/api/export/csv', async (req, res) => {
+  try {
+    console.log('📥 Export CSV demandé');
+    const client = await pool.connect();
+    const articlesResult = await client.query('SELECT * FROM articles ORDER BY pub_date DESC');
+    client.release();
+    
+    const csvData = convertToCSV(articlesResult.rows);
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.csv"');
+    
+    res.send(csvData);
+  } catch (error) {
+    console.error('❌ Erreur export CSV:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Démarrer le serveur
+startServer();
+
+module.exports = { app, startServer, initializeData };

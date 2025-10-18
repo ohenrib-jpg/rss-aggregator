@@ -1,360 +1,215 @@
+// db/database.js - Version ultra-résiliente pour Render
 const { Pool } = require('pg');
-require('dotenv').config();
-
-// Debug de la configuration
-console.log('🔧 Configuration PostgreSQL:');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-
-// URL de fallback explicite avec le domaine complet Render
-const databaseUrl = process.env.DATABASE_URL || "postgresql://rssaggregator_postgresql_olivier_user:jexuBogPqTuplOcud708PuSuIVWBWwi0@dpg-d3nnodm3jp1c73c3302g-a.frankfurt-postgres.render.com/rssaggregator_postgresql_olivier";
-
-console.log('🔗 Utilisation URL:', databaseUrl.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@'));
+const fs = require('fs').promises;
+const path = require('path');
 
 // Configuration optimisée pour Render
 const poolConfig = {
-  connectionString: databaseUrl,
-  ssl: { 
-    rejectUnauthorized: false 
-  },
-  max: 5,
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 5, // TRÈS IMPORTANT: réduit le nombre de connexions
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 15000, // 15s pour Render
+  connectionTimeoutMillis: 10000, // Timeout plus long
+  maxUses: 5000, // Recyclage fréquent
 };
+
+console.log('🔧 Configuration PostgreSQL:', {
+  hasDatabaseUrl: !!process.env.DATABASE_URL,
+  ssl: poolConfig.ssl ? 'activé' : 'désactivé',
+  maxConnections: poolConfig.max
+});
 
 const pool = new Pool(poolConfig);
 
 // Gestion robuste des erreurs
-pool.on('connect', () => {
-  console.log('✅ Connecté à PostgreSQL sur Render');
+pool.on('error', (err, client) => {
+  console.error('❌ Erreur inattendue PostgreSQL:', err);
 });
 
-pool.on('error', (err) => {
-  console.error('❌ Erreur de connexion PostgreSQL:', err.message);
+pool.on('connect', () => {
+  console.log('🔗 Nouvelle connexion PostgreSQL établie');
 });
 
 pool.on('remove', () => {
-  console.log('ℹ️  Connexion PostgreSQL fermée');
+  console.log('🔗 Connexion PostgreSQL fermée');
 });
 
-// Test de connexion avec meilleur debug
-async function testConnectionWithRetry(maxRetries = 5) {
-  console.log(`🔍 Test de connexion à PostgreSQL (${maxRetries} tentatives max)...`);
-  
+// Test de connexion avec retry intelligent
+async function testConnectionWithRetry(maxRetries = 5, delay = 3000) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let client;
     try {
-      console.log(`🔄 Tentative ${attempt}/${maxRetries}...`);
-      const client = await pool.connect();
-      console.log(`✅ Connexion PostgreSQL réussie!`);
+      console.log(`🔗 Tentative de connexion PostgreSQL (${attempt}/${maxRetries})...`);
       
-      // Test simple de requête
-      const result = await client.query('SELECT NOW() as current_time, version() as pg_version');
-      console.log(`⏰ Heure PostgreSQL: ${result.rows[0].current_time}`);
-      console.log(`📊 Version: ${result.rows[0].pg_version.split(',')[0]}`);
+      client = await pool.connect();
+      const result = await client.query('SELECT NOW() as time');
       
-      client.release();
+      console.log('✅ Connecté à PostgreSQL:', result.rows[0].time);
       return true;
-    } catch (error) {
-      console.error(`❌ Tentative ${attempt} échouée:`, error.message);
-      console.error(`🔍 Détails:`, error.code, error.address, error.port);
       
+    } catch (error) {
+      console.warn(`⚠️ Échec connexion (tentative ${attempt}):`, error.message);
+      
+      // Attente progressive (3s, 6s, 9s, 12s, 15s)
       if (attempt < maxRetries) {
-        const delay = attempt * 2000; // Backoff exponentiel
-        console.log(`⏳ Nouvelle tentative dans ${delay/1000}s...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const waitTime = delay * attempt;
+        console.log(`⏳ Nouvelle tentative dans ${waitTime/1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
+    } finally {
+      if (client) client.release();
     }
   }
+  
+  console.error('❌ Échec de toutes les tentatives de connexion');
   return false;
 }
 
-// Fonction pour créer les contraintes UNIQUE manquantes
-async function ensureUniqueConstraints() {
+// Vérification simple de fichier
+async function fileExists(filePath) {
   try {
-    console.log('🔍 Vérification des contraintes UNIQUE...');
-    
-    const constraints = [
-      { table: 'themes', column: 'name', name: 'themes_name_key' },
-      { table: 'feeds', column: 'url', name: 'feeds_url_key' },
-      { table: 'articles', column: 'link', name: 'articles_link_key' },
-      { table: 'sentiment_lexicon', column: 'word', name: 'sentiment_lexicon_word_key' }
-    ];
-
-    let constraintsCreated = 0;
-    
-    for (const constraint of constraints) {
-      try {
-        // Vérifier si la contrainte existe déjà
-        const exists = await pool.query(`
-          SELECT 1 FROM information_schema.table_constraints 
-          WHERE constraint_name = $1 AND table_name = $2
-        `, [constraint.name, constraint.table]);
-
-        if (exists.rows.length === 0) {
-          // Vérifier que la table existe d'abord
-          const tableExists = await pool.query(`
-            SELECT 1 FROM information_schema.tables 
-            WHERE table_name = $1
-          `, [constraint.table]);
-
-          if (tableExists.rows.length > 0) {
-            await pool.query(`
-              ALTER TABLE ${constraint.table} 
-              ADD CONSTRAINT ${constraint.name} 
-              UNIQUE (${constraint.column})
-            `);
-            console.log(`✅ Contrainte ${constraint.name} créée`);
-            constraintsCreated++;
-          } else {
-            console.log(`⚠️  Table ${constraint.table} n'existe pas encore`);
-          }
-        } else {
-          console.log(`✅ Contrainte ${constraint.name} existe déjà`);
-        }
-      } catch (error) {
-        console.error(`❌ Erreur contrainte ${constraint.name}:`, error.message);
-      }
-    }
-
-    // Contrainte composite pour theme_analyses
-    try {
-      const compositeExists = await pool.query(`
-        SELECT 1 FROM information_schema.table_constraints 
-        WHERE constraint_name = 'theme_analyses_theme_id_article_id_key' 
-        AND table_name = 'theme_analyses'
-      `);
-
-      if (compositeExists.rows.length === 0) {
-        const tableExists = await pool.query(`
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'theme_analyses'
-        `);
-
-        if (tableExists.rows.length > 0) {
-          await pool.query(`
-            ALTER TABLE theme_analyses 
-            ADD CONSTRAINT theme_analyses_theme_id_article_id_key 
-            UNIQUE (theme_id, article_id)
-          `);
-          console.log('✅ Contrainte composite theme_analyses créée');
-          constraintsCreated++;
-        }
-      } else {
-        console.log('✅ Contrainte composite theme_analyses existe déjà');
-      }
-    } catch (error) {
-      console.error('❌ Erreur contrainte composite:', error.message);
-    }
-
-    console.log(`🔧 ${constraintsCreated} contrainte(s) UNIQUE créée(s)`);
-    return constraintsCreated > 0;
-    
-  } catch (error) {
-    console.error('❌ Erreur création contraintes:', error.message);
+    await fs.access(filePath);
+    return true;
+  } catch {
     return false;
   }
 }
 
-// Initialiser la base de données
+// Création des tables (version simplifiée)
+async function createTables() {
+  const client = await pool.connect();
+  try {
+    console.log('📋 Création des tables...');
+    
+    const schemaPath = path.join(__dirname, 'schema.sql');
+    
+    if (await fileExists(schemaPath)) {
+      const tablesSQL = await fs.readFile(schemaPath, 'utf8');
+      await client.query(tablesSQL);
+      console.log('✅ Tables créées via schema.sql');
+    } else {
+      console.log('ℹ️  Création manuelle des tables...');
+      await createTablesManually(client);
+    }
+    
+  } catch (error) {
+    console.error('❌ Erreur création tables:', error.message);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Création manuelle des tables (fallback)
+async function createTablesManually(client) {
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS feeds (
+      id SERIAL PRIMARY KEY,
+      url VARCHAR(500) UNIQUE NOT NULL,
+      title VARCHAR(300),
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    
+    `CREATE TABLE IF NOT EXISTS articles (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT,
+      link VARCHAR(500) UNIQUE NOT NULL,
+      pub_date TIMESTAMP,
+      feed_url VARCHAR(500),
+      sentiment_score FLOAT DEFAULT 0,
+      sentiment_type VARCHAR(20) DEFAULT 'neutral',
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    
+    `CREATE TABLE IF NOT EXISTS themes (
+      id VARCHAR(100) PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      keywords TEXT[],
+      color VARCHAR(7) DEFAULT '#6366f1',
+      created_at TIMESTAMP DEFAULT NOW()
+    )`
+  ];
+
+  for (const tableSQL of tables) {
+    try {
+      await client.query(tableSQL);
+    } catch (error) {
+      console.warn('⚠️ Table peut déjà exister:', error.message);
+    }
+  }
+  console.log('✅ Tables créées manuellement');
+}
+
+// Création des index (version simplifiée)
+async function createIndexes() {
+  const client = await pool.connect();
+  try {
+    console.log('📊 Création des index...');
+    
+    const indexPath = path.join(__dirname, 'indexes.sql');
+    
+    if (await fileExists(indexPath)) {
+      const indexSQL = await fs.readFile(indexPath, 'utf8');
+      await client.query(indexSQL);
+      console.log('✅ Index créés via indexes.sql');
+    } else {
+      console.log('ℹ️  Création manuelle des index critiques...');
+      await createCriticalIndexes(client);
+    }
+    
+  } catch (error) {
+    console.warn('⚠️ Erreur création index (non critique):', error.message);
+  } finally {
+    client.release();
+  }
+}
+
+// Index critiques seulement
+async function createCriticalIndexes(client) {
+  const criticalIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_articles_pub_date_desc ON articles(pub_date DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_articles_link ON articles(link)',
+    'CREATE INDEX IF NOT EXISTS idx_feeds_url ON feeds(url)'
+  ];
+
+  for (const indexSQL of criticalIndexes) {
+    try {
+      await client.query(indexSQL);
+    } catch (error) {
+      console.warn('⚠️ Index peut déjà exister:', error.message);
+    }
+  }
+  console.log('✅ Index critiques créés');
+}
+
+// Initialisation principale
 async function initializeDatabase() {
   try {
-    console.log('🔄 Initialisation de la base de données...');
+    console.log('🚀 Initialisation de la base de données...');
     
-    const connectionOk = await testConnectionWithRetry();
-    if (!connectionOk) {
-      throw new Error('Impossible de se connecter à PostgreSQL après plusieurs tentatives');
+    // Tentative de connexion avec retry
+    const connected = await testConnectionWithRetry(5, 3000);
+    if (!connected) {
+      throw new Error('Impossible de se connecter à PostgreSQL après 5 tentatives');
     }
-
-    // Table des thèmes
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS themes (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        keywords TEXT[] NOT NULL,
-        color TEXT DEFAULT '#6366f1',
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table themes créée');
-
-    // Table des flux RSS
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS feeds (
-        id SERIAL PRIMARY KEY,
-        url TEXT NOT NULL,
-        title TEXT,
-        last_fetched TIMESTAMP DEFAULT NULL,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table feeds créée');
-
-    // Table des articles
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS articles (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT,
-        link TEXT NOT NULL,
-        pub_date TIMESTAMP NOT NULL,
-        feed_url TEXT,
-        sentiment_score DECIMAL(3,2) DEFAULT 0,
-        sentiment_type VARCHAR(20) DEFAULT 'neutral',
-        sentiment_confidence DECIMAL(3,2) DEFAULT 0,
-        sentiment_words JSONB DEFAULT '[]',
-        irony_detected BOOLEAN DEFAULT FALSE,
-        ia_corrected BOOLEAN DEFAULT FALSE,
-        correction_confidence DECIMAL(3,2) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table articles créée');
-
-    // Table des analyses par thème
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS theme_analyses (
-        id SERIAL PRIMARY KEY,
-        theme_id INTEGER,
-        article_id INTEGER,
-        match_count INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table theme_analyses créée');
-
-    // Table des analyses temporelles
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS timeline_analyses (
-        id SERIAL PRIMARY KEY,
-        date DATE NOT NULL,
-        theme_name TEXT NOT NULL,
-        article_count INTEGER DEFAULT 0,
-        avg_sentiment DECIMAL(3,2) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table timeline_analyses créée');
-
-    // Table des corrections IA
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ia_corrections (
-        id SERIAL PRIMARY KEY,
-        article_id INTEGER REFERENCES articles(id),
-        original_score DECIMAL(3,2),
-        corrected_score DECIMAL(3,2),
-        confidence DECIMAL(3,2),
-        analysis_data JSONB,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table ia_corrections créée');
-
-    // Table du lexique de sentiment
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS sentiment_lexicon (
-        id SERIAL PRIMARY KEY,
-        word TEXT NOT NULL,
-        score DECIMAL(3,2) NOT NULL,
-        usage_count INTEGER DEFAULT 0,
-        total_score DECIMAL(10,4) DEFAULT 0,
-        consistency DECIMAL(4,3) DEFAULT 0.5,
-        last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table sentiment_lexicon créée');
-
-    // Table des statistiques d'usage
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS usage_stats (
-        id SERIAL PRIMARY KEY,
-        endpoint TEXT NOT NULL,
-        call_count INTEGER DEFAULT 0,
-        last_called TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        avg_response_time DECIMAL(8,2) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Table usage_stats créée');
-
-    // 🔥 CRÉER LES CONTRAINTES UNIQUE APRÈS LES TABLES
-    console.log('🔧 Création des contraintes UNIQUE...');
-    await ensureUniqueConstraints();
-
-    // Créer les index pour les performances
-    console.log('📊 Création des index...');
-    try {
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_pub_date ON articles(pub_date)');
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_sentiment ON articles(sentiment_score)');
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_articles_link ON articles(link)');
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_themes_name ON themes(name)');
-      await pool.query('CREATE INDEX IF NOT EXISTS idx_feeds_url ON feeds(url)');
-      console.log('✅ Index créés');
-    } catch (error) {
-      console.error('❌ Erreur création index:', error.message);
-    }
-
-    console.log('🎉 Base de données complètement initialisée avec succès');
-    return true;
-
+    
+    // Création des tables et index
+    await createTables();
+    await createIndexes();
+    
+    console.log('✅ Base de données initialisée avec succès');
+    return { success: true };
+    
   } catch (error) {
     console.error('❌ Erreur initialisation base de données:', error.message);
     throw error;
   }
 }
 
-// Fonction pour fermer proprement
-async function closeDatabase() {
-  try {
-    await pool.end();
-    console.log('✅ Connexion PostgreSQL fermée');
-  } catch (error) {
-    console.error('❌ Erreur fermeture base de données:', error.message);
-  }
-}
-
-// Fonction utilitaire pour vérifier l'état de la base
-async function checkDatabaseStatus() {
-  try {
-    const client = await pool.connect();
-    
-    // Compter les tables
-    const tablesResult = await client.query(`
-      SELECT COUNT(*) as table_count 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `);
-    
-    // Vérifier les contraintes UNIQUE
-    const constraintsResult = await client.query(`
-      SELECT table_name, constraint_name 
-      FROM information_schema.table_constraints 
-      WHERE constraint_type = 'UNIQUE' 
-      AND table_name IN ('themes', 'feeds', 'articles')
-    `);
-    
-    client.release();
-    
-    return {
-      connected: true,
-      tables: parseInt(tablesResult.rows[0].table_count),
-      uniqueConstraints: constraintsResult.rows.length,
-      constraints: constraintsResult.rows
-    };
-  } catch (error) {
-    return {
-      connected: false,
-      error: error.message
-    };
-  }
-}
-
-module.exports = {
-  pool,
+module.exports = { 
+  pool, 
   initializeDatabase,
-  testConnectionWithRetry,
-  ensureUniqueConstraints,
-  closeDatabase,
-  checkDatabaseStatus
+  testConnection: testConnectionWithRetry
 };
