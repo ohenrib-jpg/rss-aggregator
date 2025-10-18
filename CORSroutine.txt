@@ -1,0 +1,56 @@
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://rss-aggregator-l7qj.onrender.com", ...]
+    }
+})
+```
+
+### 2. **Suppression du serving frontend**
+- Flask ne sert plus `index.html` → C'est Node qui le fait
+- Route `/` renvoie juste les infos du service IA
+
+### 3. **Logs améliorés**
+- Préfixe `[FLASK-IA]` pour distinguer des logs Node
+- Plus de détails sur les calculs IA
+
+### 4. **Stats d'apprentissage enrichies**
+- Compte les analyses bayésiennes
+- Moyenne de corroboration
+- Modules actifs
+
+### 5. **Analyse géopolitique améliorée**
+- Intègre le sentiment dans le calcul de risque
+- Plus de zones surveillées (Syria, Yemen, Sudan)
+
+## 📋 Résumé de l'architecture finale
+```
+┌─────────────────────────────────────────────────┐
+│  FRONTEND (public/index.html + app.js)          │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│  NODE.JS (server.js) - Port 3000                │
+│  • Sert le frontend                             │
+│  • Gère les flux RSS                            │
+│  • Routes: /api/articles, /api/feeds, /api/themes│
+│  • Analyse sentiment locale (rapide)            │
+└────────────┬────────────────────────────────────┘
+             │ Appelle via axios
+             ▼
+┌─────────────────────────────────────────────────┐
+│  FLASK IA (app.py) - Port 5000                  │
+│  • Analyse bayésienne (analysis_utils)          │
+│  • Corroboration multi-sources                  │
+│  • Métriques avancées                           │
+│  • Analyse géopolitique                         │
+│  • Routes: /api/analyze, /api/metrics, etc.     │
+└────────────┬────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────────┐
+│  POSTGRESQL (Render)                            │
+│  • articles, themes, feeds                      │
+│  • analyses (résultats IA)                      │
+│  • sentiment_lexicon                            │
+└─────────────────────────────────────────────────┘

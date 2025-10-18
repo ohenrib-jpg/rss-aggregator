@@ -1,809 +1,189 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tableau de Bord Géopolitique Avancé</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-      color: #fff;
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 30px;
-      padding: 20px;
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 15px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    h1 {
-      font-size: 2.5em;
-      margin-bottom: 10px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .subtitle {
-      font-size: 1.1em;
-      opacity: 0.9;
-    }
-
-    .tabs {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .tab-button {
-      padding: 12px 24px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 10px;
-      color: #fff;
-      cursor: pointer;
-      transition: all 0.3s;
-      font-size: 1em;
-      font-weight: 500;
-    }
-
-    .tab-button:hover {
-      background: rgba(255, 255, 255, 0.2);
-      transform: translateY(-2px);
-    }
-
-    .tab-button.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-color: #667eea;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    }
-
-    .tab-content {
-      display: none;
-      animation: fadeIn 0.5s;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-
-    .card {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 15px;
-      padding: 25px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
-
-    .card h2 {
-      margin-bottom: 20px;
-      font-size: 1.5em;
-      border-bottom: 2px solid rgba(255, 255, 255, 0.3);
-      padding-bottom: 10px;
-    }
-
-    .chart-container {
-      position: relative;
-      height: 300px;
-      margin-top: 15px;
-    }
-
-    .metric-card {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
-      padding: 20px;
-      border-radius: 10px;
-      margin-bottom: 15px;
-    }
-
-    .metric-value {
-      font-size: 2.5em;
-      font-weight: bold;
-      margin: 10px 0;
-    }
-
-    .metric-label {
-      font-size: 1.1em;
-      opacity: 0.9;
-    }
-
-    .control-panel {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 20px;
-      border-radius: 15px;
-      margin-bottom: 20px;
-    }
-
-    .control-group {
-      margin-bottom: 15px;
-    }
-
-    .control-group label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-
-    input, select, textarea {
-      width: 100%;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      font-size: 1em;
-    }
-
-    input::placeholder, textarea::placeholder {
-      color: rgba(255, 255, 255, 0.6);
-    }
-
-    button {
-      padding: 12px 30px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: none;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 1em;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s;
-      margin-top: 10px;
-    }
-
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-    }
-
-    .event-list {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .event-item {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 10px;
-      border-left: 4px solid #667eea;
-    }
-
-    .event-date {
-      font-size: 0.9em;
-      opacity: 0.8;
-      margin-bottom: 5px;
-    }
-
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 1000;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(5px);
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal-content {
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-      padding: 30px;
-      border-radius: 15px;
-      max-width: 600px;
-      width: 90%;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
-    }
-
-    .close {
-      float: right;
-      font-size: 28px;
-      font-weight: bold;
-      cursor: pointer;
-      color: #fff;
-      line-height: 20px;
-    }
-
-    .close:hover {
-      color: #667eea;
-    }
-
-    .ai-response {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 20px;
-      border-radius: 10px;
-      margin-top: 15px;
-      min-height: 100px;
-      border-left: 4px solid #667eea;
-    }
-
-    @media (max-width: 768px) {
-      .dashboard-grid {
-        grid-template-columns: 1fr;
-      }
-      
-      h1 {
-        font-size: 1.8em;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agrégateur RSS + IA v2.3</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
+<div class="container">
+    <!-- En-tête -->
     <header>
-      <h1>🌍 Tableau de Bord Géopolitique</h1>
-      <p class="subtitle">Analyse avancée des tensions mondiales et prédictions stratégiques</p>
+        <div class="header-main">
+            <h1>📊 Agrégateur RSS Thématique + IA</h1>
+            <div style="display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap;">
+                <span style="background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;">Olivier Henri B.</span>
+                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.3</span>
+                <span id="aiStatus" style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem;">🤖 IA: Vérification...</span>
+            </div>
+        </div>
     </header>
 
-    <div class="tabs">
-      <button class="tab-button active" onclick="showTab('vue-ensemble')">Vue d'ensemble</button>
-      <button class="tab-button" onclick="showTab('analyse-regionale')">Analyse régionale</button>
-      <button class="tab-button" onclick="showTab('evenements')">Événements</button>
-      <button class="tab-button" onclick="showTab('predictions')">Prédictions IA</button>
+    <!-- Messages -->
+    <div id="messageContainer"></div>
+
+    <!-- Barre de statut -->
+    <div class="status-bar">
+        <div class="last-update" id="lastUpdate">Chargement...</div>
+        <div class="refresh-controls">
+            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation</div>
+            <button id="refreshBtn">🔄 Actualiser</button>
+        </div>
     </div>
 
-    <div id="vue-ensemble" class="tab-content active">
-      <div class="dashboard-grid">
-        <div class="card">
-          <h2>📊 Indice Global de Tension</h2>
-          <div class="chart-container">
-            <canvas id="tensionChart"></canvas>
-          </div>
+    <!-- Barre d'actions -->
+    <div class="export-bar">
+        <div class="export-controls">
+            <button class="btn btn-success export-btn json">📥 JSON</button>
+            <button class="btn btn-success export-btn csv">📥 CSV</button>
+            <button class="btn btn-secondary export-btn stats">📊 Stats IA</button>
+            <button class="btn btn-secondary" onclick="showAIConfig()">⚙️ Config IA</button>
         </div>
-
-        <div class="card">
-          <h2>🎯 Points Chauds Actuels</h2>
-          <div class="metric-card">
-            <div class="metric-label">Niveau d'alerte moyen</div>
-            <div class="metric-value">7.2/10</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Zones de conflit actives</div>
-            <div class="metric-value">12</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Crises potentielles (30j)</div>
-            <div class="metric-value">5</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>🌐 Répartition des Tensions</h2>
-          <div class="chart-container">
-            <canvas id="regionChart"></canvas>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>📈 Évolution Trimestrielle</h2>
-          <div class="chart-container">
-            <canvas id="evolutionChart"></canvas>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <div id="analyse-regionale" class="tab-content">
-      <div class="control-panel">
-        <div class="control-group">
-          <label>Sélectionner une région :</label>
-          <select id="regionSelect">
-            <option value="moyen-orient">Moyen-Orient</option>
-            <option value="asie-pacifique">Asie-Pacifique</option>
-            <option value="europe">Europe</option>
-            <option value="afrique">Afrique</option>
-            <option value="ameriques">Amériques</option>
-          </select>
-        </div>
-        <button onclick="analyzeRegion()">Analyser la région</button>
-      </div>
-
-      <div class="dashboard-grid">
-        <div class="card">
-          <h2>📍 Facteurs de Tension</h2>
-          <div class="chart-container">
-            <canvas id="factorsChart"></canvas>
-          </div>
+    <!-- Onglets -->
+    <div class="tab-container">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('analysis')">📈 Analyse</div>
+            <div class="tab" onclick="showTab('metrics')">🎯 Métriques</div>
+            <div class="tab" onclick="showTab('sentiment')">😊 Sentiment</div>
+            <div class="tab" onclick="showTab('learning')">🧠 Apprentissage</div>
+            <div class="tab" onclick="showTab('feeds')">📰 Flux RSS</div>
+            <div class="tab" onclick="showTab('themes')">🎨 Thèmes</div>
+            <div class="tab" onclick="showTab('articles')">📄 Articles</div>
         </div>
 
-        <div class="card">
-          <h2>🔍 Analyse Détaillée</h2>
-          <div id="regionalAnalysis" class="ai-response">
-            Sélectionnez une région pour voir l'analyse détaillée...
-          </div>
+        <!-- Analyse -->
+        <div id="analysisTab" class="tab-content active">
+            <div class="dashboard">
+                <div class="card">
+                    <h3>📊 Répartition par Thème</h3>
+                    <canvas id="themeChart"></canvas>
+                </div>
+                <div class="card">
+                    <h3>📈 Évolution Temporelle</h3>
+                    <canvas id="timelineChart"></canvas>
+                </div>
+            </div>
         </div>
-      </div>
+
+        <!-- Métriques -->
+        <div id="metricsTab" class="tab-content">
+            <div class="stats-grid">
+                <div class="metric-card"><strong>Total Articles :</strong> <span id="m_total">—</span></div>
+                <div class="metric-card"><strong>Confiance :</strong> <span id="m_confidence">—</span></div>
+                <div class="metric-card"><strong>Bayésien :</strong> <span id="m_posterior">—</span></div>
+                <div class="metric-card"><strong>Corroboration :</strong> <span id="m_corro">—</span></div>
+            </div>
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>📈 Évolution du Sentiment</h3>
+                    <canvas id="sentimentChart"></canvas>
+                </div>
+            </div>
+            <div class="dashboard">
+                <div class="card full-width">
+                    <h3>🏆 Thèmes Principaux</h3>
+                    <ul id="topThemes" class="top-themes"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sentiment -->
+        <div id="sentimentTab" class="tab-content">
+            <div id="sentimentOverview" class="loading">Analyse de sentiment...</div>
+        </div>
+
+        <!-- Apprentissage -->
+        <div id="learningTab" class="tab-content">
+            <div id="learningStats" class="loading">Chargement...</div>
+        </div>
+
+        <!-- Flux RSS -->
+        <div id="feedsTab" class="tab-content">
+            <div class="card">
+                <h3>📋 Mes Flux RSS</h3>
+                <div id="feedsList" class="loading">Chargement...</div>
+            </div>
+        </div>
+
+        <!-- Thèmes -->
+        <div id="themesTab" class="tab-content">
+            <div class="card">
+                <h3>🎨 Mes Thèmes</h3>
+                <div id="themesList" class="loading">Chargement...</div>
+            </div>
+        </div>
+
+        <!-- Articles -->
+        <div id="articlesTab" class="tab-content">
+            <div class="card full-width">
+                <h3>📄 Derniers Articles</h3>
+                <div id="articlesList" class="loading">Chargement...</div>
+            </div>
+        </div>
     </div>
+</div>
 
-    <div id="evenements" class="tab-content">
-      <div class="control-panel">
-        <div class="control-group">
-          <label>Titre de l'événement :</label>
-          <input type="text" id="eventTitle" placeholder="Ex: Escalade diplomatique">
-        </div>
-        <div class="control-group">
-          <label>Description :</label>
-          <textarea id="eventDescription" rows="3" placeholder="Description détaillée..."></textarea>
-        </div>
-        <div class="control-group">
-          <label>Niveau de gravité (1-10) :</label>
-          <input type="number" id="eventSeverity" min="1" max="10" value="5">
-        </div>
-        <button onclick="addEvent()">Ajouter l'événement</button>
-      </div>
-
-      <div class="card">
-        <h2>📅 Chronologie des Événements</h2>
-        <div id="eventsList" class="event-list">
-          <div class="event-item">
-            <div class="event-date">18 octobre 2025</div>
-            <strong>Exercice militaire conjoint</strong>
-            <p>Augmentation des tensions en mer de Chine méridionale suite à des exercices militaires.</p>
-          </div>
-          <div class="event-item">
-            <div class="event-date">15 octobre 2025</div>
-            <strong>Sommet diplomatique</strong>
-            <p>Rencontre historique entre les leaders régionaux pour apaiser les tensions.</p>
-          </div>
-        </div>
-      </div>
+<!-- Modal Stats IA -->
+<div id="learningStatsModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('learningStatsModal')">&times;</span>
+        <h2>📊 Statistiques d'Apprentissage IA</h2>
+        <div id="modalLearningStats" class="loading">Chargement...</div>
     </div>
+</div>
 
-    <div id="predictions" class="tab-content">
-      <div class="control-panel">
-        <div class="control-group">
-          <label>Votre question d'analyse :</label>
-          <textarea id="aiQuery" rows="4" placeholder="Ex: Quelles sont les probabilités d'escalade au Moyen-Orient dans les 6 prochains mois ?"></textarea>
+<!-- Modal Configuration IA -->
+<div id="aiConfigModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('aiConfigModal')">&times;</span>
+        <h2>⚙️ Configuration de l'IA</h2>
+        
+        <div style="margin: 25px 0;">
+            <h3 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Clé API OpenAI :</label>
+                <input type="password" id="openaiKey" placeholder="sk-..." style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <small style="color: #64748b;">Obtenez une clé gratuite sur <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a></small>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle :</label>
+                <select id="openaiModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (rapide)</option>
+                    <option value="gpt-4">GPT-4 (précis)</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                </select>
+            </div>
         </div>
-        <button onclick="getAIPrediction()">Générer l'analyse IA</button>
-      </div>
 
-      <div class="card">
-        <h2>🤖 Analyse Prédictive</h2>
-        <div id="aiPrediction" class="ai-response">
-          Posez une question pour obtenir une analyse prédictive basée sur l'IA...
+        <div style="margin: 25px 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+            <h3 style="margin-bottom: 15px;">💻 IA Locale (Llama.cpp)</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="enableLocal">
+                    <span>Utiliser l'IA locale (fallback)</span>
+                </label>
+                <small style="color: #64748b; display: block; margin-top: 5px;">Nécessite Llama.cpp installé localement</small>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">URL Llama.cpp :</label>
+                <input type="text" id="llamaUrl" placeholder="http://localhost:8080" value="http://localhost:8080" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            </div>
         </div>
-      </div>
 
-      <div class="dashboard-grid">
-        <div class="card">
-          <h2>📊 Probabilités de Scénarios</h2>
-          <div class="chart-container">
-            <canvas id="scenariosChart"></canvas>
-          </div>
+        <div style="display: flex; gap: 10px; margin-top: 25px;">
+            <button class="btn btn-success" onclick="saveAIConfig()">💾 Sauvegarder</button>
+            <button class="btn btn-secondary" onclick="testAIConnection()">🔍 Tester la connexion</button>
+            <button class="btn btn-secondary" onclick="closeModal('aiConfigModal')">❌ Annuler</button>
         </div>
-
-        <div class="card">
-          <h2>⚠️ Indicateurs d'Alerte Précoce</h2>
-          <div class="chart-container">
-            <canvas id="alertsChart"></canvas>
-          </div>
-        </div>
-      </div>
     </div>
+</div>
 
-    <div id="addEventModal" class="modal">
-      <div class="modal-content">
-        <span class="close" onclick="closeModal('addEventModal')">&times;</span>
-        <h2>✅ Événement ajouté</h2>
-        <p>L'événement a été ajouté avec succès à la chronologie.</p>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let chartManager = null;
-
-    class ChartManager {
-      constructor() {
-        this.charts = {};
-        this.initializeCharts();
-      }
-
-      initializeCharts() {
-        this.createTensionChart();
-        this.createRegionChart();
-        this.createEvolutionChart();
-        this.createFactorsChart();
-        this.createScenariosChart();
-        this.createAlertsChart();
-      }
-
-      createTensionChart() {
-        const ctx = document.getElementById('tensionChart');
-        if (!ctx) return;
-        
-        this.charts.tension = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct'],
-            datasets: [{
-              label: 'Indice de tension global',
-              data: [6.5, 6.8, 7.0, 6.9, 7.2, 7.5, 7.3, 7.1, 7.4, 7.2],
-              borderColor: '#667eea',
-              backgroundColor: 'rgba(102, 126, 234, 0.1)',
-              tension: 0.4,
-              fill: true
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { labels: { color: '#fff' } }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                max: 10,
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              },
-              x: {
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              }
-            }
-          }
-        });
-      }
-
-      createRegionChart() {
-        const ctx = document.getElementById('regionChart');
-        if (!ctx) return;
-        
-        this.charts.region = new Chart(ctx, {
-          type: 'doughnut',
-          data: {
-            labels: ['Moyen-Orient', 'Asie-Pacifique', 'Europe', 'Afrique', 'Amériques'],
-            datasets: [{
-              data: [30, 25, 15, 20, 10],
-              backgroundColor: [
-                '#667eea',
-                '#764ba2',
-                '#f093fb',
-                '#4facfe',
-                '#43e97b'
-              ]
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'bottom',
-                labels: { color: '#fff', padding: 15 }
-              }
-            }
-          }
-        });
-      }
-
-      createEvolutionChart() {
-        const ctx = document.getElementById('evolutionChart');
-        if (!ctx) return;
-        
-        this.charts.evolution = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: ['T1 2024', 'T2 2024', 'T3 2024', 'T4 2024'],
-            datasets: [{
-              label: 'Nombre de crises',
-              data: [8, 10, 11, 12],
-              backgroundColor: '#667eea'
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { labels: { color: '#fff' } }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              },
-              x: {
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              }
-            }
-          }
-        });
-      }
-
-      createFactorsChart() {
-        const ctx = document.getElementById('factorsChart');
-        if (!ctx) return;
-        
-        this.charts.factors = new Chart(ctx, {
-          type: 'radar',
-          data: {
-            labels: ['Militaire', 'Économique', 'Diplomatique', 'Social', 'Ressources'],
-            datasets: [{
-              label: 'Niveau de tension',
-              data: [8, 6, 7, 5, 9],
-              borderColor: '#667eea',
-              backgroundColor: 'rgba(102, 126, 234, 0.2)'
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { labels: { color: '#fff' } }
-            },
-            scales: {
-              r: {
-                beginAtZero: true,
-                max: 10,
-                ticks: { color: '#fff', backdropColor: 'transparent' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                pointLabels: { color: '#fff' }
-              }
-            }
-          }
-        });
-      }
-
-      createScenariosChart() {
-        const ctx = document.getElementById('scenariosChart');
-        if (!ctx) return;
-        
-        this.charts.scenarios = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: ['Escalade', 'Status quo', 'Désescalade', 'Conflit ouvert', 'Résolution'],
-            datasets: [{
-              label: 'Probabilité (%)',
-              data: [35, 30, 20, 10, 5],
-              backgroundColor: ['#e74c3c', '#f39c12', '#3498db', '#c0392b', '#27ae60']
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: 'y',
-            plugins: {
-              legend: { labels: { color: '#fff' } }
-            },
-            scales: {
-              x: {
-                beginAtZero: true,
-                max: 100,
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              },
-              y: {
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              }
-            }
-          }
-        });
-      }
-
-      createAlertsChart() {
-        const ctx = document.getElementById('alertsChart');
-        if (!ctx) return;
-        
-        this.charts.alerts = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'],
-            datasets: [
-              {
-                label: 'Activité militaire',
-                data: [5, 6, 7, 8, 7, 9, 8, 9],
-                borderColor: '#e74c3c',
-                tension: 0.4
-              },
-              {
-                label: 'Tensions diplomatiques',
-                data: [4, 5, 6, 6, 7, 7, 8, 7],
-                borderColor: '#f39c12',
-                tension: 0.4
-              },
-              {
-                label: 'Instabilité économique',
-                data: [6, 6, 5, 7, 6, 8, 7, 8],
-                borderColor: '#3498db',
-                tension: 0.4
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { labels: { color: '#fff' } }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                max: 10,
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              },
-              x: {
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              }
-            }
-          }
-        });
-      }
-
-      refreshCharts() {
-        Object.values(this.charts).forEach(chart => {
-          if (chart) chart.update();
-        });
-      }
-    }
-
-    function showTab(tabName) {
-      const tabs = document.querySelectorAll('.tab-content');
-      const buttons = document.querySelectorAll('.tab-button');
-      
-      tabs.forEach(tab => tab.classList.remove('active'));
-      buttons.forEach(btn => btn.classList.remove('active'));
-      
-      const activeTab = document.getElementById(tabName);
-      const activeButton = Array.from(buttons).find(btn => 
-        btn.textContent.includes(getTabLabel(tabName))
-      );
-      
-      if (activeTab) activeTab.classList.add('active');
-      if (activeButton) activeButton.classList.add('active');
-      
-      if (chartManager) {
-        setTimeout(() => chartManager.refreshCharts(), 100);
-      }
-    }
-
-    function getTabLabel(tabName) {
-      const labels = {
-        'vue-ensemble': 'Vue d\'ensemble',
-        'analyse-regionale': 'Analyse régionale',
-        'evenements': 'Événements',
-        'predictions': 'Prédictions IA'
-      };
-      return labels[tabName] || '';
-    }
-
-    function analyzeRegion() {
-      const region = document.getElementById('regionSelect').value;
-      const analysisDiv = document.getElementById('regionalAnalysis');
-      
-      const analyses = {
-        'moyen-orient': 'Analyse du Moyen-Orient : Tensions élevées persistantes liées aux conflits historiques, concurrence pour les ressources énergétiques et rivalités régionales. Niveau d\'alerte : 8.5/10.',
-        'asie-pacifique': 'Analyse Asie-Pacifique : Montée des tensions territoriales en mer de Chine méridionale, course aux armements navals et rivalités économiques. Niveau d\'alerte : 7.8/10.',
-        'europe': 'Analyse Europe : Tensions modérées centrées sur les questions énergétiques et les défis sécuritaires régionaux. Niveau d\'alerte : 6.2/10.',
-        'afrique': 'Analyse Afrique : Instabilité croissante due aux conflits internes, compétition pour les ressources et influences extérieures. Niveau d\'alerte : 7.0/10.',
-        'ameriques': 'Analyse Amériques : Tensions relativement faibles, principalement liées aux questions migratoires et économiques. Niveau d\'alerte : 5.5/10.'
-      };
-      
-      analysisDiv.innerHTML = analyses[region] || 'Analyse non disponible.';
-    }
-
-    function addEvent() {
-      const title = document.getElementById('eventTitle').value;
-      const description = document.getElementById('eventDescription').value;
-      const severity = document.getElementById('eventSeverity').value;
-      
-      if (!title || !description) {
-        alert('Veuillez remplir tous les champs.');
-        return;
-      }
-      
-      const eventsList = document.getElementById('eventsList');
-      const today = new Date().toLocaleDateString('fr-FR', { 
-        day: 'numeric', 
-        month: 'long', 
-        year: 'numeric' 
-      });
-      
-      const newEvent = document.createElement('div');
-      newEvent.className = 'event-item';
-      newEvent.innerHTML = `
-        <div class="event-date">${today} - Gravité: ${severity}/10</div>
-        <strong>${title}</strong>
-        <p>${description}</p>
-      `;
-      
-      eventsList.insertBefore(newEvent, eventsList.firstChild);
-      
-      document.getElementById('eventTitle').value = '';
-      document.getElementById('eventDescription').value = '';
-      document.getElementById('eventSeverity').value = '5';
-      
-      showModal('addEventModal');
-    }
-
-    function getAIPrediction() {
-      const query = document.getElementById('aiQuery').value;
-      const predictionDiv = document.getElementById('aiPrediction');
-      
-      if (!query) {
-        alert('Veuillez saisir une question.');
-        return;
-      }
-      
-      predictionDiv.innerHTML = '<p>⏳ Génération de l\'analyse en cours...</p>';
-      
-      setTimeout(() => {
-        predictionDiv.innerHTML = `
-          <h3>Analyse pour : "${query}"</h3>
-          <p><strong>Évaluation globale :</strong> Les modèles prédictifs indiquent une probabilité modérée à élevée d'escalade dans les zones actuellement sous tension.</p>
-          <p><strong>Facteurs clés :</strong></p>
-          <ul style="margin-left: 20px; margin-top: 10px;">
-            <li>Augmentation des déploiements militaires (+15% sur 30 jours)</li>
-            <li>Dégradation des canaux diplomatiques (-22%)</li>
-            <li>Volatilité économique accrue dans la région</li>
-          </ul>
-          <p><strong>Recommandations :</strong> Surveillance accrue des indicateurs d'alerte précoce, maintien des canaux de communication diplomatique, préparation de scénarios de contingence.</p>
-          <p style="margin-top: 15px; font-size: 0.9em; opacity: 0.8;">⚠️ Cette analyse est générée à partir de données simulées à des fins pédagogiques.</p>
-        `;
-      }, 1500);
-    }
-
-    function showModal(modalId) {
-      const modal = document.getElementById(modalId);
-      if (modal) modal.style.display = 'flex';
-    }
-
-    function closeModal(modalId) {
-      const modal = document.getElementById(modalId);
-      if (modal) modal.style.display = 'none';
-    }
-
-    window.addEventListener('click', function(event) {
-      if (event.target.classList.contains('modal')) {
-        event.target.style.display = 'none';
-      }
-    });
-
-    document.addEventListener('DOMContentLoaded', function() {
-      chartManager = new ChartManager();
-    });
-  </script>
+<script src="app.js"></script>
+<script src="chart-manager.js"></script>
 </body>
 </html>

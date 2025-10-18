@@ -32,6 +32,7 @@
         backgroundColor: "rgba(255,99,132,0.06)",
         borderColor: "rgba(255,99,132,1)"
       },
+      {
 window.app = (function () {
   const state = {
     apiBase: "/api",
