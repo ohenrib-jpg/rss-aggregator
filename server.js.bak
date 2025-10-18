@@ -8,9 +8,6 @@ const nodemailer = require('nodemailer'); // npm install nodemailer
 const { pool, initializeDatabase } = require('./db/database');
 
 const app = express();
-
-app.use(cors());
-app.use(bodyParser.json());
 const parser = new Parser({
   timeout: 10000,
   customFields: { item: ['content:encoded'] }
@@ -516,8 +513,3 @@ async function refreshData() {
 }
 
 // ============ ROUTES API (suite dans le prochain message) ============
-
-// Start server (bind to Render PORT if provided)
-app.listen(PORT, () => {
-  console.log(`🚀 RSS Aggregator Node service listening on port ${PORT}`);
-});

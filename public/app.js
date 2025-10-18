@@ -1,3 +1,4 @@
+const API_BASE = window.__API_BASE__ || (location.origin.includes('http') ? location.origin : 'http://localhost:3000');
 /* public/app.js - Version finale avec IA intégrée - SANS ERREURS */
 
 window.app = (function () {
