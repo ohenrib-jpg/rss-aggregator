@@ -1307,6 +1307,35 @@ app.get('/api/sentiment/stats', async (req, res) => {
   }
 });
 
+// ============ ROUTE COMPTEUR D'ARTICLES ============
+
+app.get('/api/articles/count', async (req, res) => {
+  try {
+    console.log('🔢 Comptage des articles...');
+    
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as total FROM articles');
+    client.release();
+    
+    const total = parseInt(result.rows[0].total);
+    
+    console.log(`✅ ${total} articles comptabilisés`);
+    
+    res.json({
+      success: true,
+      total: total,
+      message: `${total} articles dans la base de données`
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur comptage articles:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Stats d'apprentissage
 app.get('/api/learning-stats', async (req, res) => {
   try {
