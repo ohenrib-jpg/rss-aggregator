@@ -1,17 +1,71 @@
-// db/database.js - Version résiliente
+// db/database.js - Version ultra-résiliente pour Render
 const { Pool } = require('pg');
 const fs = require('fs').promises;
 const path = require('path');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+// Configuration optimisée pour Render
+const poolConfig = {
+  connectionString: process.env.DABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
+  max: 5, // TRÈS IMPORTANT: réduit le nombre de connexions
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000, // Timeout plus long
+  maxUses: 5000, // Recyclage fréquent
+};
+
+console.log('🔧 Configuration PostgreSQL:', {
+  hasDatabaseUrl: !!process.env.DATABASE_URL,
+  ssl: poolConfig.ssl ? 'activé' : 'désactivé',
+  maxConnections: poolConfig.max
 });
 
-// ✅ FONCTION RÉSILIENTE : Vérifie si un fichier existe
+const pool = new Pool(poolConfig);
+
+// Gestion robuste des erreurs
+pool.on('error', (err, client) => {
+  console.error('❌ Erreur inattendue PostgreSQL:', err);
+});
+
+pool.on('connect', () => {
+  console.log('🔗 Nouvelle connexion PostgreSQL établie');
+});
+
+pool.on('remove', () => {
+  console.log('🔗 Connexion PostgreSQL fermée');
+});
+
+// Test de connexion avec retry intelligent
+async function testConnectionWithRetry(maxRetries = 5, delay = 3000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let client;
+    try {
+      console.log(`🔗 Tentative de connexion PostgreSQL (${attempt}/${maxRetries})...`);
+      
+      client = await pool.connect();
+      const result = await client.query('SELECT NOW() as time');
+      
+      console.log('✅ Connecté à PostgreSQL:', result.rows[0].time);
+      return true;
+      
+    } catch (error) {
+      console.warn(`⚠️ Échec connexion (tentative ${attempt}):`, error.message);
+      
+      // Attente progressive (3s, 6s, 9s, 12s, 15s)
+      if (attempt < maxRetries) {
+        const waitTime = delay * attempt;
+        console.log(`⏳ Nouvelle tentative dans ${waitTime/1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    } finally {
+      if (client) client.release();
+    }
+  }
+  
+  console.error('❌ Échec de toutes les tentatives de connexion');
+  return false;
+}
+
+// Vérification simple de fichier
 async function fileExists(filePath) {
   try {
     await fs.access(filePath);
@@ -21,7 +75,7 @@ async function fileExists(filePath) {
   }
 }
 
-// ✅ FONCTION RÉSILIENTE : Création des tables avec fallback
+// Création des tables (version simplifiée)
 async function createTables() {
   const client = await pool.connect();
   try {
@@ -30,42 +84,34 @@ async function createTables() {
     const schemaPath = path.join(__dirname, 'schema.sql');
     
     if (await fileExists(schemaPath)) {
-      // Méthode normale : avec fichier SQL
       const tablesSQL = await fs.readFile(schemaPath, 'utf8');
       await client.query(tablesSQL);
       console.log('✅ Tables créées via schema.sql');
     } else {
-      // Méthode fallback : création manuelle
-      console.log('ℹ️  schema.sql non trouvé, création manuelle...');
+      console.log('ℹ️  Création manuelle des tables...');
       await createTablesManually(client);
-      console.log('✅ Tables créées manuellement');
     }
     
   } catch (error) {
-    console.error('❌ Erreur création tables:', error);
+    console.error('❌ Erreur création tables:', error.message);
     throw error;
   } finally {
     client.release();
   }
 }
 
-// ✅ FONCTION DE FALLBACK : Création manuelle des tables
+// Création manuelle des tables (fallback)
 async function createTablesManually(client) {
-  // Table feeds
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS feeds (
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS feeds (
       id SERIAL PRIMARY KEY,
       url VARCHAR(500) UNIQUE NOT NULL,
       title VARCHAR(300),
       is_active BOOLEAN DEFAULT true,
-      last_fetched TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-
-  // Table articles
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS articles (
+    )`,
+    
+    `CREATE TABLE IF NOT EXISTS articles (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       content TEXT,
@@ -74,48 +120,29 @@ async function createTablesManually(client) {
       feed_url VARCHAR(500),
       sentiment_score FLOAT DEFAULT 0,
       sentiment_type VARCHAR(20) DEFAULT 'neutral',
-      sentiment_confidence FLOAT DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-
-  // Table themes
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS themes (
+    )`,
+    
+    `CREATE TABLE IF NOT EXISTS themes (
       id VARCHAR(100) PRIMARY KEY,
       name VARCHAR(200) NOT NULL,
       keywords TEXT[],
       color VARCHAR(7) DEFAULT '#6366f1',
-      description TEXT,
       created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
+    )`
+  ];
 
-  // Table theme_analyses
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS theme_analyses (
-      id SERIAL PRIMARY KEY,
-      article_id INTEGER REFERENCES articles(id) ON DELETE CASCADE,
-      theme_id VARCHAR(100) REFERENCES themes(id) ON DELETE CASCADE,
-      confidence FLOAT DEFAULT 1.0,
-      created_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(article_id, theme_id)
-    )
-  `);
-
-  // Table sentiment_lexicon
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS sentiment_lexicon (
-      id SERIAL PRIMARY KEY,
-      word VARCHAR(100) UNIQUE NOT NULL,
-      score FLOAT NOT NULL,
-      language VARCHAR(10) DEFAULT 'fr',
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
+  for (const tableSQL of tables) {
+    try {
+      await client.query(tableSQL);
+    } catch (error) {
+      console.warn('⚠️ Table peut déjà exister:', error.message);
+    }
+  }
+  console.log('✅ Tables créées manuellement');
 }
 
-// ✅ FONCTION RÉSILIENTE : Création des index
+// Création des index (version simplifiée)
 async function createIndexes() {
   const client = await pool.connect();
   try {
@@ -124,66 +151,51 @@ async function createIndexes() {
     const indexPath = path.join(__dirname, 'indexes.sql');
     
     if (await fileExists(indexPath)) {
-      // Méthode normale : avec fichier SQL
       const indexSQL = await fs.readFile(indexPath, 'utf8');
       await client.query(indexSQL);
       console.log('✅ Index créés via indexes.sql');
     } else {
-      // Méthode fallback : création manuelle des index critiques
-      console.log('ℹ️  indexes.sql non trouvé, création manuelle des index...');
-      await createIndexesManually(client);
-      console.log('✅ Index créés manuellement');
+      console.log('ℹ️  Création manuelle des index critiques...');
+      await createCriticalIndexes(client);
     }
     
   } catch (error) {
-    console.warn('⚠️ Erreur création index:', error.message);
+    console.warn('⚠️ Erreur création index (non critique):', error.message);
   } finally {
     client.release();
   }
 }
 
-// ✅ FONCTION DE FALLBACK : Création manuelle des index
-async function createIndexesManually(client) {
-  // Index critiques seulement
+// Index critiques seulement
+async function createCriticalIndexes(client) {
   const criticalIndexes = [
-    `CREATE INDEX IF NOT EXISTS idx_articles_pub_date_desc ON articles(pub_date DESC)`,
-    `CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_articles_feed_url ON articles(feed_url)`,
-    `CREATE INDEX IF NOT EXISTS idx_articles_sentiment_score ON articles(sentiment_score)`,
-    `CREATE INDEX IF NOT EXISTS idx_feeds_url ON feeds(url)`,
-    `CREATE INDEX IF NOT EXISTS idx_feeds_active ON feeds(is_active) WHERE is_active = true`
+    'CREATE INDEX IF NOT EXISTS idx_articles_pub_date_desc ON articles(pub_date DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_articles_link ON articles(link)',
+    'CREATE INDEX IF NOT EXISTS idx_feeds_url ON feeds(url)'
   ];
 
   for (const indexSQL of criticalIndexes) {
     try {
       await client.query(indexSQL);
     } catch (error) {
-      console.warn(`⚠️ Index non créé: ${error.message}`);
+      console.warn('⚠️ Index peut déjà exister:', error.message);
     }
   }
+  console.log('✅ Index critiques créés');
 }
 
-// Le reste du code reste identique...
-async function testConnection() {
-  try {
-    const client = await pool.connect();
-    const result = await client.query('SELECT NOW()');
-    client.release();
-    console.log('✅ Connecté à PostgreSQL:', result.rows[0].now);
-    return true;
-  } catch (error) {
-    console.error('❌ Impossible de se connecter à PostgreSQL:', error.message);
-    return false;
-  }
-}
-
+// Initialisation principale
 async function initializeDatabase() {
   try {
     console.log('🚀 Initialisation de la base de données...');
     
-    const connected = await testConnection();
-    if (!connected) throw new Error('Connexion PostgreSQL échouée');
+    // Tentative de connexion avec retry
+    const connected = await testConnectionWithRetry(5, 3000);
+    if (!connected) {
+      throw new Error('Impossible de se connecter à PostgreSQL après 5 tentatives');
+    }
     
+    // Création des tables et index
     await createTables();
     await createIndexes();
     
@@ -191,14 +203,13 @@ async function initializeDatabase() {
     return { success: true };
     
   } catch (error) {
-    console.error('❌ Erreur initialisation base de données:', error);
+    console.error('❌ Erreur initialisation base de données:', error.message);
     throw error;
   }
 }
 
 module.exports = { 
   pool, 
-  initializeDatabase, 
-  createIndexes,
-  testConnection 
+  initializeDatabase,
+  testConnection: testConnectionWithRetry
 };
