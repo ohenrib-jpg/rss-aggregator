@@ -27,6 +27,7 @@
       { 
         label: "Négative", 
         data: neg/* public/app.js - Version corrigée avec routes API uniformes */
+      },
 window.app = (function () {
   const state = {
     apiBase: "/api",
