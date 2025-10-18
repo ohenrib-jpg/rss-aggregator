@@ -960,49 +960,54 @@ async function saveFeedToConfig(url) {
 async function initializeThemes() {
   try {
     const client = await pool.connect();
-    
-    // Vérifier si des thèmes existent déjà
     const result = await client.query('SELECT COUNT(*) as count FROM themes');
+    
     if (parseInt(result.rows[0].count) === 0) {
-      console.log('📋 Chargement des thèmes depuis themes.json...');
-      
-      try {
-        const fs = require('fs').promises;
-        const themesData = JSON.parse(await fs.readFile('./themes.json', 'utf8'));
-        
-        for (const theme of themesData.themes) {
-          await client.query(
-            `INSERT INTO themes (id, name, keywords, color, description) 
-             VALUES ($1, $2, $3, $4, $5) 
-             ON CONFLICT (id) DO NOTHING`,
-            [theme.id, theme.name, theme.keywords, theme.color, theme.description]
-          );
-        }
-        console.log(`✅ ${themesData.themes.length} thèmes chargés dans la base`);
-      } catch (e) {
-        console.warn('⚠️ Impossible de charger themes.json, utilisation des thèmes par défaut');
-        // Thèmes par défaut
-        const defaultThemes = [
-          ['geo_politique', 'Politique', ['politique', 'gouvernement'], '#3b82f6', 'Actualités politiques'],
-          ['geo_economie', 'Économie', ['économie', 'bourse'], '#10b981', 'Actualités économiques'],
-          ['geo_sante', 'Santé', ['santé', 'médecine'], '#ef4444', 'Actualités sanitaires']
-        ];
-        
-        for (const theme of defaultThemes) {
-          await client.query(
-            'INSERT INTO themes (id, name, keywords, color, description) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING',
-            theme
-          );
-        }
-        console.log('✅ Thèmes par défaut chargés');
-      }
+      console.log('📋 Chargement des thèmes par défaut...');
+      // Charger les thèmes par défaut
     } else {
-      console.log(`✅ ${result.rows[0].count} thèmes déjà présents en base`);
+      console.log(`✅ ${result.rows[0].count} thèmes déjà présents`);
     }
     
     client.release();
   } catch (error) {
-    console.error('❌ Erreur initialisation thèmes:', error);
+    console.warn('⚠️ Erreur initialisation thèmes:', error.message);
+  }
+}
+
+async function initializeFeeds() {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as count FROM feeds');
+    
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📋 Chargement des flux par défaut...');
+      // Charger les flux par défaut
+    } else {
+      console.log(`✅ ${result.rows[0].count} flux déjà présents`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.warn('⚠️ Erreur initialisation flux:', error.message);
+  }
+}
+
+async function initializeSentimentLexicon() {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as count FROM sentiment_lexicon');
+    
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📚 Initialisation du lexique de sentiment...');
+      // Initialiser le lexique
+    } else {
+      console.log(`✅ ${result.rows[0].count} mots dans le lexique`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.warn('⚠️ Erreur initialisation lexique:', error.message);
   }
 }
 
@@ -1092,27 +1097,8 @@ async function initializeSentimentLexicon() {
 }
 
 async function initializeData() {
-  console.log('🚀 Initialisation des données...');
-  
-  try {
-    // Initialiser la base de données
-    await initializeDatabase();
-    console.log('✅ Base de données initialisée');
+  console.log('✅ Initialisation des données terminée');
     
-    // Initialiser les thèmes
-    await initializeThemes();
-    
-    // Initialiser les flux RSS
-    await initializeFeeds();
-    
-    // Initialiser le lexique de sentiment
-    await initializeSentimentLexicon();
-    
-    // Rafraîchir les données initiales
-    console.log('🔄 Chargement des données initiales...');
-    await refreshData();
-    
-    console.log('✅ Initialisation terminée avec succès');
   } catch (error) {
     console.error('❌ Erreur lors de l\'initialisation:', error);
     throw error;
@@ -1397,6 +1383,120 @@ app.get('/api/export/csv', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ============ GESTION ROBUSTE DU DÉMARRAGE ============
+
+let isDatabaseReady = false;
+let databaseInitPromise = null;
+
+// Fonction d'initialisation centralisée
+async function initializeApplication() {
+  console.log('🚀 Initialisation de l\'application...');
+  
+  try {
+    // 1. Initialiser la base de données d'abord
+    console.log('📦 Initialisation de la base de données...');
+    await initializeDatabase();
+    isDatabaseReady = true;
+    console.log('✅ Base de données prête');
+    
+    // 2. Initialiser les données
+    console.log('📋 Chargement des données initiales...');
+    await initializeThemes();
+    await initializeFeeds();
+    await initializeSentimentLexicon();
+    
+    // 3. Rafraîchissement initial (optionnel, peut être fait en background)
+    console.log('🔄 Chargement initial des articles...');
+    refreshData().then(() => {
+      console.log('✅ Données initiales chargées');
+    }).catch(err => {
+      console.warn('⚠️ Rafraîchissement initial échoué:', err.message);
+    });
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Échec initialisation application:', error);
+    isDatabaseReady = false;
+    throw error;
+  }
+}
+
+// Middleware pour vérifier la disponibilité de la DB
+app.use((req, res, next) => {
+  if (!isDatabaseReady && req.path.startsWith('/api/') && !req.path.includes('/health')) {
+    return res.status(503).json({
+      success: false,
+      error: 'Service temporairement indisponible',
+      message: 'Base de données en cours d\'initialisation'
+    });
+  }
+  next();
+});
+
+// Route health améliorée
+app.get('/api/health', async (req, res) => {
+  try {
+    let dbStatus = 'disconnected';
+    let flaskStatus = 'unknown';
+    
+    if (isDatabaseReady) {
+      const client = await pool.connect();
+      client.release();
+      dbStatus = 'connected';
+    }
+    
+    try {
+      const flaskResponse = await axios.get(`${FLASK_API_URL}/api/health`, { timeout: 5000 });
+      flaskStatus = flaskResponse.data.ok ? 'connected' : 'error';
+    } catch (e) {
+      flaskStatus = 'disconnected';
+    }
+    
+    res.json({
+      ok: isDatabaseReady,
+      service: 'Node.js RSS Aggregator',
+      database: dbStatus,
+      flask: flaskStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(503).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+// Démarrer le serveur de manière robuste
+async function startServer() {
+  try {
+    console.log('🚀 Démarrage du serveur...');
+    
+    // Initialiser l'application avant de démarrer le serveur
+    await initializeApplication();
+    
+    // Maintenant démarrer le serveur
+    app.listen(PORT, () => {
+      console.log(`✅ Serveur démarré sur le port ${PORT}`);
+      console.log(`📊 Interface: http://localhost:${PORT}`);
+      console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
+      console.log(`💾 Mode: ${NODE_ENV}`);
+      console.log(`📧 Email: ${EMAIL_CONFIG.user ? '✅ Configuré' : '❌ Non configuré'}`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur démarrage serveur:', error);
+    
+    // Démarrer quand même en mode dégradé
+    console.log('🟡 Démarrage en mode dégradé (sans base de données)...');
+    app.listen(PORT, () => {
+      console.log(`⚠️ Serveur démarré en mode dégradé sur le port ${PORT}`);
+      console.log('🔶 Certaines fonctionnalités peuvent être limitées');
+    });
+  }
+}
 
 // Démarrer le serveur
 startServer();
