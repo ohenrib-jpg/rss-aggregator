@@ -1113,39 +1113,52 @@ app.get('/api/debug/indexes', async (req, res) => {
   }
 });
 
-// Route de diagnostic indexes database
+// Route debug database corrigée
 app.get('/api/debug/database', async (req, res) => {
   try {
     const client = await pool.connect();
     
-    // Statistiques des tables
+// VERSION CORRIGÉE 18/10- Compatible PostgreSQL
     const tablesStats = await client.query(`
       SELECT 
-        tablename,
         (SELECT count(*) FROM articles) as articles_count,
         (SELECT count(*) FROM themes) as themes_count,
-        (SELECT count(*) FROM feeds) as feeds_count
-      FROM pg_tables 
-      WHERE schemaname = 'public'
+        (SELECT count(*) FROM feeds) as feeds_count,
+        (SELECT count(*) FROM sentiment_lexicon) as lexicon_count
     `);
     
     // Index existants
     const indexes = await client.query(`
-      SELECT COUNT(*) as index_count FROM pg_indexes 
-      WHERE schemaname = 'public' AND indexname LIKE 'idx_%'
+      SELECT COUNT(*) as index_count 
+      FROM pg_indexes 
+      WHERE schemaname = 'public' 
+      AND indexname LIKE 'idx_%'
     `);
     
     // Performance des requêtes
     const performance = await client.query(`
       SELECT 
         schemaname,
-        tablename,
+        relname as tablename,
         seq_scan,
         seq_tup_read,
         idx_scan,
         idx_tup_fetch
       FROM pg_stat_user_tables 
-      WHERE tablename IN ('articles', 'themes', 'feeds')
+      WHERE relname IN ('articles', 'themes', 'feeds')
+    `);
+    
+    // Détails des index
+    const indexDetails = await client.query(`
+      SELECT 
+        indexname,
+        tablename,
+        indexdef
+      FROM pg_indexes 
+      WHERE schemaname = 'public'
+      AND indexname LIKE 'idx_%'
+      ORDER BY tablename, indexname
+      LIMIT 20
     `);
     
     client.release();
@@ -1154,14 +1167,20 @@ app.get('/api/debug/database', async (req, res) => {
       success: true,
       database: {
         connection: '✅ Connecté',
-        tables: tablesStats.rows,
+        statistics: tablesStats.rows[0],
         indexes: indexes.rows[0],
-        performance: performance.rows
-      }
+        performance: performance.rows,
+        index_details: indexDetails.rows
+      },
+      timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Erreur debug database:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
   }
 });
 
