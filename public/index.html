@@ -3,462 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS Thématique + IA v2.3</title>
+    <title>Agrégateur RSS Thématique + IA V.2.3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* Styles additionnels pour la nouvelle interface */
-        .module-status {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .module-card {
-            background: white;
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            border-left: 4px solid #6366f1;
-            transition: all 0.3s;
-        }
-        
-        .module-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-        }
-        
-        .module-card.active {
-            border-left-color: #10b981;
-        }
-        
-        .module-card.inactive {
-            border-left-color: #ef4444;
-            opacity: 0.7;
-        }
-        
-        .module-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .module-name {
-            font-weight: 600;
-            color: #1e293b;
-        }
-        
-        .module-status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .module-status-badge.active {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        
-        .module-status-badge.inactive {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        
-        .settings-panel {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        
-        .settings-group {
-            margin-bottom: 20px;
-        }
-        
-        .settings-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #334155;
-        }
-        
-        .settings-group input,
-        .settings-group select,
-        .settings-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 0.95rem;
-        }
-        
-        .settings-group input:focus,
-        .settings-group select:focus,
-        .settings-group textarea:focus {
-            outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-        }
-        
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 0.9rem;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-        
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #334155;
-        }
-        
-        .btn-secondary:hover {
-            background: #e2e8f0;
-        }
-        
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-        
-        .btn-success {
-            background: #10b981;
-            color: white;
-        }
-        
-        .chart-controls {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        
-        .chart-controls button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            background: white;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        
-        .chart-controls button:hover {
-            background: #6366f1;
-            color: white;
-            border-color: #6366f1;
-        }
-        
-        .chart-controls button.active {
-            background: #6366f1;
-            color: white;
-            border-color: #6366f1;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            animation: fadeIn 0.3s;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        .modal-content {
-            background: white;
-            margin: 5% auto;
-            padding: 30px;
-            border-radius: 12px;
-            max-width: 700px;
-            width: 90%;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            animation: slideIn 0.3s;
-        }
-        
-        @keyframes slideIn {
-            from { transform: translateY(-50px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        
-        .close {
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            color: #94a3b8;
-            transition: color 0.2s;
-        }
-        
-        .close:hover {
-            color: #ef4444;
-        }
-        
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 8px;
-            background: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 2000;
-            animation: slideInRight 0.3s;
-            max-width: 400px;
-        }
-        
-        @keyframes slideInRight {
-            from { transform: translateX(400px); }
-            to { transform: translateX(0); }
-        }
-        
-        .notification.success {
-            border-left: 4px solid #10b981;
-        }
-        
-        .notification.error {
-            border-left: 4px solid #ef4444;
-        }
-        
-        .notification.info {
-            border-left: 4px solid #3b82f6;
-        }
-        
-        .zoom-info {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(255,255,255,0.9);
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            color: #64748b;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .feed-manager {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .feed-list-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-            transition: background 0.2s;
-        }
-        
-        .feed-list-item:hover {
-            background: #f8f9fa;
-        }
-        
-        .feed-url {
-            flex: 1;
-            color: #334155;
-            font-size: 0.9rem;
-        }
-        
-        .feed-actions {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .icon-btn {
-            padding: 6px 10px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            background: #f1f5f9;
-            transition: all 0.2s;
-        }
-        
-        .icon-btn:hover {
-            background: #e2e8f0;
-            transform: scale(1.05);
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 6px;
-            background: #e2e8f0;
-            border-radius: 3px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #6366f1, #4f46e5);
-            transition: width 0.3s;
-            animation: shimmer 2s infinite;
-        }
-        
-        @keyframes shimmer {
-            0% { background-position: -1000px 0; }
-            100% { background-position: 1000px 0; }
-        }
-    </style>
 </head>
 <body>
 <div class="container">
-    <!-- En-tête -->
     <header>
         <div class="header-main" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
             <div class="header-title">
-                <h1 style="margin: 0 0 8px 0; font-size: 2rem; font-weight: 700;">📊 Agrégateur RSS Thématique + IA</h1>
+                <h1 style="margin: 0 0 8px 0; font-size: 2rem; font-weight: 700;">📊 Agrégateur RSS Thématique</h1>
                 <div class="header-subtitle" style="display: flex; align-items: center; gap: 15px; font-size: 0.9rem; opacity: 0.9; flex-wrap: wrap;">
                     <span class="author" style="background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: 600;">Olivier Henri B.</span>
                     <span class="version" style="background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 6px; font-family: monospace;">V.2.3</span>
-                    <span id="backendStatus" style="background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 6px;">🔄 Vérification...</span>
                 </div>
             </div>
             <div class="header-tagline" style="font-size: 1rem; opacity: 0.9; margin-top: 8px;">
-                Analyse de flux RSS par thèmes personnalisés • Détection avancée des tendances • Intelligence Artificielle
+                Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances + IA
+            </div>
+        </div>
+
+        <div class="demo-banner" style="display: flex; align-items: flex-start; gap: 15px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 1px solid #ffeaa7; border-left: 4px solid #fdcb6e; padding: 16px; border-radius: 10px; margin-bottom: 20px;">
+            <div class="demo-icon" style="font-size: 1.5rem;">🚀</div>
+            <div class="demo-content">
+                <div class="demo-title" style="font-weight: 700; font-size: 1rem; color: #2d3436; margin-bottom: 6px;">Application de démonstration</div>
+                <div class="demo-text" style="font-size: 0.9rem; color: #636e72; line-height: 1.4; margin-bottom: 8px;">
+                    Architecture hybride Node.js + Flask IA • PostgreSQL • Modules d'analyse avancés
+                </div>
             </div>
         </div>
     </header>
 
-    <!-- Statut des modules IA -->
-    <div class="module-status" id="moduleStatus">
-        <div class="module-card active">
-            <div class="module-header">
-                <span class="module-name">🧠 Analyse Bayésienne</span>
-                <span class="module-status-badge active">Actif</span>
-            </div>
-            <div style="font-size: 0.85rem; color: #64748b;">Fusion probabiliste multi-sources</div>
-        </div>
-        
-        <div class="module-card active">
-            <div class="module-header">
-                <span class="module-name">🔗 Corroboration</span>
-                <span class="module-status-badge active">Actif</span>
-            </div>
-            <div style="font-size: 0.85rem; color: #64748b;">Vérification croisée des sources</div>
-        </div>
-        
-        <div class="module-card active">
-            <div class="module-header">
-                <span class="module-name">😊 Analyse Sentiment</span>
-                <span class="module-status-badge active">Actif</span>
-            </div>
-            <div style="font-size: 0.85rem; color: #64748b;">Détection émotions + intensité</div>
-        </div>
-        
-        <div class="module-card active">
-            <div class="module-header">
-                <span class="module-name">🌍 Géopolitique</span>
-                <span class="module-status-badge active">Actif</span>
-            </div>
-            <div style="font-size: 0.85rem; color: #64748b;">Zones de crise + relations</div>
-        </div>
-        
-        <div class="module-card active">
-            <div class="module-header">
-                <span class="module-name">📊 Métriques IA</span>
-                <span class="module-status-badge active">Actif</span>
-            </div>
-            <div style="font-size: 0.85rem; color: #64748b;">Calculs statistiques avancés</div>
-        </div>
-    </div>
+    <div id="messageContainer"></div>
 
-    <!-- Conteneur de messages -->
-    <div id="messageContainer" style="padding: 0; margin-bottom: 10px; color: #ef4444; font-weight: 500;"></div>
-
-    <!-- Barre de statut et actions -->
     <div class="status-bar">
         <div class="last-update" id="lastUpdate">Chargement...</div>
         <div class="refresh-controls">
-            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation (5 min)</div>
+            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation</div>
             <button class="refresh" id="refreshBtn">🔄 Actualiser</button>
         </div>
     </div>
 
-    <!-- Barre d'export -->
     <div class="export-bar" style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-        <div class="export-controls btn-group">
-            <button class="btn btn-success export-btn json">📥 Export JSON</button>
-            <button class="btn btn-primary export-btn csv">📥 Export CSV</button>
-            <button class="btn btn-primary export-btn stats">📊 Stats IA</button>
-            <button class="btn btn-secondary" onclick="showSettings()">⚙️ Paramètres</button>
+        <div class="export-controls" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button class="export-btn json" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #10b981, #059669);">📥 Export JSON</button>
+            <button class="export-btn csv" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #3b82f6, #1d4ed8);">📥 Export CSV</button>
+            <button class="export-btn stats" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #06b6d4, #0891b2);">📊 Stats</button>
         </div>
     </div>
 
-    <!-- Onglets -->
+    <div class="stats-grid" id="statsGrid">
+        <div class="loading">Chargement des données...</div>
+    </div>
+
     <div class="tab-container">
         <div class="tabs">
-            <div class="tab active" onclick="showTab('analysis', event)">📈 Analyse</div>
-            <div class="tab" onclick="showTab('trends', event)">📊 Tendances</div>
-            <div class="tab" onclick="showTab('metrics', event)">🎯 Métriques</div>
-            <div class="tab" onclick="showTab('sentiment', event)">😊 Sentiment</div>
-            <div class="tab" onclick="showTab('geopolitical', event)">🌍 Géopolitique</div>
-            <div class="tab" onclick="showTab('learning', event)">🧠 Apprentissage</div>
-            <div class="tab" onclick="showTab('feeds', event)">📰 Flux RSS</div>
-            <div class="tab" onclick="showTab('themes', event)">🎨 Thèmes</div>
-            <div class="tab" onclick="showTab('articles', event)">📄 Articles</div>
+            <div class="tab active" onclick="window.showTab('analysis', event)">📈 Analyse</div>
+            <div class="tab" onclick="window.showTab('trends', event)">📊 Tendances</div>
+            <div class="tab" onclick="window.showTab('metrics', event)">🎯 Métriques</div>
+            <div class="tab" onclick="window.showTab('sentiment', event)">😊 Sentiment</div>
+            <div class="tab" onclick="window.showTab('learning', event)">🧠 Apprentissage</div>
+            <div class="tab" onclick="window.showTab('feeds', event)">📰 Flux RSS</div>
+            <div class="tab" onclick="window.showTab('themes', event)">🎨 Thèmes</div>
+            <div class="tab" onclick="window.showTab('articles', event)">📄 Articles</div>
         </div>
 
         <!-- Onglet Analyse -->
         <div id="analysisTab" class="tab-content active">
-            <div class="chart-controls">
-                <span style="font-weight: 600; color: #334155;">Contrôles graphique :</span>
-                <button onclick="resetZoom('themeChart')">🔍 Reset Zoom</button>
-                <button onclick="resetZoom('timelineChart')">🔍 Reset Timeline</button>
-                <button class="active" data-period="30">30 jours</button>
-                <button data-period="60">60 jours</button>
-                <button data-period="90">90 jours</button>
-            </div>
-            
             <div id="themeSelectorContainer"></div>
-            
             <div class="dashboard">
-                <div class="card" style="position: relative;">
+                <div class="card">
                     <h3>📊 Répartition par Thème</h3>
-                    <div class="zoom-info">🖱️ Molette: Zoom • Clic: Pan</div>
                     <canvas id="themeChart" height="250"></canvas>
                 </div>
-                <div class="card" style="position: relative;">
+                <div class="card">
                     <h3>📈 Évolution Temporelle</h3>
-                    <div class="zoom-info">🖱️ Molette: Zoom • Drag: Pan</div>
                     <canvas id="timelineChart" height="250"></canvas>
                 </div>
             </div>
@@ -468,9 +88,9 @@
         <div id="trendsTab" class="tab-content">
             <div class="dashboard">
                 <div class="card full-width">
-                    <h3>📈 Évolution des Thèmes (IA)</h3>
+                    <h3>📈 Évolution des Thèmes</h3>
                     <div id="trendsTable" class="trends-table">
-                        <div class="loading">Calcul des tendances par IA...</div>
+                        <div class="loading">Calcul des tendances...</div>
                     </div>
                 </div>
             </div>
@@ -482,30 +102,25 @@
                 <div class="card full-width">
                     <h3>🎯 Statistiques Globales</h3>
                     <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                        <div class="metric-card" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Total Articles</div>
-                            <div style="font-size: 2rem; font-weight: 700;"><span id="m_total">—</span></div>
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Total Articles :</strong> <span id="m_total">—</span>
                         </div>
-                        <div class="metric-card" style="background: linear-gradient(135deg, #f093fb, #f5576c); color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Confiance Moyenne</div>
-                            <div style="font-size: 2rem; font-weight: 700;"><span id="m_confidence">—</span></div>
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Confiance Moyenne :</strong> <span id="m_confidence">—</span>
                         </div>
-                        <div class="metric-card" style="background: linear-gradient(135deg, #4facfe, #00f2fe); color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Fiabilité Bayésienne</div>
-                            <div style="font-size: 2rem; font-weight: 700;"><span id="m_posterior">—</span></div>
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Fiabilité Bayésienne :</strong> <span id="m_posterior">—</span>
                         </div>
-                        <div class="metric-card" style="background: linear-gradient(135deg, #43e97b, #38f9d7); color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Corroboration Moyenne</div>
-                            <div style="font-size: 2rem; font-weight: 700;"><span id="m_corro">—</span></div>
+                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
+                            <strong>Corroboration Moyenne :</strong> <span id="m_corro">—</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="dashboard">
-                <div class="card full-width" style="position: relative;">
+                <div class="card full-width">
                     <h3>📈 Évolution du Sentiment (30 derniers jours)</h3>
-                    <div class="zoom-info">🖱️ Molette: Zoom • Drag: Déplacer</div>
                     <canvas id="sentimentChart" height="280"></canvas>
                 </div>
             </div>
@@ -523,21 +138,7 @@
             <div class="dashboard">
                 <div class="card full-width">
                     <h3>📊 Aperçu du Sentiment Global</h3>
-                    <div id="sentimentOverview"><div class="loading">Analyse de sentiment par IA...</div></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Onglet Géopolitique -->
-        <div id="geopoliticalTab" class="tab-content">
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>🌍 Rapport Géopolitique (IA)</h3>
-                    <div id="geopoliticalReport"><div class="loading">Analyse géopolitique en cours...</div></div>
-                </div>
-                <div class="card full-width">
-                    <h3>⚠️ Zones de Crise Détectées</h3>
-                    <div id="crisisZones"><div class="loading">Détection des zones de crise...</div></div>
+                    <div id="sentimentOverview"><div class="loading">Analyse de sentiment...</div></div>
                 </div>
             </div>
         </div>
@@ -546,30 +147,24 @@
         <div id="learningTab" class="tab-content">
             <div class="dashboard">
                 <div class="card full-width">
-                    <h3>🧠 Statistiques d'Apprentissage IA</h3>
-                    <div id="learningStats"><div class="loading">Chargement des stats IA...</div></div>
+                    <h3>🧠 Statistiques d'Apprentissage</h3>
+                    <div id="learningStats"><div class="loading">Chargement...</div></div>
                 </div>
             </div>
         </div>
 
         <!-- Onglet Flux RSS -->
         <div id="feedsTab" class="tab-content">
-            <div class="feed-manager">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3>📋 Mes Flux RSS</h3>
-                    <button class="btn btn-primary" onclick="showAddFeedModal()">➕ Ajouter un flux</button>
-                </div>
+            <div class="card">
+                <h3>📋 Mes Flux RSS</h3>
                 <div id="feedsList"><div class="loading">Chargement des flux...</div></div>
             </div>
         </div>
 
         <!-- Onglet Thèmes -->
         <div id="themesTab" class="tab-content">
-            <div class="feed-manager">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3>🎨 Mes Thèmes</h3>
-                    <button class="btn btn-primary" onclick="showAddThemeModal()">➕ Ajouter un thème</button>
-                </div>
+            <div class="card">
+                <h3>🎨 Mes Thèmes</h3>
                 <div id="themesList"><div class="loading">Chargement des thèmes...</div></div>
             </div>
         </div>
@@ -577,545 +172,76 @@
         <!-- Onglet Articles -->
         <div id="articlesTab" class="tab-content">
             <div class="card full-width">
-                <h3>📄 Derniers Articles Analysés</h3>
+                <h3>📄 Derniers Articles</h3>
                 <div id="articlesList"><div class="loading">Chargement des articles...</div></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Paramètres -->
-<div id="settingsModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeSettings()">&times;</span>
-        <h2>⚙️ Paramètres de l'Application</h2>
-        
-        <div class="settings-panel">
-            <div class="settings-group">
-                <label>🔄 Intervalle de rafraîchissement automatique (minutes)</label>
-                <input type="number" id="refreshInterval" value="5" min="1" max="60">
-            </div>
-            
-            <div class="settings-group">
-                <label>📊 Période d'analyse par défaut (jours)</label>
-                <select id="defaultPeriod">
-                    <option value="7">7 jours</option>
-                    <option value="30" selected>30 jours</option>
-                    <option value="60">60 jours</option>
-                    <option value="90">90 jours</option>
-                </select>
-            </div>
-            
-            <div class="settings-group">
-                <label>🎯 Seuil de confiance minimum (0-1)</label>
-                <input type="number" id="confidenceThreshold" value="0.5" min="0" max="1" step="0.1">
-            </div>
-            
-            <div class="settings-group">
-                <label>🔗 Seuil de corroboration (0-1)</label>
-                <input type="number" id="corroborationThreshold" value="0.65" min="0" max="1" step="0.05">
-            </div>
-            
-            <div class="btn-group">
-                <button class="btn btn-primary" onclick="saveSettings()">💾 Sauvegarder</button>
-                <button class="btn btn-secondary" onclick="closeSettings()">❌ Annuler</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Stats IA -->
-<div id="learningStatsModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeLearningStats()">&times;</span>
-        <h2>📊 Statistiques d'Apprentissage IA</h2>
+<!-- Modal Apprentissage -->
+<div id="learningStatsModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background: white; margin: 5% auto; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%;">
+        <span class="close" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+        <h3>📊 Statistiques d'Apprentissage</h3>
         <div id="modalLearningStats"><div class="loading">Chargement...</div></div>
-    </div>
-</div>
-
-<!-- Modal Ajout Flux -->
-<div id="addFeedModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeAddFeed()">&times;</span>
-        <h2>➕ Ajouter un Flux RSS</h2>
-        <div class="settings-panel">
-            <div class="settings-group">
-                <label>URL du flux RSS</label>
-                <input type="url" id="newFeedUrl" placeholder="https://example.com/rss">
-            </div>
-            <div class="btn-group">
-                <button class="btn btn-success" onclick="addFeed()">✅ Ajouter</button>
-                <button class="btn btn-secondary" onclick="closeAddFeed()">❌ Annuler</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Ajout Thème -->
-<div id="addThemeModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeAddTheme()">&times;</span>
-        <h2>➕ Ajouter un Thème</h2>
-        <div class="settings-panel">
-            <div class="settings-group">
-                <label>Nom du thème</label>
-                <input type="text" id="newThemeName" placeholder="Ex: Intelligence Artificielle">
-            </div>
-            <div class="settings-group">
-                <label>Mots-clés (séparés par des virgules)</label>
-                <textarea id="newThemeKeywords" rows="3" placeholder="IA, intelligence artificielle, machine learning"></textarea>
-            </div>
-            <div class="settings-group">
-                <label>Couleur</label>
-                <input type="color" id="newThemeColor" value="#6366f1">
-            </div>
-            <div class="btn-group">
-                <button class="btn btn-success" onclick="addTheme()">✅ Ajouter</button>
-                <button class="btn btn-secondary" onclick="closeAddTheme()">❌ Annuler</button>
-            </div>
-        </div>
     </div>
 </div>
 
 <script src="app.js"></script>
 <script src="chart-manager.js"></script>
 <script>
-// === FONCTIONS UI AVANCÉES ===
-
-// Vérifier le statut des backends
-async function checkBackendStatus() {
-    const badge = document.getElementById('backendStatus');
-    try {
-        const response = await fetch('/health');
-        const data = await response.json();
-        
-        if (data.status === 'OK' || data.ok) {
-            const flaskStatus = data.flask || 'unknown';
-            badge.innerHTML = `✅ Node.js: OK • Flask: ${flaskStatus === 'connected' ? '✅' : '⚠️'}`;
-            badge.style.background = 'rgba(16, 185, 129, 0.3)';
-        } else {
-            badge.innerHTML = '⚠️ Serveur: Dégradé';
-            badge.style.background = 'rgba(239, 68, 68, 0.3)';
-        }
-    } catch (error) {
-        badge.innerHTML = '❌ Serveur: Hors ligne';
-        badge.style.background = 'rgba(239, 68, 68, 0.3)';
-    }
-}
-
-// Afficher notification
-function showNotification(message, type = 'info') {
-    const notif = document.createElement('div');
-    notif.className = `notification ${type}`;
-    notif.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="font-size: 1.5rem;">
-                ${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}
-            </div>
-            <div>
-                <div style="font-weight: 600; margin-bottom: 4px;">
-                    ${type === 'success' ? 'Succès' : type === 'error' ? 'Erreur' : 'Information'}
-                </div>
-                <div style="font-size: 0.9rem; color: #64748b;">${message}</div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(notif);
-    
-    setTimeout(() => {
-        notif.style.animation = 'slideOutRight 0.3s';
-        setTimeout(() => notif.remove(), 300);
-    }, 4000);
-}
-
-// Gestion des modals
-function showSettings() {
-    document.getElementById('settingsModal').style.display = 'block';
-}
-
-function closeSettings() {
-    document.getElementById('settingsModal').style.display = 'none';
-}
-
-function saveSettings() {
-    const refreshInterval = document.getElementById('refreshInterval').value;
-    const defaultPeriod = document.getElementById('defaultPeriod').value;
-    const confidenceThreshold = document.getElementById('confidenceThreshold').value;
-    const corroborationThreshold = document.getElementById('corroborationThreshold').value;
-    
-    // Sauvegarder dans localStorage
-    localStorage.setItem('settings', JSON.stringify({
-        refreshInterval,
-        defaultPeriod,
-        confidenceThreshold,
-        corroborationThreshold
-    }));
-    
-    showNotification('Paramètres sauvegardés avec succès', 'success');
-    closeSettings();
-    
-    // Appliquer les changements
-    if (window.app && window.app._state) {
-        window.app._state.refreshIntervalMs = refreshInterval * 60 * 1000;
-    }
-}
-
-function loadSettings() {
-    const saved = localStorage.getItem('settings');
-    if (saved) {
-        const settings = JSON.parse(saved);
-        document.getElementById('refreshInterval').value = settings.refreshInterval || 5;
-        document.getElementById('defaultPeriod').value = settings.defaultPeriod || 30;
-        document.getElementById('confidenceThreshold').value = settings.confidenceThreshold || 0.5;
-        document.getElementById('corroborationThreshold').value = settings.corroborationThreshold || 0.65;
-    }
-}
-
-function showAddFeedModal() {
-    document.getElementById('addFeedModal').style.display = 'block';
-}
-
-function closeAddFeed() {
-    document.getElementById('addFeedModal').style.display = 'none';
-    document.getElementById('newFeedUrl').value = '';
-}
-
-async function addFeed() {
-    const url = document.getElementById('newFeedUrl').value.trim();
-    if (!url) {
-        showNotification('Veuillez entrer une URL valide', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/feeds', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
-        });
-        
-        if (response.ok) {
-            showNotification('Flux RSS ajouté avec succès', 'success');
-            closeAddFeed();
-            if (window.app) window.app.loadFeeds();
-        } else {
-            throw new Error('Erreur lors de l\'ajout du flux');
-        }
-    } catch (error) {
-        showNotification('Erreur: ' + error.message, 'error');
-    }
-}
-
-function showAddThemeModal() {
-    document.getElementById('addThemeModal').style.display = 'block';
-}
-
-function closeAddTheme() {
-    document.getElementById('addThemeModal').style.display = 'none';
-    document.getElementById('newThemeName').value = '';
-    document.getElementById('newThemeKeywords').value = '';
-    document.getElementById('newThemeColor').value = '#6366f1';
-}
-
-async function addTheme() {
-    const name = document.getElementById('newThemeName').value.trim();
-    const keywords = document.getElementById('newThemeKeywords').value.trim();
-    const color = document.getElementById('newThemeColor').value;
-    
-    if (!name || !keywords) {
-        showNotification('Veuillez remplir tous les champs', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/themes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name,
-                keywords: keywords.split(',').map(k => k.trim()),
-                color
-            })
-        });
-        
-        if (response.ok) {
-            showNotification('Thème ajouté avec succès', 'success');
-            closeAddTheme();
-            if (window.app) window.app.loadThemes();
-        } else {
-            throw new Error('Erreur lors de l\'ajout du thème');
-        }
-    } catch (error) {
-        showNotification('Erreur: ' + error.message, 'error');
-    }
-}
-
-function closeLearningStats() {
-    document.getElementById('learningStatsModal').style.display = 'none';
-}
-
-// Reset zoom sur les graphiques
-function resetZoom(chartId) {
-    if (window.app && window.app._state && window.app._state.charts) {
-        const chart = window.app._state.charts[chartId];
-        if (chart && chart.resetZoom) {
-            chart.resetZoom();
-            showNotification('Zoom réinitialisé', 'info');
-        }
-    }
-}
-
-// Charger les données géopolitiques
-async function loadGeopoliticalData() {
-    const reportContainer = document.getElementById('geopoliticalReport');
-    const crisisContainer = document.getElementById('crisisZones');
-    
-    try {
-        // Rapport géopolitique
-        const reportResponse = await fetch('/api/geopolitical/report');
-        const reportData = await reportResponse.json();
-        
-        if (reportData.success && reportData.report) {
-            const summary = reportData.report.summary;
-            const zones = reportData.report.crisisZones || [];
-            
-            reportContainer.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 2rem; font-weight: 700;">${summary.totalCountries}</div>
-                        <div style="font-size: 0.85rem; opacity: 0.9;">Pays surveillés</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #f093fb, #f5576c); color: white; padding: 15px; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 2rem; font-weight: 700;">${summary.highRiskZones}</div>
-                        <div style="font-size: 0.85rem; opacity: 0.9;">Zones à haut risque</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #4facfe, #00f2fe); color: white; padding: 15px; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 2rem; font-weight: 700;">${summary.activeRelations || 0}</div>
-                        <div style="font-size: 0.85rem; opacity: 0.9;">Relations actives</div>
-                    </div>
-                </div>
-            `;
-            
-            // Zones de crise
-            if (zones.length > 0) {
-                crisisContainer.innerHTML = zones.map(zone => {
-                    const riskColor = zone.riskLevel === 'high' ? '#ef4444' : 
-                                     zone.riskLevel === 'medium' ? '#f59e0b' : '#10b981';
-                    const riskEmoji = zone.riskLevel === 'high' ? '🔴' : 
-                                     zone.riskLevel === 'medium' ? '🟡' : '🟢';
-                    
-                    return `
-                        <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 4px solid ${riskColor};">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 5px;">
-                                        ${riskEmoji} ${zone.country}
-                                    </div>
-                                    <div style="font-size: 0.85rem; color: #64748b;">
-                                        ${zone.mentions} mentions • Score: ${(zone.riskScore * 100).toFixed(0)}%
-                                    </div>
-                                </div>
-                                <div style="text-align: right;">
-                                    <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 600;">
-                                        ${zone.riskLevel}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                crisisContainer.innerHTML = '<div class="loading">Aucune zone de crise détectée</div>';
-            }
-        }
-    } catch (error) {
-        console.error('Erreur chargement données géopolitiques:', error);
-        reportContainer.innerHTML = '<div class="loading">Erreur de chargement</div>';
-        crisisContainer.innerHTML = '<div class="loading">Erreur de chargement</div>';
-    }
-}
-
-// Charger les stats d'apprentissage
-async function loadLearningData() {
-    const container = document.getElementById('learningStats');
-    
-    try {
-        const response = await fetch('/api/learning-stats');
-        const data = await response.json();
-        
-        if (data.success) {
-            container.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 10px;">
-                        <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Articles traités</div>
-                        <div style="font-size: 2rem; font-weight: 700;">${data.total_articles_processed}</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #f093fb, #f5576c); color: white; padding: 20px; border-radius: 10px;">
-                        <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Précision sentiment</div>
-                        <div style="font-size: 2rem; font-weight: 700;">${(data.sentiment_accuracy * 100).toFixed(1)}%</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #4facfe, #00f2fe); color: white; padding: 20px; border-radius: 10px;">
-                        <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Détection thèmes</div>
-                        <div style="font-size: 2rem; font-weight: 700;">${(data.theme_detection_accuracy * 100).toFixed(1)}%</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #43e97b, #38f9d7); color: white; padding: 20px; border-radius: 10px;">
-                        <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Temps moyen</div>
-                        <div style="font-size: 2rem; font-weight: 700;">${data.avg_processing_time}s</div>
-                    </div>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 15px;">
-                    <h4 style="margin-bottom: 15px;">🤖 Modules IA actifs</h4>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                        ${(data.modules_active || ['analysis_utils', 'corroboration', 'metrics', 'bayesian_fusion']).map(mod => 
-                            `<span style="background: white; padding: 8px 15px; border-radius: 20px; font-size: 0.85rem; border: 1px solid #e2e8f0;">
-                                ✅ ${mod}
-                            </span>`
-                        ).join('')}
-                    </div>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
-                    <h4 style="margin-bottom: 10px;">📊 Statistiques détaillées</h4>
-                    <div style="font-size: 0.9rem; color: #64748b; line-height: 1.8;">
-                        <div>• Analyses bayésiennes: <strong>${data.bayesian_fusion_used || 0}</strong></div>
-                        <div>• Corroboration moyenne: <strong>${data.corroboration_avg || 0}</strong></div>
-                        <div>• Version du modèle: <strong>${data.model_version}</strong></div>
-                    </div>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Erreur chargement stats apprentissage:', error);
-        container.innerHTML = '<div class="loading">Erreur de chargement</div>';
-    }
-}
-
-// Charger aperçu sentiment
-async function loadSentimentOverview() {
-    const container = document.getElementById('sentimentOverview');
-    
-    try {
-        const response = await fetch('/api/sentiment/stats');
-        const data = await response.json();
-        
-        if (data.success && data.stats) {
-            const stats = data.stats;
-            const total = stats.total || 0;
-            const posPercent = total > 0 ? (stats.positive / total * 100).toFixed(1) : 0;
-            const neuPercent = total > 0 ? (stats.neutral / total * 100).toFixed(1) : 0;
-            const negPercent = total > 0 ? (stats.negative / total * 100).toFixed(1) : 0;
-            
-            container.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px; border-radius: 10px;">
-                        <div style="font-size: 3rem; margin-bottom: 5px;">😊</div>
-                        <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Positif</div>
-                        <div style="font-size: 2rem; font-weight: 700;">${stats.positive} (${posPercent}%)</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #64748b, #475569); color: white; padding: 20px; border-radius: 10px;">
-                        <div style="font-size: 3rem; margin-bottom: 5px;">😐</div>
-                        <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Neutre</div>
-                        <div style="font-size: 2rem; font-weight: 700;">${stats.neutral} (${neuPercent}%)</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 20px; border-radius: 10px;">
-                        <div style="font-size: 3rem; margin-bottom: 5px;">😞</div>
-                        <div style="font-size: 0.85rem; opacity: 0.9; margin-bottom: 5px;">Négatif</div>
-                        <div style="font-size: 2rem; font-weight: 700;">${stats.negative} (${negPercent}%)</div>
-                    </div>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
-                    <h4 style="margin-bottom: 15px;">📊 Métriques IA</h4>
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-size: 0.9rem; color: #64748b;">Score moyen</span>
-                            <span style="font-weight: 600;">${(stats.average_score || 0).toFixed(3)}</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${Math.abs(stats.average_score) * 100}%;"></div>
-                        </div>
-                    </div>
-                    ${stats.confidence_avg ? `
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-size: 0.9rem; color: #64748b;">Confiance moyenne</span>
-                            <span style="font-weight: 600;">${stats.confidence_avg.toFixed(3)}</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${stats.confidence_avg * 100}%;"></div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    ${stats.bayesian_avg ? `
-                    <div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-size: 0.9rem; color: #64748b;">Fiabilité bayésienne</span>
-                            <span style="font-weight: 600;">${stats.bayesian_avg.toFixed(3)}</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${stats.bayesian_avg * 100}%;"></div>
-                        </div>
-                    </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Erreur chargement aperçu sentiment:', error);
-        container.innerHTML = '<div class="loading">Erreur de chargement</div>';
-    }
-}
-
-    // Améliorer la fonction showTab pour charger les données
-    const originalShowTab = window.showTab;
-    window.showTab = function(target, ev) {
-        if (originalShowTab) {
-            originalShowTab(target, ev);
-        }
-        
-        // Charger les données spécifiques à l'onglet
-        if (target === 'geopolitical') {
-            loadGeopoliticalData();
-        } else if (target === 'learning') {
-            loadLearningData();
-        } else if (target === 'sentiment') {
-            loadSentimentOverview();
-        }
-    };
-
-    // Initialisation au chargement
-    window.addEventListener('load', function() {
-        console.log('🎯 Interface UI avancée chargée');
-        
-        // Charger les paramètres
-        loadSettings();
-        
-        // Vérifier le statut backend
-        checkBackendStatus();
-        setInterval(checkBackendStatus, 30000); // Toutes les 30s
-        
-        // Initialiser le ChartManager après app.js
+// Patch pour initialiser le ChartManager après chargement
+window.addEventListener('load', function() {
+    console.log('🎯 DOM chargé, initialisation ChartManager...');
+    if (window.app && window.ChartManager && window.app._state) {
         setTimeout(function() {
-            if (window.app && window.ChartManager && window.app._state) {
-                try {
-                    if (!window.app.chartManager) {
-                        window.app.chartManager = new ChartManager(window.app._state);
-                        console.log('✅ ChartManager initialisé avec zoom/pan');
-                    }
-                } catch(e) {
-                    console.warn('⚠️ ChartManager init failed:', e);
+            try {
+                if (!window.app.chartManager) {
+                    window.app.chartManager = new ChartManager(window.app._state);
+                    console.log('✅ ChartManager initialisé');
                 }
+            } catch(e) {
+                console.warn('⚠️ ChartManager init failed:', e);
             }
         }, 2000);
-        
-        // Fermer les modals en cliquant à l'extérieur
-        window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
-                event.target.style.display = 'none';
-            }
-        };
-    });
+    }
+});
 </script>
+
+<style>
+/* Styles additionnels inline pour garantir le rendu */
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.status-bar { background: white; border-radius: 10px; padding: 15px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.refresh-controls { display: flex; gap: 15px; align-items: center; }
+.auto-refresh-indicator { font-size: 0.85rem; color: #22c55e; font-weight: 500; }
+.blink { animation: blink 1.5s infinite; }
+@keyframes blink { 0%, 50%, 100% { opacity: 1; } 25%, 75% { opacity: 0.3; } }
+button { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.3s; }
+button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.tab-container { background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+.tabs { display: flex; background: #f8f9fa; border-bottom: 2px solid #e9ecef; overflow-x: auto; }
+.tab { padding: 15px 20px; cursor: pointer; white-space: nowrap; font-weight: 500; color: #64748b; transition: all 0.3s; border-bottom: 3px solid transparent; }
+.tab:hover { background: #e9ecef; color: #1e293b; }
+.tab.active { color: #2563eb; border-bottom-color: #2563eb; background: white; }
+.tab-content { display: none; padding: 20px; }
+.tab-content.active { display: block; }
+.dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 20px; }
+.card { background: #f8f9fa; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.card.full-width { grid-column: 1 / -1; }
+.card h3 { margin-bottom: 15px; font-size: 1.1rem; color: #1e293b; }
+.loading { text-align: center; padding: 40px; color: #64748b; font-style: italic; }
+canvas { max-height: 350px; }
+.article-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.article-card h4 { margin-bottom: 8px; }
+.article-card .meta { font-size: 0.85rem; color: #64748b; margin-bottom: 8px; }
+.themes .tag { display: inline-block; padding: 4px 8px; margin: 2px; background: #e0e7ff; border-radius: 4px; font-size: 0.75rem; }
+.theme-row { padding: 8px; border-bottom: 1px solid #e9ecef; }
+.top-themes li { padding: 8px; border-bottom: 1px solid #e9ecef; }
+.modal { display: none; }
+.modal.show { display: block; }
+@media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
+</style>
 </body>
 </html>
