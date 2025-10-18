@@ -1220,6 +1220,36 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// Route temporaire pour recréer les index manquants
+app.post('/api/fix-indexes', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    // Index CRITIQUE manquant de database 18/10
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_articles_pub_date_desc 
+      ON articles(pub_date DESC)
+    `);
+    
+    // Index composite pour la pagination
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_articles_loading_speed 
+      ON articles(pub_date DESC, id DESC)
+    `);
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      message: 'Index critiques créés',
+      indexes: ['idx_articles_pub_date_desc', 'idx_articles_loading_speed']
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Démarrer le serveur
 startServer();
 
