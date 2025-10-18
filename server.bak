@@ -1,10 +1,10 @@
-// server.js - Version avec initialisation robuste
+// server.js - Version avec résilience email
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Parser = require('rss-parser');
 const axios = require('axios');
-const nodemailer = require('nodemailer');
+const nodemailer = require('nodemailer'); // npm install nodemailer
 const { pool, initializeDatabase } = require('./db/database');
 
 const app = express();
@@ -23,16 +23,16 @@ const FLASK_API_URL = process.env.FLASK_API_URL || 'https://rss-aggregator-2.onr
 
 // Configuration Email
 const EMAIL_CONFIG = {
-  service: process.env.EMAIL_SERVICE || 'gmail',
-  user: process.env.EMAIL_USER,
-  pass: process.env.EMAIL_PASS,
+  service: process.env.EMAIL_SERVICE || 'gmail', // ou 'smtp'
+  user: process.env.EMAIL_USER, // votre email
+  pass: process.env.EMAIL_PASS, // mot de passe application
   to: process.env.EMAIL_TO || process.env.EMAIL_USER
 };
 
 // Limites mémoire
-const MEMORY_THRESHOLD_MB = 400;
-const CLEANUP_INTERVAL = 3600000;
-const DATA_RETENTION_DAYS = 30;
+const MEMORY_THRESHOLD_MB = 400; // Seuil avant export (80% de 512Mo)
+const CLEANUP_INTERVAL = 3600000; // Vérification toutes les heures
+const DATA_RETENTION_DAYS = 30; // Conservation 30 jours
 
 console.log(`🔧 Configuration:`);
 console.log(`   - Node.js port: ${PORT}`);
@@ -50,6 +50,7 @@ app.use(express.static('public'));
 
 let transporter = null;
 
+// Initialiser le transporteur email
 if (EMAIL_CONFIG.user && EMAIL_CONFIG.pass) {
   transporter = nodemailer.createTransport({
     service: EMAIL_CONFIG.service,
@@ -61,28 +62,34 @@ if (EMAIL_CONFIG.user && EMAIL_CONFIG.pass) {
   console.log('✅ Transporteur email initialisé');
 }
 
+// Fonction pour obtenir l'usage mémoire
 function getMemoryUsage() {
   const used = process.memoryUsage();
   return {
-    rss: Math.round(used.rss / 1024 / 1024),
+    rss: Math.round(used.rss / 1024 / 1024), // MB
     heapTotal: Math.round(used.heapTotal / 1024 / 1024),
     heapUsed: Math.round(used.heapUsed / 1024 / 1024),
     external: Math.round(used.external / 1024 / 1024)
   };
 }
 
+// Exporter les données en JSON/CSV
 async function exportDataToFile() {
   try {
     console.log('📦 Export des données...');
     
     const client = await pool.connect();
+    
+    // Récupérer toutes les données
     const articlesResult = await client.query(`
       SELECT * FROM articles 
       WHERE created_at < NOW() - INTERVAL '${DATA_RETENTION_DAYS} days'
       ORDER BY pub_date DESC
     `);
+    
     const themesResult = await client.query('SELECT * FROM themes');
     const feedsResult = await client.query('SELECT * FROM feeds');
+    
     client.release();
     
     const exportData = {
@@ -107,6 +114,7 @@ async function exportDataToFile() {
   }
 }
 
+// Envoyer l'export par email
 async function sendExportEmail(exportData) {
   if (!transporter) {
     console.warn('⚠️ Email non configuré, export ignoré');
@@ -118,6 +126,7 @@ async function sendExportEmail(exportData) {
     
     const jsonData = JSON.stringify(exportData, null, 2);
     const csvData = convertToCSV(exportData.articles);
+    
     const dateStr = new Date().toISOString().split('T')[0];
     
     const mailOptions = {
@@ -161,8 +170,10 @@ async function sendExportEmail(exportData) {
   }
 }
 
+// Convertir articles en CSV
 function convertToCSV(articles) {
   if (!articles || articles.length === 0) return '';
+  
   const headers = ['id', 'title', 'link', 'pub_date', 'sentiment_type', 'sentiment_score', 'sentiment_confidence', 'created_at'];
   const rows = articles.map(article => 
     headers.map(h => {
@@ -170,27 +181,35 @@ function convertToCSV(articles) {
       return `"${String(value).replace(/"/g, '""')}"`;
     }).join(',')
   );
+  
   return [headers.join(','), ...rows].join('\n');
 }
 
+// Nettoyer les anciennes données (APRÈS export)
 async function cleanupOldData() {
   try {
     console.log('🧹 Nettoyage des anciennes données...');
+    
     const client = await pool.connect();
+    
     const result = await client.query(`
       DELETE FROM articles 
       WHERE created_at < NOW() - INTERVAL '${DATA_RETENTION_DAYS} days'
       RETURNING id
     `);
+    
     client.release();
+    
     console.log(`✅ ${result.rowCount} articles supprimés`);
     return result.rowCount;
+    
   } catch (error) {
     console.error('❌ Erreur nettoyage:', error);
     throw error;
   }
 }
 
+// Vérification mémoire et export automatique
 async function checkMemoryAndExport() {
   const memory = getMemoryUsage();
   console.log(`💾 Mémoire: RSS=${memory.rss}MB, Heap=${memory.heapUsed}/${memory.heapTotal}MB`);
@@ -200,34 +219,44 @@ async function checkMemoryAndExport() {
     console.log('📦 Démarrage export + nettoyage...');
     
     try {
+      // 1. Exporter les données
       const exportData = await exportDataToFile();
+      
+      // 2. Envoyer par email
       const emailSent = await sendExportEmail(exportData);
       
       if (emailSent) {
+        // 3. Nettoyer SEULEMENT si l'email est envoyé
         await cleanupOldData();
+        
+        // 4. Forcer garbage collection
         if (global.gc) {
           global.gc();
           console.log('✅ Garbage collection forcé');
         }
+        
         const newMemory = getMemoryUsage();
         console.log(`✅ Nettoyage terminé: ${memory.rss}MB → ${newMemory.rss}MB`);
       } else {
         console.warn('⚠️ Email non envoyé, nettoyage annulé (sécurité)');
       }
+      
     } catch (error) {
       console.error('❌ Erreur lors du processus:', error);
     }
   }
 }
 
+// Démarrer la vérification périodique
 setInterval(checkMemoryAndExport, CLEANUP_INTERVAL);
 console.log(`⏰ Vérification mémoire programmée (toutes les ${CLEANUP_INTERVAL/60000} min)`);
 
-// ============ ROUTES D'EXPORT ============
+// ============ ROUTE MANUELLE D'EXPORT ============
 
 app.post('/api/manual-export', async (req, res) => {
   try {
     console.log('📧 Export manuel demandé');
+    
     const exportData = await exportDataToFile();
     const emailSent = await sendExportEmail(exportData);
     
@@ -243,15 +272,18 @@ app.post('/api/manual-export', async (req, res) => {
         error: 'Email non configuré ou erreur d\'envoi'
       });
     }
+    
   } catch (error) {
     console.error('❌ Erreur export manuel:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// ===Route GET pour l'export manuel (en plus de la POST existante)===
 app.get('/api/manual-export', async (req, res) => {
   try {
     console.log('📧 Export manuel demandé (GET)');
+    
     const exportData = await exportDataToFile();
     const emailSent = await sendExportEmail(exportData);
     
@@ -267,45 +299,14 @@ app.get('/api/manual-export', async (req, res) => {
         error: 'Email non configuré ou erreur d\'envoi'
       });
     }
+    
   } catch (error) {
     console.error('❌ Erreur export manuel:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.get('/api/export/json', async (req, res) => {
-  try {
-    console.log('📥 Export JSON demandé');
-    const exportData = await exportDataToFile();
-    
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.json"');
-    res.send(JSON.stringify(exportData, null, 2));
-  } catch (error) {
-    console.error('❌ Erreur export JSON:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/export/csv', async (req, res) => {
-  try {
-    console.log('📥 Export CSV demandé');
-    const client = await pool.connect();
-    const articlesResult = await client.query('SELECT * FROM articles ORDER BY pub_date DESC');
-    client.release();
-    
-    const csvData = convertToCSV(articlesResult.rows);
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.csv"');
-    res.send(csvData);
-  } catch (error) {
-    console.error('❌ Erreur export CSV:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============ ANALYSEUR DE SENTIMENT ============
-
+// ============ ANALYSEUR DE SENTIMENT (LOCAL) ============
 class SelfLearningSentiment {
   constructor() {
     this.lexicon = new Map();
@@ -407,7 +408,6 @@ class SelfLearningSentiment {
 const sentimentAnalyzer = new SelfLearningSentiment();
 
 // ============ GESTIONNAIRE POSTGRESQL ============
-
 class PostgreSQLManager {
   async saveArticle(articleData) {
     const { title, content, link, pubDate, feedUrl, sentiment } = articleData;
@@ -491,7 +491,6 @@ class PostgreSQLManager {
 const dbManager = new PostgreSQLManager();
 
 // ============ REFRESH FLUX RSS ============
-
 async function refreshData() {
   try {
     console.log('🔄 Rafraîchissement des flux RSS...');
@@ -545,6 +544,7 @@ async function refreshData() {
 
 // ============ ROUTES PRINCIPALES ============
 
+// Route pour obtenir les articles
 app.get('/api/articles', async (req, res) => {
   try {
     const { limit = 50, offset = 0 } = req.query;
@@ -564,30 +564,7 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
-app.get('/api/articles/count', async (req, res) => {
-  try {
-    console.log('🔢 Comptage des articles...');
-    const client = await pool.connect();
-    const result = await client.query('SELECT COUNT(*) as total FROM articles');
-    client.release();
-    
-    const total = parseInt(result.rows[0].total);
-    console.log(`✅ ${total} articles comptabilisés`);
-    
-    res.json({
-      success: true,
-      total: total,
-      message: `${total} articles dans la base de données`
-    });
-  } catch (error) {
-    console.error('❌ Erreur comptage articles:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
+// Route pour rafraîchir les données
 app.post('/api/refresh', async (req, res) => {
   try {
     console.log('🔄 Rafraîchissement manuel demandé');
@@ -607,8 +584,38 @@ app.post('/api/refresh', async (req, res) => {
   }
 });
 
+// Route de santé
+app.get('/api/health', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    client.release();
+    
+    let flaskStatus = 'unknown';
+    try {
+      const flaskResponse = await axios.get(`${FLASK_API_URL}/api/health`, { timeout: 5000 });
+      flaskStatus = flaskResponse.data.ok ? 'connected' : 'error';
+    } catch (e) {
+      flaskStatus = 'disconnected';
+    }
+    
+    res.json({
+      ok: true,
+      service: 'Node.js RSS Aggregator',
+      database: 'connected',
+      flask: flaskStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 // ============ GESTION DES FLUX RSS ============
 
+// Obtenir tous les flux avec statut
 app.get('/api/feeds/manager', async (req, res) => {
   try {
     const client = await pool.connect();
@@ -629,14 +636,18 @@ app.get('/api/feeds/manager', async (req, res) => {
   }
 });
 
+// Route /api/feeds existante (la garder)
 app.get('/api/feeds', async (req, res) => {
   try {
     const feeds = await dbManager.getFeeds();
+    
+    // Si pas de flux en base, renvoyer quelques flux par défaut depuis config.json
     if (feeds.length === 0) {
       const config = require('./config.json');
       const defaultFeeds = config.feeds.slice(0, 10);
       return res.json(defaultFeeds);
     }
+    
     res.json(feeds);
   } catch (error) {
     console.error('❌ Erreur route /api/feeds:', error);
@@ -647,9 +658,11 @@ app.get('/api/feeds', async (req, res) => {
   }
 });
 
+// Ajouter un nouveau flux
 app.post('/api/feeds', async (req, res) => {
   try {
     const { url, title } = req.body;
+    
     if (!url) {
       return res.status(400).json({ success: false, error: 'URL requise' });
     }
@@ -663,6 +676,9 @@ app.post('/api/feeds', async (req, res) => {
     );
     client.release();
     
+    // Sauvegarder aussi dans config.json pour backup
+    await saveFeedToConfig(url);
+    
     res.json({
       success: true,
       message: 'Flux ajouté avec succès',
@@ -674,6 +690,7 @@ app.post('/api/feeds', async (req, res) => {
   }
 });
 
+// Modifier un flux
 app.put('/api/feeds/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -702,9 +719,11 @@ app.put('/api/feeds/:id', async (req, res) => {
   }
 });
 
+// Supprimer un flux
 app.delete('/api/feeds/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
     const client = await pool.connect();
     const result = await client.query(
       'DELETE FROM feeds WHERE id = $1 RETURNING *',
@@ -728,9 +747,12 @@ app.delete('/api/feeds/:id', async (req, res) => {
 
 // ============ GESTION DES THÈMES ============
 
+// Route /api/themes existante (la garder)  
 app.get('/api/themes', async (req, res) => {
   try {
     const themes = await dbManager.getThemes();
+    
+    // Si pas de thèmes en base, renvoyer des thèmes par défaut
     if (themes.length === 0) {
       const defaultThemes = [
         { id: 1, name: 'Politique', keywords: ['politique', 'gouvernement', 'élection'], color: '#3b82f6', count: 0 },
@@ -739,6 +761,7 @@ app.get('/api/themes', async (req, res) => {
       ];
       return res.json(defaultThemes);
     }
+    
     res.json(themes);
   } catch (error) {
     console.error('❌ Erreur route /api/themes:', error);
@@ -749,6 +772,7 @@ app.get('/api/themes', async (req, res) => {
   }
 });
 
+// Obtenir tous les thèmes avec votre structure
 app.get('/api/themes/manager', async (req, res) => {
   try {
     const client = await pool.connect();
@@ -759,6 +783,7 @@ app.get('/api/themes/manager', async (req, res) => {
     `);
     client.release();
     
+    // Formater selon votre structure
     const themes = result.rows.map(theme => ({
       id: theme.id,
       name: theme.name,
@@ -778,6 +803,7 @@ app.get('/api/themes/manager', async (req, res) => {
   }
 });
 
+// Importer les thèmes depuis votre fichier JSON
 app.post('/api/themes/import', async (req, res) => {
   try {
     const fs = require('fs').promises;
@@ -816,14 +842,17 @@ app.post('/api/themes/import', async (req, res) => {
   }
 });
 
+// Ajouter un nouveau thème
 app.post('/api/themes', async (req, res) => {
   try {
     const { id, name, keywords, color, description } = req.body;
+    
     if (!name) {
       return res.status(400).json({ success: false, error: 'Nom requis' });
     }
     
     const themeId = id || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
     const client = await pool.connect();
     const result = await client.query(
       `INSERT INTO themes (id, name, keywords, color, description) 
@@ -846,6 +875,7 @@ app.post('/api/themes', async (req, res) => {
   }
 });
 
+// Modifier un thème
 app.put('/api/themes/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -874,11 +904,17 @@ app.put('/api/themes/:id', async (req, res) => {
   }
 });
 
+// Supprimer un thème
 app.delete('/api/themes/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
     const client = await pool.connect();
+    
+    // Supprimer d'abord les relations
     await client.query('DELETE FROM theme_analyses WHERE theme_id = $1', [id]);
+    
+    // Puis supprimer le thème
     const result = await client.query(
       'DELETE FROM themes WHERE id = $1 RETURNING *',
       [id]
@@ -899,78 +935,203 @@ app.delete('/api/themes/:id', async (req, res) => {
   }
 });
 
-// ============ ROUTES DE STATISTIQUES ============
+// ============ FONCTIONS UTILITAIRES ============
 
-app.get('/api/sentiment/stats', async (req, res) => {
+async function saveFeedToConfig(url) {
+  try {
+    const fs = require('fs').promises;
+    const configPath = './config.json';
+    
+    const data = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(data);
+    
+    if (!config.feeds.includes(url)) {
+      config.feeds.push(url);
+      await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+      console.log(`✅ Flux sauvegardé dans config.json: ${url}`);
+    }
+  } catch (error) {
+    console.warn('⚠️ Impossible de sauvegarder le flux dans config.json:', error.message);
+  }
+}
+
+// ============ FONCTIONS D'INITIALISATION ============
+
+async function initializeThemes() {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as count FROM themes');
+    
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📋 Chargement des thèmes par défaut...');
+      // Charger les thèmes par défaut
+    } else {
+      console.log(`✅ ${result.rows[0].count} thèmes déjà présents`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.warn('⚠️ Erreur initialisation thèmes:', error.message);
+  }
+}
+
+async function initializeFeeds() {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as count FROM feeds');
+    
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📋 Chargement des flux par défaut...');
+      // Charger les flux par défaut
+    } else {
+      console.log(`✅ ${result.rows[0].count} flux déjà présents`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.warn('⚠️ Erreur initialisation flux:', error.message);
+  }
+}
+
+async function initializeSentimentLexicon() {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as count FROM sentiment_lexicon');
+    
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📚 Initialisation du lexique de sentiment...');
+      // Initialiser le lexique
+    } else {
+      console.log(`✅ ${result.rows[0].count} mots dans le lexique`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.warn('⚠️ Erreur initialisation lexique:', error.message);
+  }
+}
+
+async function initializeFeeds() {
+  try {
+    const client = await pool.connect();
+    
+    // Vérifier si des flux existent déjà
+    const result = await client.query('SELECT COUNT(*) as count FROM feeds');
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📋 Chargement des flux depuis config.json...');
+      
+      try {
+        const fs = require('fs').promises;
+        const config = JSON.parse(await fs.readFile('./config.json', 'utf8'));
+        
+        for (const feedUrl of config.feeds.slice(0, 10)) {
+          await client.query(
+            `INSERT INTO feeds (url, title) VALUES ($1, $2) ON CONFLICT (url) DO NOTHING`,
+            [feedUrl, new URL(feedUrl).hostname]
+          );
+        }
+        console.log(`✅ ${config.feeds.length} flux chargés dans la base`);
+      } catch (e) {
+        console.warn('⚠️ Impossible de charger config.json, utilisation des flux par défaut');
+        // Flux par défaut
+        const defaultFeeds = [
+          'https://www.lemonde.fr/rss/une.xml',
+          'https://www.lefigaro.fr/rss/figaro_actualites.xml'
+        ];
+        
+        for (const feedUrl of defaultFeeds) {
+          await client.query(
+            'INSERT INTO feeds (url, title) VALUES ($1, $2) ON CONFLICT (url) DO NOTHING',
+            [feedUrl, new URL(feedUrl).hostname]
+          );
+        }
+        console.log('✅ Flux par défaut chargés');
+      }
+    } else {
+      console.log(`✅ ${result.rows[0].count} flux déjà présents en base`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.error('❌ Erreur initialisation flux:', error);
+  }
+}
+
+async function initializeSentimentLexicon() {
+  try {
+    const client = await pool.connect();
+    
+    // Vérifier si le lexique existe déjà
+    const result = await client.query('SELECT COUNT(*) as count FROM sentiment_lexicon');
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📚 Initialisation du lexique de sentiment...');
+      
+      // Mots de base pour le lexique
+      const baseWords = [
+        ['excellent', 2.0], ['exceptionnel', 2.0], ['formidable', 2.0], ['parfait', 2.0],
+        ['génial', 1.8], ['fantastique', 1.8], ['merveilleux', 1.8], ['superbe', 1.8],
+        ['bon', 1.0], ['bien', 1.0], ['positif', 1.0], ['succès', 1.0], ['réussite', 1.0],
+        ['paix', 1.8], ['accord', 1.5], ['coopération', 1.5], ['dialogue', 1.2],
+        ['catastrophe', -2.0], ['désastre', -2.0], ['horrible', -2.0], ['terrible', -2.0],
+        ['mauvais', -1.0], ['négatif', -1.0], ['problème', -1.0], ['échec', -1.0],
+        ['crise', -1.0], ['danger', -1.0], ['menace', -1.0], ['guerre', -2.0],
+        ['conflit', -1.8], ['violence', -1.8], ['sanction', -1.3], ['tension', -1.3]
+      ];
+      
+      for (const [word, score] of baseWords) {
+        await client.query(
+          'INSERT INTO sentiment_lexicon (word, score) VALUES ($1, $2) ON CONFLICT (word) DO NOTHING',
+          [word, score]
+        );
+      }
+      
+      console.log(`✅ ${baseWords.length} mots ajoutés au lexique`);
+    } else {
+      console.log(`✅ Lexique déjà initialisé (${result.rows[0].count} mots)`);
+    }
+    
+    client.release();
+  } catch (error) {
+    console.error('❌ Erreur initialisation lexique:', error);
+  }
+}
+
+async function initializeData() {
+  console.log('✅ Initialisation des données terminée');
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'initialisation:', error);
+    throw error;
+  }
+}
+
+// Verifier les indexes
+app.get('/api/debug/indexes', async (req, res) => {
   try {
     const client = await pool.connect();
     const result = await client.query(`
-      SELECT 
-        sentiment_type,
-        COUNT(*) as count,
-        AVG(sentiment_score) as avg_score,
-        AVG(sentiment_confidence) as avg_confidence
-      FROM articles 
-      WHERE sentiment_type IS NOT NULL
-      GROUP BY sentiment_type
-      ORDER BY count DESC
+      SELECT tablename, indexname, indexdef 
+      FROM pg_indexes 
+      WHERE schemaname = 'public'
+      ORDER BY tablename, indexname
     `);
     client.release();
     
-    const total = result.rows.reduce((sum, row) => sum + parseInt(row.count), 0);
-    
     res.json({
       success: true,
-      stats: result.rows,
-      total: total,
-      summary: {
-        positive: result.rows.find(r => r.sentiment_type === 'positive')?.count || 0,
-        negative: result.rows.find(r => r.sentiment_type === 'negative')?.count || 0,
-        neutral: result.rows.find(r => r.sentiment_type === 'neutral')?.count || 0
-      }
+      indexes: result.rows
     });
   } catch (error) {
-    console.error('❌ Erreur stats sentiment:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.get('/api/learning-stats', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    
-    const [lexicon, themes, articles, feeds] = await Promise.all([
-      client.query('SELECT COUNT(*) FROM sentiment_lexicon'),
-      client.query('SELECT COUNT(*) FROM themes'),
-      client.query('SELECT COUNT(*) FROM articles'),
-      client.query('SELECT COUNT(*) FROM feeds WHERE is_active = true')
-    ]);
-    
-    client.release();
-    
-    res.json({
-      success: true,
-      stats: {
-        lexicon_words: parseInt(lexicon.rows[0].count),
-        themes_count: parseInt(themes.rows[0].count),
-        articles_analyzed: parseInt(articles.rows[0].count),
-        active_feeds: parseInt(feeds.rows[0].count),
-        analysis_confidence: 'high'
-      },
-      last_updated: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Erreur stats apprentissage:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============ ROUTE DE DIAGNOSTIC ============
-
+// Route debug database corrigée
 app.get('/api/debug/database', async (req, res) => {
   try {
     const client = await pool.connect();
     
+// VERSION CORRIGÉE 18/10- Compatible PostgreSQL
     const tablesStats = await client.query(`
       SELECT 
         (SELECT count(*) FROM articles) as articles_count,
@@ -979,6 +1140,7 @@ app.get('/api/debug/database', async (req, res) => {
         (SELECT count(*) FROM sentiment_lexicon) as lexicon_count
     `);
     
+    // Index existants
     const indexes = await client.query(`
       SELECT COUNT(*) as index_count 
       FROM pg_indexes 
@@ -986,6 +1148,7 @@ app.get('/api/debug/database', async (req, res) => {
       AND indexname LIKE 'idx_%'
     `);
     
+    // Performance des requêtes
     const performance = await client.query(`
       SELECT 
         schemaname,
@@ -998,6 +1161,7 @@ app.get('/api/debug/database', async (req, res) => {
       WHERE relname IN ('articles', 'themes', 'feeds')
     `);
     
+    // Détails des index
     const indexDetails = await client.query(`
       SELECT 
         indexname,
@@ -1033,87 +1197,216 @@ app.get('/api/debug/database', async (req, res) => {
   }
 });
 
-// ============ FONCTIONS D'INITIALISATION ============
+// ============ DÉMARRAGE DU SERVEUR ============
 
-async function initializeThemes() {
+async function startServer() {
+  try {
+    console.log('🚀 Démarrage du serveur...');
+    
+    // Initialiser les données
+    await initializeData();
+    
+    // Démarrer le serveur
+    app.listen(PORT, () => {
+      console.log(`✅ Serveur démarré sur le port ${PORT}`);
+      console.log(`📊 Interface: http://localhost:${PORT}`);
+      console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
+      console.log(`💾 Mode: ${NODE_ENV}`);
+      console.log(`📧 Email: ${EMAIL_CONFIG.user ? '✅ Configuré' : '❌ Non configuré'}`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur démarrage serveur:', error);
+    process.exit(1);
+  }
+}
+
+// Gestion propre de l'arrêt
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Arrêt du serveur...');
+  try {
+    await pool.end();
+    console.log('✅ Connexions DB fermées');
+  } catch (error) {
+    console.error('❌ Erreur fermeture DB:', error);
+  }
+  process.exit(0);
+});
+
+// Route temporaire pour recréer les index manquants
+app.post('/api/fix-indexes', async (req, res) => {
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT COUNT(*) as count FROM themes');
     
-    if (parseInt(result.rows[0].count) === 0) {
-      console.log('📋 Chargement des thèmes par défaut...');
-    } else {
-      console.log(`✅ ${result.rows[0].count} thèmes déjà présents`);
-    }
+    // Index CRITIQUE manquant de database 18/10
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_articles_pub_date_desc 
+      ON articles(pub_date DESC)
+    `);
+    
+    // Index composite pour la pagination
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_articles_loading_speed 
+      ON articles(pub_date DESC, id DESC)
+    `);
     
     client.release();
+    
+    res.json({
+      success: true,
+      message: 'Index critiques créés',
+      indexes: ['idx_articles_pub_date_desc', 'idx_articles_loading_speed']
+    });
+    
   } catch (error) {
-    console.warn('⚠️ Erreur initialisation thèmes:', error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
-}
+});
 
-async function initializeFeeds() {
+// ============ ROUTES MANQUANTES ============
+
+// Stats de sentiment
+app.get('/api/sentiment/stats', async (req, res) => {
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT COUNT(*) as count FROM feeds');
-    
-    if (parseInt(result.rows[0].count) === 0) {
-      console.log('📋 Chargement des flux par défaut...');
-    } else {
-      console.log(`✅ ${result.rows[0].count} flux déjà présents`);
-    }
-    
+    const result = await client.query(`
+      SELECT 
+        sentiment_type,
+        COUNT(*) as count,
+        AVG(sentiment_score) as avg_score,
+        AVG(sentiment_confidence) as avg_confidence
+      FROM articles 
+      WHERE sentiment_type IS NOT NULL
+      GROUP BY sentiment_type
+      ORDER BY count DESC
+    `);
     client.release();
+    
+    res.json({
+      success: true,
+      stats: result.rows,
+      total: result.rows.reduce((sum, row) => sum + parseInt(row.count), 0)
+    });
   } catch (error) {
-    console.warn('⚠️ Erreur initialisation flux:', error.message);
+    console.error('❌ Erreur stats sentiment:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-}
+});
 
-async function initializeSentimentLexicon() {
+// ============ ROUTE COMPTEUR D'ARTICLES ============
+
+app.get('/api/articles/count', async (req, res) => {
+  try {
+    console.log('🔢 Comptage des articles...');
+    
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) as total FROM articles');
+    client.release();
+    
+    const total = parseInt(result.rows[0].total);
+    
+    console.log(`✅ ${total} articles comptabilisés`);
+    
+    res.json({
+      success: true,
+      total: total,
+      message: `${total} articles dans la base de données`
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur comptage articles:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Stats d'apprentissage
+app.get('/api/learning-stats', async (req, res) => {
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT COUNT(*) as count FROM sentiment_lexicon');
     
-    if (parseInt(result.rows[0].count) === 0) {
-      console.log('📚 Initialisation du lexique de sentiment...');
-    } else {
-      console.log(`✅ ${result.rows[0].count} mots dans le lexique`);
-    }
+    const lexiconCount = await client.query('SELECT COUNT(*) FROM sentiment_lexicon');
+    const themesCount = await client.query('SELECT COUNT(*) FROM themes');
+    const articlesCount = await client.query('SELECT COUNT(*) FROM articles');
     
     client.release();
+    
+    res.json({
+      success: true,
+      stats: {
+        lexicon_words: parseInt(lexiconCount.rows[0].count),
+        themes_count: parseInt(themesCount.rows[0].count),
+        articles_analyzed: parseInt(articlesCount.rows[0].count),
+        analysis_confidence: 'high'
+      }
+    });
   } catch (error) {
-    console.warn('⚠️ Erreur initialisation lexique:', error.message);
+    console.error('❌ Erreur stats apprentissage:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-}
+});
 
-async function initializeData() {
-  console.log('🚀 Initialisation des données...');
+// Export JSON direct (téléchargement)
+app.get('/api/export/json', async (req, res) => {
   try {
-    console.log('✅ Initialisation des données terminée');
+    console.log('📥 Export JSON demandé');
+    const exportData = await exportDataToFile();
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.json"');
+    
+    res.send(JSON.stringify(exportData, null, 2));
   } catch (error) {
-    console.error('❌ Erreur lors de l\'initialisation:', error);
-    throw error;
+    console.error('❌ Erreur export JSON:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
-}
+});
+
+// Export CSV direct (téléchargement)
+app.get('/api/export/csv', async (req, res) => {
+  try {
+    console.log('📥 Export CSV demandé');
+    const client = await pool.connect();
+    const articlesResult = await client.query('SELECT * FROM articles ORDER BY pub_date DESC');
+    client.release();
+    
+    const csvData = convertToCSV(articlesResult.rows);
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.csv"');
+    
+    res.send(csvData);
+  } catch (error) {
+    console.error('❌ Erreur export CSV:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // ============ GESTION ROBUSTE DU DÉMARRAGE ============
 
 let isDatabaseReady = false;
+let databaseInitPromise = null;
 
+// Fonction d'initialisation centralisée
 async function initializeApplication() {
   console.log('🚀 Initialisation de l\'application...');
   
   try {
+    // 1. Initialiser la base de données d'abord
     console.log('📦 Initialisation de la base de données...');
     await initializeDatabase();
     isDatabaseReady = true;
     console.log('✅ Base de données prête');
     
+    // 2. Initialiser les données
     console.log('📋 Chargement des données initiales...');
     await initializeThemes();
     await initializeFeeds();
     await initializeSentimentLexicon();
     
+    // 3. Rafraîchissement initial (optionnel, peut être fait en background)
     console.log('🔄 Chargement initial des articles...');
     refreshData().then(() => {
       console.log('✅ Données initiales chargées');
@@ -1130,6 +1423,7 @@ async function initializeApplication() {
   }
 }
 
+// Middleware pour vérifier la disponibilité de la DB
 app.use((req, res, next) => {
   if (!isDatabaseReady && req.path.startsWith('/api/') && !req.path.includes('/health')) {
     return res.status(503).json({
@@ -1141,6 +1435,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Route health améliorée
 app.get('/api/health', async (req, res) => {
   try {
     let dbStatus = 'disconnected';
@@ -1174,11 +1469,15 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Démarrer le serveur de manière robuste
 async function startServer() {
   try {
     console.log('🚀 Démarrage du serveur...');
+    
+    // Initialiser l'application avant de démarrer le serveur
     await initializeApplication();
     
+    // Maintenant démarrer le serveur
     app.listen(PORT, () => {
       console.log(`✅ Serveur démarré sur le port ${PORT}`);
       console.log(`📊 Interface: http://localhost:${PORT}`);
@@ -1189,6 +1488,8 @@ async function startServer() {
     
   } catch (error) {
     console.error('❌ Erreur démarrage serveur:', error);
+    
+    // Démarrer quand même en mode dégradé
     console.log('🟡 Démarrage en mode dégradé (sans base de données)...');
     app.listen(PORT, () => {
       console.log(`⚠️ Serveur démarré en mode dégradé sur le port ${PORT}`);
@@ -1196,18 +1497,6 @@ async function startServer() {
     });
   }
 }
-
-// Gestion propre de l'arrêt
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Arrêt du serveur...');
-  try {
-    await pool.end();
-    console.log('✅ Connexions DB fermées');
-  } catch (error) {
-    console.error('❌ Erreur fermeture DB:', error);
-  }
-  process.exit(0);
-});
 
 // Démarrer le serveur
 startServer();
