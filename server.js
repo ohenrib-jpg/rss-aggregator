@@ -798,5 +798,329 @@ async function loadInitialFeeds() {
   }
 }
 
+// ============ GESTION DES FLUX RSS ============
+
+// Obtenir tous les flux avec statut
+app.get('/api/feeds/manager', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT id, url, title, is_active, last_fetched, created_at 
+      FROM feeds 
+      ORDER BY created_at DESC
+    `);
+    client.release();
+    
+    res.json({
+      success: true,
+      feeds: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Ajouter un nouveau flux
+app.post('/api/feeds', async (req, res) => {
+  try {
+    const { url, title } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL requise' });
+    }
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `INSERT INTO feeds (url, title) VALUES ($1, $2) 
+       ON CONFLICT (url) DO UPDATE SET is_active = true
+       RETURNING *`,
+      [url, title || new URL(url).hostname]
+    );
+    client.release();
+    
+    // Sauvegarder aussi dans config.json pour backup
+    await saveFeedToConfig(url);
+    
+    res.json({
+      success: true,
+      message: 'Flux ajouté avec succès',
+      feed: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur ajout flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Modifier un flux
+app.put('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { url, title, is_active } = req.body;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `UPDATE feeds SET url = $1, title = $2, is_active = $3 
+       WHERE id = $4 RETURNING *`,
+      [url, title, is_active, id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Flux modifié avec succès',
+      feed: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur modification flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Supprimer un flux
+app.delete('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      'DELETE FROM feeds WHERE id = $1 RETURNING *',
+      [id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Flux supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur suppression flux:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ GESTION DES THÈMES (adaptée à votre structure) ============
+
+// Importer les thèmes depuis votre fichier JSON
+app.post('/api/themes/import', async (req, res) => {
+  try {
+    const fs = require('fs').promises;
+    const themesData = JSON.parse(await fs.readFile('./themes.json', 'utf8'));
+    
+    const client = await pool.connect();
+    let importedCount = 0;
+    
+    for (const theme of themesData.themes) {
+      try {
+        await client.query(
+          `INSERT INTO themes (id, name, keywords, color, description) 
+           VALUES ($1, $2, $3, $4, $5) 
+           ON CONFLICT (id) DO UPDATE SET 
+           name = $2, keywords = $3, color = $4, description = $5`,
+          [theme.id, theme.name, theme.keywords, theme.color, theme.description]
+        );
+        importedCount++;
+      } catch (e) {
+        console.warn(`⚠️ Erreur import thème ${theme.name}:`, e.message);
+      }
+    }
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      message: `${importedCount} thèmes importés avec succès`,
+      total: themesData.themes.length,
+      imported: importedCount
+    });
+  } catch (error) {
+    console.error('❌ Erreur import thèmes:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Obtenir tous les thèmes avec votre structure
+app.get('/api/themes/manager', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT id, name, keywords, color, description, created_at 
+      FROM themes 
+      ORDER BY name
+    `);
+    client.release();
+    
+    // Formater selon votre structure
+    const themes = result.rows.map(theme => ({
+      id: theme.id,
+      name: theme.name,
+      keywords: theme.keywords || [],
+      color: theme.color,
+      description: theme.description,
+      created_at: theme.created_at
+    }));
+    
+    res.json({
+      success: true,
+      themes: themes
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération thèmes:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Ajouter un nouveau thème
+app.post('/api/themes', async (req, res) => {
+  try {
+    const { id, name, keywords, color, description } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Nom requis' });
+    }
+    
+    const themeId = id || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `INSERT INTO themes (id, name, keywords, color, description) 
+       VALUES ($1, $2, $3, $4, $5) 
+       ON CONFLICT (id) DO UPDATE SET 
+       name = $2, keywords = $3, color = $4, description = $5
+       RETURNING *`,
+      [themeId, name, keywords || [], color || '#6366f1', description]
+    );
+    client.release();
+    
+    res.json({
+      success: true,
+      message: 'Thème ajouté avec succès',
+      theme: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur ajout thème:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Modifier un thème
+app.put('/api/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, keywords, color, description } = req.body;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `UPDATE themes SET name = $1, keywords = $2, color = $3, description = $4 
+       WHERE id = $5 RETURNING *`,
+      [name, keywords, color, description, id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Thème modifié avec succès',
+      theme: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur modification thème:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Supprimer un thème
+app.delete('/api/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const client = await pool.connect();
+    
+    // Supprimer d'abord les relations
+    await client.query('DELETE FROM theme_analyses WHERE theme_id = $1', [id]);
+    
+    // Puis supprimer le thème
+    const result = await client.query(
+      'DELETE FROM themes WHERE id = $1 RETURNING *',
+      [id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Thème supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur suppression thème:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ FONCTIONS UTILITAIRES ============
+
+async function saveFeedToConfig(url) {
+  try {
+    const fs = require('fs').promises;
+    const configPath = './config.json';
+    
+    const data = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(data);
+    
+    if (!config.feeds.includes(url)) {
+      config.feeds.push(url);
+      await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+      console.log(`✅ Flux sauvegardé dans config.json: ${url}`);
+    }
+  } catch (error) {
+    console.warn('⚠️ Impossible de sauvegarder le flux dans config.json:', error.message);
+  }
+}
+
+// ============ CORRECTION ROUTE /api/health ============
+
+app.get('/api/health', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    client.release();
+    
+    let flaskStatus = 'unknown';
+    try {
+      const flaskResponse = await axios.get(`${FLASK_API_URL}/api/health`, { timeout: 5000 });
+      flaskStatus = flaskResponse.data.ok ? 'connected' : 'error';
+    } catch (e) {
+      flaskStatus = 'disconnected';
+    }
+    
+    res.json({
+      ok: true,
+      service: 'Node.js RSS Aggregator',
+      database: 'connected',
+      flask: flaskStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 // Démarrer le serveur
 startServer();
