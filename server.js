@@ -515,61 +515,291 @@ async function refreshData() {
   }
 }
 
-// ============ ROUTES API ============
+// ============ ROUTES MANQUANTES POUR LA GESTION ============
 
-// Route de santé
-app.get('/health', async (req, res) => {
+// Gestion des flux - Route manager
+app.get('/api/feeds/manager', async (req, res) => {
   try {
-    // Vérifier la connexion à la base de données
     const client = await pool.connect();
+    const result = await client.query(`
+      SELECT id, url, title, is_active, last_fetched, created_at 
+      FROM feeds 
+      ORDER BY created_at DESC
+    `);
     client.release();
     
-    // Vérifier la connexion à Flask
-    let flaskStatus = 'unknown';
-    try {
-      const flaskResponse = await axios.get(`${FLASK_API_URL}/health`, { timeout: 5000 });
-      flaskStatus = flaskResponse.data.ok ? 'connected' : 'error';
-    } catch (e) {
-      flaskStatus = 'disconnected';
-    }
-    
     res.json({
-      status: 'OK',
-      service: 'Node.js RSS Aggregator',
-      database: 'connected',
-      flask: flaskStatus,
-      timestamp: new Date().toISOString()
+      success: true,
+      feeds: result.rows
     });
   } catch (error) {
-    res.status(500).json({
-      status: 'ERROR',
-      error: error.message
+    console.error('❌ Erreur récupération flux manager:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      // Fallback pour développement
+      feeds: []
     });
   }
 });
 
-// Route racine
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/index.html');
-});
-
-// Obtenir tous les articles
-app.get('/api/articles', async (req, res) => {
+// Gestion des thèmes - Route manager  
+app.get('/api/themes/manager', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = parseInt(req.query.offset) || 0;
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT id, name, keywords, color, description, created_at 
+      FROM themes 
+      ORDER BY name
+    `);
+    client.release();
     
-    const articles = await dbManager.getArticles(limit, offset);
+    // Formater selon votre structure
+    const themes = result.rows.map(theme => ({
+      id: theme.id,
+      name: theme.name,
+      keywords: theme.keywords || [],
+      color: theme.color,
+      description: theme.description,
+      created_at: theme.created_at
+    }));
     
     res.json({
       success: true,
-      articles: articles,
-      totalArticles: articles.length,
-      limit: limit,
-      offset: offset
+      themes: themes
     });
   } catch (error) {
-    console.error('❌ Erreur route /api/articles:', error);
+    console.error('❌ Erreur récupération thèmes manager:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      // Fallback pour développement
+      themes: []
+    });
+  }
+});
+
+// Import des thèmes depuis votre fichier JSON
+app.post('/api/themes/import', async (req, res) => {
+  try {
+    const fs = require('fs').promises;
+    const themesData = JSON.parse(await fs.readFile('./themes.json', 'utf8'));
+    
+    const client = await pool.connect();
+    let importedCount = 0;
+    
+    for (const theme of themesData.themes) {
+      try {
+        await client.query(
+          `INSERT INTO themes (id, name, keywords, color, description) 
+           VALUES ($1, $2, $3, $4, $5) 
+           ON CONFLICT (id) DO UPDATE SET 
+           name = $2, keywords = $3, color = $4, description = $5`,
+          [theme.id, theme.name, theme.keywords, theme.color, theme.description]
+        );
+        importedCount++;
+        console.log(`✅ Thème importé: ${theme.name}`);
+      } catch (e) {
+        console.warn(`⚠️ Erreur import thème ${theme.name}:`, e.message);
+      }
+    }
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      message: `${importedCount} thèmes importés avec succès`,
+      total: themesData.themes.length,
+      imported: importedCount
+    });
+  } catch (error) {
+    console.error('❌ Erreur import thèmes:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Ajouter un nouveau flux
+app.post('/api/feeds', async (req, res) => {
+  try {
+    const { url, title } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'URL requise' });
+    }
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `INSERT INTO feeds (url, title) VALUES ($1, $2) 
+       ON CONFLICT (url) DO UPDATE SET is_active = true
+       RETURNING *`,
+      [url, title || new URL(url).hostname]
+    );
+    client.release();
+    
+    res.json({
+      success: true,
+      message: 'Flux ajouté avec succès',
+      feed: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur ajout flux:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Modifier un flux (activation/désactivation)
+app.put('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `UPDATE feeds SET is_active = $1 WHERE id = $2 RETURNING *`,
+      [is_active, id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: `Flux ${is_active ? 'activé' : 'désactivé'} avec succès`,
+      feed: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur modification flux:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Supprimer un flux
+app.delete('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      'DELETE FROM feeds WHERE id = $1 RETURNING *',
+      [id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Flux supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur suppression flux:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Ajouter un nouveau thème
+app.post('/api/themes', async (req, res) => {
+  try {
+    const { name, keywords, color, description } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Nom requis' });
+    }
+    
+    const themeId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      `INSERT INTO themes (id, name, keywords, color, description) 
+       VALUES ($1, $2, $3, $4, $5) 
+       ON CONFLICT (id) DO UPDATE SET 
+       name = $2, keywords = $3, color = $4, description = $5
+       RETURNING *`,
+      [themeId, name, keywords || [], color || '#6366f1', description]
+    );
+    client.release();
+    
+    res.json({
+      success: true,
+      message: 'Thème ajouté avec succès',
+      theme: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erreur ajout thème:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Supprimer un thème
+app.delete('/api/themes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const client = await pool.connect();
+    
+    // Supprimer d'abord les relations
+    await client.query('DELETE FROM theme_analyses WHERE theme_id = $1', [id]);
+    
+    // Puis supprimer le thème
+    const result = await client.query(
+      'DELETE FROM themes WHERE id = $1 RETURNING *',
+      [id]
+    );
+    client.release();
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Thème supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur suppression thème:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// ============ CORRECTION DES ROUTES EXISTANTES ============
+
+// Route /api/feeds existante (la garder)
+app.get('/api/feeds', async (req, res) => {
+  try {
+    const feeds = await dbManager.getFeeds();
+    
+    // Si pas de flux en base, renvoyer quelques flux par défaut depuis config.json
+    if (feeds.length === 0) {
+      const config = require('./config.json');
+      const defaultFeeds = config.feeds.slice(0, 10);
+      return res.json(defaultFeeds);
+    }
+    
+    res.json(feeds);
+  } catch (error) {
+    console.error('❌ Erreur route /api/feeds:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -577,7 +807,7 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
-// Obtenir les thèmes
+// Route /api/themes existante (la garder)  
 app.get('/api/themes', async (req, res) => {
   try {
     const themes = await dbManager.getThemes();
@@ -587,9 +817,7 @@ app.get('/api/themes', async (req, res) => {
       const defaultThemes = [
         { id: 1, name: 'Politique', keywords: ['politique', 'gouvernement', 'élection'], color: '#3b82f6', count: 0 },
         { id: 2, name: 'Économie', keywords: ['économie', 'bourse', 'finance'], color: '#10b981', count: 0 },
-        { id: 3, name: 'Santé', keywords: ['santé', 'médecine', 'hôpital'], color: '#ef4444', count: 0 },
-        { id: 4, name: 'Technologie', keywords: ['technologie', 'innovation', 'digital'], color: '#8b5cf6', count: 0 },
-        { id: 5, name: 'International', keywords: ['international', 'monde', 'diplomatie'], color: '#f59e0b', count: 0 }
+        { id: 3, name: 'Santé', keywords: ['santé', 'médecine', 'hôpital'], color: '#ef4444', count: 0 }
       ];
       return res.json(defaultThemes);
     }
@@ -604,177 +832,51 @@ app.get('/api/themes', async (req, res) => {
   }
 });
 
-// Obtenir les flux RSS
-app.get('/api/feeds', async (req, res) => {
+// ============ FONCTION D'INITIALISATION DES THÈMES ============
+
+async function initializeThemes() {
   try {
-    const feeds = await dbManager.getFeeds();
+    const client = await pool.connect();
     
-    // Si pas de flux en base, renvoyer quelques flux par défaut depuis config.json
-    if (feeds.length === 0) {
-      const config = require('./config.json');
-      const defaultFeeds = config.feeds.slice(0, 10); // Premiers 10 flux
-      return res.json(defaultFeeds);
-    }
-    
-    res.json(feeds);
-  } catch (error) {
-    console.error('❌ Erreur route /api/feeds:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Actualiser les données
-app.post('/api/refresh', async (req, res) => {
-  try {
-    console.log('🔄 Actualisation manuelle demandée');
-    const articles = await refreshData();
-    
-    res.json({
-      success: true,
-      message: `Données actualisées avec ${articles.length} nouveaux articles`,
-      articles: articles.length
-    });
-  } catch (error) {
-    console.error('❌ Erreur route /api/refresh:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Proxy vers l'API Flask IA
-app.get('/api/sentiment/stats', async (req, res) => {
-  try {
-    const response = await axios.get(`${FLASK_API_URL}/api/sentiment/stats`, {
-      params: req.query,
-      timeout: 10000
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('❌ Erreur proxy sentiment/stats:', error.message);
-    // Fallback : stats locales
-    const articles = await dbManager.getArticles(1000, 0);
-    const stats = calculateLocalSentimentStats(articles);
-    res.json({
-      success: true,
-      stats: stats
-    });
-  }
-});
-
-app.get('/api/learning-stats', async (req, res) => {
-  try {
-    const response = await axios.get(`${FLASK_API_URL}/api/learning-stats`, {
-      timeout: 10000
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('❌ Erreur proxy learning-stats:', error.message);
-    // Fallback : stats locales
-    res.json({
-      success: true,
-      total_articles_processed: 0,
-      sentiment_accuracy: 0.75,
-      theme_detection_accuracy: 0.65,
-      bayesian_fusion_used: 0,
-      corroboration_avg: 0.0,
-      avg_processing_time: 2.1,
-      model_version: "2.3",
-      modules_active: ["analysis_utils", "corroboration", "metrics"]
-    });
-  }
-});
-
-// ============ FONCTIONS UTILITAIRES ============
-
-function calculateLocalSentimentStats(articles) {
-  const stats = {
-    total: articles.length,
-    positive: 0,
-    negative: 0,
-    neutral: 0,
-    average_score: 0,
-    confidence_avg: 0,
-    bayesian_avg: 0
-  };
-  
-  let totalScore = 0;
-  let totalConfidence = 0;
-  
-  articles.forEach(article => {
-    const sentiment = article.sentiment;
-    if (sentiment) {
-      totalScore += sentiment.score || 0;
-      totalConfidence += sentiment.confidence || 0;
+    // Vérifier si des thèmes existent déjà
+    const result = await client.query('SELECT COUNT(*) as count FROM themes');
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('📋 Chargement des thèmes depuis themes.json...');
       
-      switch(sentiment.sentiment) {
-        case 'positive': stats.positive++; break;
-        case 'negative': stats.negative++; break;
-        default: stats.neutral++; break;
+      try {
+        const fs = require('fs').promises;
+        const themesData = JSON.parse(await fs.readFile('./themes.json', 'utf8'));
+        
+        for (const theme of themesData.themes) {
+          await client.query(
+            `INSERT INTO themes (id, name, keywords, color, description) 
+             VALUES ($1, $2, $3, $4, $5) 
+             ON CONFLICT (id) DO NOTHING`,
+            [theme.id, theme.name, theme.keywords, theme.color, theme.description]
+          );
+        }
+        console.log(`✅ ${themesData.themes.length} thèmes chargés dans la base`);
+      } catch (e) {
+        console.warn('⚠️ Impossible de charger themes.json, utilisation des thèmes par défaut');
+        // Thèmes par défaut
+        const defaultThemes = [
+          ['geo_politique', 'Politique', ['politique', 'gouvernement'], '#3b82f6', 'Actualités politiques'],
+          ['geo_economie', 'Économie', ['économie', 'bourse'], '#10b981', 'Actualités économiques'],
+          ['geo_sante', 'Santé', ['santé', 'médecine'], '#ef4444', 'Actualités sanitaires']
+        ];
+        
+        for (const theme of defaultThemes) {
+          await client.query(
+            'INSERT INTO themes (id, name, keywords, color, description) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING',
+            theme
+          );
+        }
       }
     }
-  });
-  
-  if (articles.length > 0) {
-    stats.average_score = totalScore / articles.length;
-    stats.confidence_avg = totalConfidence / articles.length;
-  }
-  
-  return stats;
-}
-
-// ============ GESTION DES ERREURS ============
-
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route non trouvée',
-    path: req.path
-  });
-});
-
-app.use((error, req, res, next) => {
-  console.error('❌ Erreur serveur:', error);
-  res.status(500).json({
-    success: false,
-    error: 'Erreur interne du serveur'
-  });
-});
-
-// ============ DÉMARRAGE DU SERVEUR ============
-
-async function startServer() {
-  try {
-    // Initialiser la base de données
-    console.log('🔄 Initialisation de la base de données...');
-    await initializeDatabase();
-    console.log('✅ Base de données initialisée');
     
-    // Initialiser les thèmes
-    console.log('🎨 Initialisation des thèmes...');
-    await initializeThemes();
-    console.log('✅ Thèmes initialisés');
-    
-    // Charger les flux initiaux
-    console.log('📥 Chargement des flux initiaux...');
-    await loadInitialFeeds();
-    console.log('✅ Flux initiaux chargés');
-    
-    // Démarrer le serveur
-    app.listen(PORT, () => {
-      console.log(`🚀 Serveur RSS Aggregator démarré sur le port ${PORT}`);
-      console.log(`🔗 URL: http://localhost:${PORT}`);
-      console.log(`🤖 API Flask: ${FLASK_API_URL}`);
-      console.log('✅ Prêt à recevoir des requêtes');
-    });
-    
+    client.release();
   } catch (error) {
-    console.error('❌ Erreur démarrage serveur:', error);
-    process.exit(1);
+    console.error('❌ Erreur initialisation thèmes:', error);
   }
 }
 

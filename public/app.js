@@ -963,6 +963,62 @@ window.app = (function () {
     }
   }
 
+// ============ FONCTIONS MANQUANTES FLUX ET THEMES 18/10============
+
+async function exportFeeds() {
+  try {
+    const response = await fetch('/api/feeds/manager');
+    const data = await response.json();
+    
+    if (data.success) {
+      const csvContent = "data:text/csv;charset=utf-8," 
+        + "URL,Titre,Statut,Dernier fetch\n"
+        + data.feeds.map(feed => 
+            `"${feed.url}","${feed.title || ''}","${feed.is_active ? 'Actif' : 'Inactif'}","${feed.last_fetched || 'Jamais'}"`
+          ).join("\n");
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "flux_rss_export.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  } catch (error) {
+    alert('Erreur export: ' + error.message);
+  }
+}
+
+async function exportThemes() {
+  try {
+    const response = await fetch('/api/themes/manager');
+    const data = await response.json();
+    
+    if (data.success) {
+      const csvContent = "data:text/csv;charset=utf-8," 
+        + "Nom,Couleur,Description,Nombre de mots-clés\n"
+        + data.themes.map(theme => 
+            `"${theme.name}","${theme.color}","${theme.description || ''}","${theme.keywords.length}"`
+          ).join("\n");
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "themes_export.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  } catch (error) {
+    alert('Erreur export: ' + error.message);
+  }
+}
+
+// Exposer les nouvelles fonctions globales
+window.exportFeeds = exportFeeds;
+window.exportThemes = exportThemes;
+
   // ========== INITIALISATION ==========
   function initializeApp() {
     console.log("🚀 Initialisation de l'application RSS Aggregator");
