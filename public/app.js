@@ -24,9 +24,13 @@
         backgroundColor: "rgba(201,203,207,0.06)", 
         borderColor: "rgba(201,203,207,1)" 
       },
-      { 
-        label: "Négative", 
-        data: neg/* public/app.js - Version corrigée avec routes API uniformes */
+      {
+        label: "Négative",
+        data: neg,
+        fill: true,
+        tension: 0.2,
+        backgroundColor: "rgba(255,99,132,0.06)",
+        borderColor: "rgba(255,99,132,1)"
       },
 window.app = (function () {
   const state = {
