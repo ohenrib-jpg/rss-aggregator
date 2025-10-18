@@ -279,6 +279,33 @@ app.post('/api/manual-export', async (req, res) => {
   }
 });
 
+// ===Route GET pour l'export manuel (en plus de la POST existante)===
+app.get('/api/manual-export', async (req, res) => {
+  try {
+    console.log('📧 Export manuel demandé (GET)');
+    
+    const exportData = await exportDataToFile();
+    const emailSent = await sendExportEmail(exportData);
+    
+    if (emailSent) {
+      res.json({
+        success: true,
+        message: 'Export envoyé par email',
+        statistics: exportData.statistics
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Email non configuré ou erreur d\'envoi'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erreur export manuel:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ ANALYSEUR DE SENTIMENT (LOCAL) ============
 class SelfLearningSentiment {
   constructor() {
@@ -1246,6 +1273,98 @@ app.post('/api/fix-indexes', async (req, res) => {
     });
     
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ ROUTES MANQUANTES ============
+
+// Stats de sentiment
+app.get('/api/sentiment/stats', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        sentiment_type,
+        COUNT(*) as count,
+        AVG(sentiment_score) as avg_score,
+        AVG(sentiment_confidence) as avg_confidence
+      FROM articles 
+      WHERE sentiment_type IS NOT NULL
+      GROUP BY sentiment_type
+      ORDER BY count DESC
+    `);
+    client.release();
+    
+    res.json({
+      success: true,
+      stats: result.rows,
+      total: result.rows.reduce((sum, row) => sum + parseInt(row.count), 0)
+    });
+  } catch (error) {
+    console.error('❌ Erreur stats sentiment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Stats d'apprentissage
+app.get('/api/learning-stats', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    const lexiconCount = await client.query('SELECT COUNT(*) FROM sentiment_lexicon');
+    const themesCount = await client.query('SELECT COUNT(*) FROM themes');
+    const articlesCount = await client.query('SELECT COUNT(*) FROM articles');
+    
+    client.release();
+    
+    res.json({
+      success: true,
+      stats: {
+        lexicon_words: parseInt(lexiconCount.rows[0].count),
+        themes_count: parseInt(themesCount.rows[0].count),
+        articles_analyzed: parseInt(articlesCount.rows[0].count),
+        analysis_confidence: 'high'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur stats apprentissage:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Export JSON direct (téléchargement)
+app.get('/api/export/json', async (req, res) => {
+  try {
+    console.log('📥 Export JSON demandé');
+    const exportData = await exportDataToFile();
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.json"');
+    
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (error) {
+    console.error('❌ Erreur export JSON:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Export CSV direct (téléchargement)
+app.get('/api/export/csv', async (req, res) => {
+  try {
+    console.log('📥 Export CSV demandé');
+    const client = await pool.connect();
+    const articlesResult = await client.query('SELECT * FROM articles ORDER BY pub_date DESC');
+    client.release();
+    
+    const csvData = convertToCSV(articlesResult.rows);
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="rss-export.csv"');
+    
+    res.send(csvData);
+  } catch (error) {
+    console.error('❌ Erreur export CSV:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
