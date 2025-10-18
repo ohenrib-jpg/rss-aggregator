@@ -3,245 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS Thématique + IA V.2.3</title>
+    <title>Agrégateur RSS + IA v2.3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="container">
+    <!-- En-tête -->
     <header>
-        <div class="header-main" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            <div class="header-title">
-                <h1 style="margin: 0 0 8px 0; font-size: 2rem; font-weight: 700;">📊 Agrégateur RSS Thématique</h1>
-                <div class="header-subtitle" style="display: flex; align-items: center; gap: 15px; font-size: 0.9rem; opacity: 0.9; flex-wrap: wrap;">
-                    <span class="author" style="background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: 600;">Olivier Henri B.</span>
-                    <span class="version" style="background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 6px; font-family: monospace;">V.2.3</span>
-                </div>
-            </div>
-            <div class="header-tagline" style="font-size: 1rem; opacity: 0.9; margin-top: 8px;">
-                Analyse de flux RSS par thèmes personnalisés - Détection avancée des tendances + IA
-            </div>
-        </div>
-
-        <div class="demo-banner" style="display: flex; align-items: flex-start; gap: 15px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 1px solid #ffeaa7; border-left: 4px solid #fdcb6e; padding: 16px; border-radius: 10px; margin-bottom: 20px;">
-            <div class="demo-icon" style="font-size: 1.5rem;">🚀</div>
-            <div class="demo-content">
-                <div class="demo-title" style="font-weight: 700; font-size: 1rem; color: #2d3436; margin-bottom: 6px;">Application de démonstration</div>
-                <div class="demo-text" style="font-size: 0.9rem; color: #636e72; line-height: 1.4; margin-bottom: 8px;">
-                    Architecture hybride Node.js + Flask IA • PostgreSQL • Modules d'analyse avancés
-                </div>
+        <div class="header-main">
+            <h1>📊 Agrégateur RSS Thématique + IA</h1>
+            <div style="display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap;">
+                <span style="background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;">Olivier Henri B.</span>
+                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.3</span>
+                <span id="aiStatus" style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem;">🤖 IA: Vérification...</span>
             </div>
         </div>
     </header>
 
+    <!-- Messages -->
     <div id="messageContainer"></div>
 
+    <!-- Barre de statut -->
     <div class="status-bar">
         <div class="last-update" id="lastUpdate">Chargement...</div>
         <div class="refresh-controls">
             <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation</div>
-            <button class="refresh" id="refreshBtn">🔄 Actualiser</button>
+            <button id="refreshBtn">🔄 Actualiser</button>
         </div>
     </div>
 
-    <div class="export-bar" style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-        <div class="export-controls" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <button class="export-btn json" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #10b981, #059669);">📥 Export JSON</button>
-            <button class="export-btn csv" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #3b82f6, #1d4ed8);">📥 Export CSV</button>
-            <button class="export-btn stats" style="padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; background: linear-gradient(135deg, #06b6d4, #0891b2);">📊 Stats</button>
+    <!-- Barre d'actions -->
+    <div class="export-bar">
+        <div class="export-controls">
+            <button class="btn btn-success export-btn json">📥 JSON</button>
+            <button class="btn btn-success export-btn csv">📥 CSV</button>
+            <button class="btn btn-secondary export-btn stats">📊 Stats IA</button>
+            <button class="btn btn-secondary" onclick="showAIConfig()">⚙️ Config IA</button>
         </div>
     </div>
 
-    <div class="stats-grid" id="statsGrid">
-        <div class="loading">Chargement des données...</div>
-    </div>
-
+    <!-- Onglets -->
     <div class="tab-container">
         <div class="tabs">
-            <div class="tab active" onclick="window.showTab('analysis', event)">📈 Analyse</div>
-            <div class="tab" onclick="window.showTab('trends', event)">📊 Tendances</div>
-            <div class="tab" onclick="window.showTab('metrics', event)">🎯 Métriques</div>
-            <div class="tab" onclick="window.showTab('sentiment', event)">😊 Sentiment</div>
-            <div class="tab" onclick="window.showTab('learning', event)">🧠 Apprentissage</div>
-            <div class="tab" onclick="window.showTab('feeds', event)">📰 Flux RSS</div>
-            <div class="tab" onclick="window.showTab('themes', event)">🎨 Thèmes</div>
-            <div class="tab" onclick="window.showTab('articles', event)">📄 Articles</div>
+            <div class="tab active" onclick="showTab('analysis')">📈 Analyse</div>
+            <div class="tab" onclick="showTab('metrics')">🎯 Métriques</div>
+            <div class="tab" onclick="showTab('sentiment')">😊 Sentiment</div>
+            <div class="tab" onclick="showTab('learning')">🧠 Apprentissage</div>
+            <div class="tab" onclick="showTab('feeds')">📰 Flux RSS</div>
+            <div class="tab" onclick="showTab('themes')">🎨 Thèmes</div>
+            <div class="tab" onclick="showTab('articles')">📄 Articles</div>
         </div>
 
-        <!-- Onglet Analyse -->
+        <!-- Analyse -->
         <div id="analysisTab" class="tab-content active">
-            <div id="themeSelectorContainer"></div>
             <div class="dashboard">
                 <div class="card">
                     <h3>📊 Répartition par Thème</h3>
-                    <canvas id="themeChart" height="250"></canvas>
+                    <canvas id="themeChart"></canvas>
                 </div>
                 <div class="card">
                     <h3>📈 Évolution Temporelle</h3>
-                    <canvas id="timelineChart" height="250"></canvas>
+                    <canvas id="timelineChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- Onglet Tendances -->
-        <div id="trendsTab" class="tab-content">
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>📈 Évolution des Thèmes</h3>
-                    <div id="trendsTable" class="trends-table">
-                        <div class="loading">Calcul des tendances...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Onglet Métriques -->
+        <!-- Métriques -->
         <div id="metricsTab" class="tab-content">
+            <div class="stats-grid">
+                <div class="metric-card"><strong>Total Articles :</strong> <span id="m_total">—</span></div>
+                <div class="metric-card"><strong>Confiance :</strong> <span id="m_confidence">—</span></div>
+                <div class="metric-card"><strong>Bayésien :</strong> <span id="m_posterior">—</span></div>
+                <div class="metric-card"><strong>Corroboration :</strong> <span id="m_corro">—</span></div>
+            </div>
             <div class="dashboard">
                 <div class="card full-width">
-                    <h3>🎯 Statistiques Globales</h3>
-                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
-                            <strong>Total Articles :</strong> <span id="m_total">—</span>
-                        </div>
-                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
-                            <strong>Confiance Moyenne :</strong> <span id="m_confidence">—</span>
-                        </div>
-                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
-                            <strong>Fiabilité Bayésienne :</strong> <span id="m_posterior">—</span>
-                        </div>
-                        <div class="metric-card" style="background: white; padding: 15px; border-radius: 8px;">
-                            <strong>Corroboration Moyenne :</strong> <span id="m_corro">—</span>
-                        </div>
-                    </div>
+                    <h3>📈 Évolution du Sentiment</h3>
+                    <canvas id="sentimentChart"></canvas>
                 </div>
             </div>
-
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>📈 Évolution du Sentiment (30 derniers jours)</h3>
-                    <canvas id="sentimentChart" height="280"></canvas>
-                </div>
-            </div>
-
             <div class="dashboard">
                 <div class="card full-width">
                     <h3>🏆 Thèmes Principaux</h3>
-                    <ul id="topThemes" class="top-themes" style="list-style: none; padding: 0;"></ul>
+                    <ul id="topThemes" class="top-themes"></ul>
                 </div>
             </div>
         </div>
 
-        <!-- Onglet Sentiment -->
+        <!-- Sentiment -->
         <div id="sentimentTab" class="tab-content">
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>📊 Aperçu du Sentiment Global</h3>
-                    <div id="sentimentOverview"><div class="loading">Analyse de sentiment...</div></div>
-                </div>
-            </div>
+            <div id="sentimentOverview" class="loading">Analyse de sentiment...</div>
         </div>
 
-        <!-- Onglet Apprentissage -->
+        <!-- Apprentissage -->
         <div id="learningTab" class="tab-content">
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>🧠 Statistiques d'Apprentissage</h3>
-                    <div id="learningStats"><div class="loading">Chargement...</div></div>
-                </div>
-            </div>
+            <div id="learningStats" class="loading">Chargement...</div>
         </div>
 
-        <!-- Onglet Flux RSS -->
+        <!-- Flux RSS -->
         <div id="feedsTab" class="tab-content">
             <div class="card">
                 <h3>📋 Mes Flux RSS</h3>
-                <div id="feedsList"><div class="loading">Chargement des flux...</div></div>
+                <div id="feedsList" class="loading">Chargement...</div>
             </div>
         </div>
 
-        <!-- Onglet Thèmes -->
+        <!-- Thèmes -->
         <div id="themesTab" class="tab-content">
             <div class="card">
                 <h3>🎨 Mes Thèmes</h3>
-                <div id="themesList"><div class="loading">Chargement des thèmes...</div></div>
+                <div id="themesList" class="loading">Chargement...</div>
             </div>
         </div>
 
-        <!-- Onglet Articles -->
+        <!-- Articles -->
         <div id="articlesTab" class="tab-content">
             <div class="card full-width">
                 <h3>📄 Derniers Articles</h3>
-                <div id="articlesList"><div class="loading">Chargement des articles...</div></div>
+                <div id="articlesList" class="loading">Chargement...</div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Apprentissage -->
-<div id="learningStatsModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
-    <div class="modal-content" style="background: white; margin: 5% auto; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%;">
-        <span class="close" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
-        <h3>📊 Statistiques d'Apprentissage</h3>
-        <div id="modalLearningStats"><div class="loading">Chargement...</div></div>
+<!-- Modal Stats IA -->
+<div id="learningStatsModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('learningStatsModal')">&times;</span>
+        <h2>📊 Statistiques d'Apprentissage IA</h2>
+        <div id="modalLearningStats" class="loading">Chargement...</div>
+    </div>
+</div>
+
+<!-- Modal Configuration IA -->
+<div id="aiConfigModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('aiConfigModal')">&times;</span>
+        <h2>⚙️ Configuration de l'IA</h2>
+        
+        <div style="margin: 25px 0;">
+            <h3 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Clé API OpenAI :</label>
+                <input type="password" id="openaiKey" placeholder="sk-..." style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <small style="color: #64748b;">Obtenez une clé gratuite sur <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a></small>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle :</label>
+                <select id="openaiModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (rapide)</option>
+                    <option value="gpt-4">GPT-4 (précis)</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                </select>
+            </div>
+        </div>
+
+        <div style="margin: 25px 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+            <h3 style="margin-bottom: 15px;">💻 IA Locale (Llama.cpp)</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="enableLocal">
+                    <span>Utiliser l'IA locale (fallback)</span>
+                </label>
+                <small style="color: #64748b; display: block; margin-top: 5px;">Nécessite Llama.cpp installé localement</small>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">URL Llama.cpp :</label>
+                <input type="text" id="llamaUrl" placeholder="http://localhost:8080" value="http://localhost:8080" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 25px;">
+            <button class="btn btn-success" onclick="saveAIConfig()">💾 Sauvegarder</button>
+            <button class="btn btn-secondary" onclick="testAIConnection()">🔍 Tester la connexion</button>
+            <button class="btn btn-secondary" onclick="closeModal('aiConfigModal')">❌ Annuler</button>
+        </div>
     </div>
 </div>
 
 <script src="app.js"></script>
 <script src="chart-manager.js"></script>
-<script>
-// Patch pour initialiser le ChartManager après chargement
-window.addEventListener('load', function() {
-    console.log('🎯 DOM chargé, initialisation ChartManager...');
-    if (window.app && window.ChartManager && window.app._state) {
-        setTimeout(function() {
-            try {
-                if (!window.app.chartManager) {
-                    window.app.chartManager = new ChartManager(window.app._state);
-                    console.log('✅ ChartManager initialisé');
-                }
-            } catch(e) {
-                console.warn('⚠️ ChartManager init failed:', e);
-            }
-        }, 2000);
-    }
-});
-</script>
-
-<style>
-/* Styles additionnels inline pour garantir le rendu */
-.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-.status-bar { background: white; border-radius: 10px; padding: 15px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-.refresh-controls { display: flex; gap: 15px; align-items: center; }
-.auto-refresh-indicator { font-size: 0.85rem; color: #22c55e; font-weight: 500; }
-.blink { animation: blink 1.5s infinite; }
-@keyframes blink { 0%, 50%, 100% { opacity: 1; } 25%, 75% { opacity: 0.3; } }
-button { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.3s; }
-button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-.tab-container { background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
-.tabs { display: flex; background: #f8f9fa; border-bottom: 2px solid #e9ecef; overflow-x: auto; }
-.tab { padding: 15px 20px; cursor: pointer; white-space: nowrap; font-weight: 500; color: #64748b; transition: all 0.3s; border-bottom: 3px solid transparent; }
-.tab:hover { background: #e9ecef; color: #1e293b; }
-.tab.active { color: #2563eb; border-bottom-color: #2563eb; background: white; }
-.tab-content { display: none; padding: 20px; }
-.tab-content.active { display: block; }
-.dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 20px; }
-.card { background: #f8f9fa; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-.card.full-width { grid-column: 1 / -1; }
-.card h3 { margin-bottom: 15px; font-size: 1.1rem; color: #1e293b; }
-.loading { text-align: center; padding: 40px; color: #64748b; font-style: italic; }
-canvas { max-height: 350px; }
-.article-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.article-card h4 { margin-bottom: 8px; }
-.article-card .meta { font-size: 0.85rem; color: #64748b; margin-bottom: 8px; }
-.themes .tag { display: inline-block; padding: 4px 8px; margin: 2px; background: #e0e7ff; border-radius: 4px; font-size: 0.75rem; }
-.theme-row { padding: 8px; border-bottom: 1px solid #e9ecef; }
-.top-themes li { padding: 8px; border-bottom: 1px solid #e9ecef; }
-.modal { display: none; }
-.modal.show { display: block; }
-@media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
-</style>
 </body>
 </html>

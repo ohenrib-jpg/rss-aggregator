@@ -1,9 +1,10 @@
-// server.js - Version avec proxy vers Flask IA
+// server.js - Version avec résilience email
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const Parser = require('rss-parser');
 const axios = require('axios');
+const nodemailer = require('nodemailer'); // npm install nodemailer
 const { pool, initializeDatabase } = require('./db/database');
 
 const app = express();
@@ -17,16 +18,263 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'production';
 const FLASK_API_URL = process.env.FLASK_API_URL || 'https://rss-aggregator-2.onrender.com';
 
+// Configuration Email
+const EMAIL_CONFIG = {
+  service: process.env.EMAIL_SERVICE || 'gmail', // ou 'smtp'
+  user: process.env.EMAIL_USER, // votre email
+  pass: process.env.EMAIL_PASS, // mot de passe application
+  to: process.env.EMAIL_TO || process.env.EMAIL_USER
+};
+
+// Limites mémoire
+const MEMORY_THRESHOLD_MB = 400; // Seuil avant export (80% de 512Mo)
+const CLEANUP_INTERVAL = 3600000; // Vérification toutes les heures
+const DATA_RETENTION_DAYS = 30; // Conservation 30 jours
+
 console.log(`🔧 Configuration:`);
 console.log(`   - Node.js port: ${PORT}`);
 console.log(`   - Flask API: ${FLASK_API_URL}`);
-console.log(`   - Environment: ${NODE_ENV}`);
+console.log(`   - Email: ${EMAIL_CONFIG.user ? '✅ Configuré' : '❌ Non configuré'}`);
+console.log(`   - Seuil mémoire: ${MEMORY_THRESHOLD_MB}MB`);
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static('public'));
+
+// ============ SYSTÈME D'EXPORT EMAIL ============
+
+let transporter = null;
+
+// Initialiser le transporteur email
+if (EMAIL_CONFIG.user && EMAIL_CONFIG.pass) {
+  transporter = nodemailer.createTransport({
+    service: EMAIL_CONFIG.service,
+    auth: {
+      user: EMAIL_CONFIG.user,
+      pass: EMAIL_CONFIG.pass
+    }
+  });
+  console.log('✅ Transporteur email initialisé');
+}
+
+// Fonction pour obtenir l'usage mémoire
+function getMemoryUsage() {
+  const used = process.memoryUsage();
+  return {
+    rss: Math.round(used.rss / 1024 / 1024), // MB
+    heapTotal: Math.round(used.heapTotal / 1024 / 1024),
+    heapUsed: Math.round(used.heapUsed / 1024 / 1024),
+    external: Math.round(used.external / 1024 / 1024)
+  };
+}
+
+// Exporter les données en JSON/CSV
+async function exportDataToFile() {
+  try {
+    console.log('📦 Export des données...');
+    
+    const client = await pool.connect();
+    
+    // Récupérer toutes les données
+    const articlesResult = await client.query(`
+      SELECT * FROM articles 
+      WHERE created_at < NOW() - INTERVAL '${DATA_RETENTION_DAYS} days'
+      ORDER BY pub_date DESC
+    `);
+    
+    const themesResult = await client.query('SELECT * FROM themes');
+    const feedsResult = await client.query('SELECT * FROM feeds');
+    
+    client.release();
+    
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      period: `${DATA_RETENTION_DAYS} jours`,
+      statistics: {
+        totalArticles: articlesResult.rows.length,
+        totalThemes: themesResult.rows.length,
+        totalFeeds: feedsResult.rows.length
+      },
+      articles: articlesResult.rows,
+      themes: themesResult.rows,
+      feeds: feedsResult.rows
+    };
+    
+    console.log(`✅ Export prêt: ${articlesResult.rows.length} articles`);
+    return exportData;
+    
+  } catch (error) {
+    console.error('❌ Erreur export données:', error);
+    throw error;
+  }
+}
+
+// Envoyer l'export par email
+async function sendExportEmail(exportData) {
+  if (!transporter) {
+    console.warn('⚠️ Email non configuré, export ignoré');
+    return false;
+  }
+  
+  try {
+    console.log('📧 Envoi de l\'export par email...');
+    
+    const jsonData = JSON.stringify(exportData, null, 2);
+    const csvData = convertToCSV(exportData.articles);
+    
+    const dateStr = new Date().toISOString().split('T')[0];
+    
+    const mailOptions = {
+      from: EMAIL_CONFIG.user,
+      to: EMAIL_CONFIG.to,
+      subject: `📊 Export RSS Aggregator - ${dateStr}`,
+      html: `
+        <h2>Export automatique - RSS Aggregator</h2>
+        <p><strong>Date:</strong> ${exportData.exportDate}</p>
+        <p><strong>Période:</strong> ${exportData.period}</p>
+        <h3>Statistiques:</h3>
+        <ul>
+          <li>Articles: ${exportData.statistics.totalArticles}</li>
+          <li>Thèmes: ${exportData.statistics.totalThemes}</li>
+          <li>Flux RSS: ${exportData.statistics.totalFeeds}</li>
+        </ul>
+        <p>Les données sont attachées en JSON et CSV.</p>
+        <p><em>Export automatique avant nettoyage de la base de données.</em></p>
+      `,
+      attachments: [
+        {
+          filename: `rss-export-${dateStr}.json`,
+          content: jsonData,
+          contentType: 'application/json'
+        },
+        {
+          filename: `rss-export-${dateStr}.csv`,
+          content: csvData,
+          contentType: 'text/csv'
+        }
+      ]
+    };
+    
+    await transporter.sendMail(mailOptions);
+    console.log('✅ Email envoyé avec succès');
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Erreur envoi email:', error);
+    return false;
+  }
+}
+
+// Convertir articles en CSV
+function convertToCSV(articles) {
+  if (!articles || articles.length === 0) return '';
+  
+  const headers = ['id', 'title', 'link', 'pub_date', 'sentiment_type', 'sentiment_score', 'sentiment_confidence', 'created_at'];
+  const rows = articles.map(article => 
+    headers.map(h => {
+      const value = article[h] || '';
+      return `"${String(value).replace(/"/g, '""')}"`;
+    }).join(',')
+  );
+  
+  return [headers.join(','), ...rows].join('\n');
+}
+
+// Nettoyer les anciennes données (APRÈS export)
+async function cleanupOldData() {
+  try {
+    console.log('🧹 Nettoyage des anciennes données...');
+    
+    const client = await pool.connect();
+    
+    const result = await client.query(`
+      DELETE FROM articles 
+      WHERE created_at < NOW() - INTERVAL '${DATA_RETENTION_DAYS} days'
+      RETURNING id
+    `);
+    
+    client.release();
+    
+    console.log(`✅ ${result.rowCount} articles supprimés`);
+    return result.rowCount;
+    
+  } catch (error) {
+    console.error('❌ Erreur nettoyage:', error);
+    throw error;
+  }
+}
+
+// Vérification mémoire et export automatique
+async function checkMemoryAndExport() {
+  const memory = getMemoryUsage();
+  console.log(`💾 Mémoire: RSS=${memory.rss}MB, Heap=${memory.heapUsed}/${memory.heapTotal}MB`);
+  
+  if (memory.rss > MEMORY_THRESHOLD_MB) {
+    console.log(`⚠️ Seuil mémoire atteint (${memory.rss}MB > ${MEMORY_THRESHOLD_MB}MB)`);
+    console.log('📦 Démarrage export + nettoyage...');
+    
+    try {
+      // 1. Exporter les données
+      const exportData = await exportDataToFile();
+      
+      // 2. Envoyer par email
+      const emailSent = await sendExportEmail(exportData);
+      
+      if (emailSent) {
+        // 3. Nettoyer SEULEMENT si l'email est envoyé
+        await cleanupOldData();
+        
+        // 4. Forcer garbage collection
+        if (global.gc) {
+          global.gc();
+          console.log('✅ Garbage collection forcé');
+        }
+        
+        const newMemory = getMemoryUsage();
+        console.log(`✅ Nettoyage terminé: ${memory.rss}MB → ${newMemory.rss}MB`);
+      } else {
+        console.warn('⚠️ Email non envoyé, nettoyage annulé (sécurité)');
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur lors du processus:', error);
+    }
+  }
+}
+
+// Démarrer la vérification périodique
+setInterval(checkMemoryAndExport, CLEANUP_INTERVAL);
+console.log(`⏰ Vérification mémoire programmée (toutes les ${CLEANUP_INTERVAL/60000} min)`);
+
+// ============ ROUTE MANUELLE D'EXPORT ============
+
+app.post('/api/manual-export', async (req, res) => {
+  try {
+    console.log('📧 Export manuel demandé');
+    
+    const exportData = await exportDataToFile();
+    const emailSent = await sendExportEmail(exportData);
+    
+    if (emailSent) {
+      res.json({
+        success: true,
+        message: 'Export envoyé par email',
+        statistics: exportData.statistics
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Email non configuré ou erreur d\'envoi'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erreur export manuel:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // ============ ANALYSEUR DE SENTIMENT (LOCAL) ============
 class SelfLearningSentiment {
@@ -93,7 +341,6 @@ class SelfLearningSentiment {
       let wordScore = this.lexicon.get(word) || 0;
       if (Math.abs(wordScore) < 0.1) continue;
 
-      // Négations
       for (let j = Math.max(0, i - 2); j < i; j++) {
         if (this.negations.includes(words[j])) {
           wordScore *= -1.2;
@@ -101,7 +348,6 @@ class SelfLearningSentiment {
         }
       }
 
-      // Intensificateurs
       for (let j = Math.max(0, i - 2); j < i; j++) {
         if (this.intensifiers[words[j]]) {
           wordScore *= this.intensifiers[words[j]];
@@ -266,244 +512,4 @@ async function refreshData() {
   }
 }
 
-// ============ ROUTES API LOCALES (NODE.JS) ============
-
-app.get('/api/articles', async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = parseInt(req.query.offset) || 0;
-    const articles = await dbManager.getArticles(limit, offset);
-    
-    res.json({
-      success: true,
-      articles: articles,
-      totalArticles: articles.length,
-      lastUpdate: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Erreur /api/articles:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/themes', async (req, res) => {
-  try {
-    const themes = await dbManager.getThemes();
-    res.json(themes);
-  } catch (error) {
-    console.error('❌ Erreur /api/themes:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/feeds', async (req, res) => {
-  try {
-    const feeds = await dbManager.getFeeds();
-    res.json(feeds);
-  } catch (error) {
-    console.error('❌ Erreur /api/feeds:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/refresh', async (req, res) => {
-  try {
-    const articles = await refreshData();
-    res.json({
-      success: true,
-      message: 'Données rafraîchies',
-      articlesCount: articles.length,
-      lastUpdate: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Erreur /api/refresh:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============ ROUTES PROXY VERS FLASK (IA) ============
-
-// Helper pour appeler Flask
-async function callFlask(endpoint, method = 'GET', data = null) {
-  try {
-    const url = `${FLASK_API_URL}${endpoint}`;
-    console.log(`🔗 Proxy Flask: ${method} ${url}`);
-    
-    const config = {
-      method: method,
-      url: url,
-      timeout: 30000,
-      headers: { 'Content-Type': 'application/json' }
-    };
-    
-    if (data && method === 'POST') {
-      config.data = data;
-    }
-    
-    const response = await axios(config);
-    return response.data;
-  } catch (error) {
-    console.error(`❌ Erreur proxy Flask ${endpoint}:`, error.message);
-    throw error;
-  }
-}
-
-// Stats de sentiment (via Flask pour analyse avancée)
-app.get('/api/sentiment/stats', async (req, res) => {
-  try {
-    const days = req.query.days || 7;
-    const data = await callFlask(`/api/sentiment/stats?days=${days}`);
-    res.json(data);
-  } catch (error) {
-    // Fallback local si Flask indisponible
-    console.warn('⚠️ Flask indisponible, calcul local du sentiment');
-    try {
-      const result = await pool.query(`
-        SELECT 
-          COUNT(*) as total,
-          COUNT(CASE WHEN sentiment_type = 'positive' THEN 1 END) as positive,
-          COUNT(CASE WHEN sentiment_type = 'negative' THEN 1 END) as negative,
-          COUNT(CASE WHEN sentiment_type = 'neutral' THEN 1 END) as neutral,
-          AVG(sentiment_score) as average_score
-        FROM articles
-        WHERE pub_date > NOW() - INTERVAL '${req.query.days || 7} days'
-      `);
-      res.json({ success: true, stats: result.rows[0] });
-    } catch (dbError) {
-      res.status(500).json({ success: false, error: 'Service indisponible' });
-    }
-  }
-});
-
-// Métriques avancées (Flask IA)
-app.get('/api/metrics', async (req, res) => {
-  try {
-    const days = req.query.days || 30;
-    const data = await callFlask(`/api/metrics?days=${days}`);
-    res.json(data);
-  } catch (error) {
-    console.error('❌ Erreur /api/metrics:', error);
-    res.status(500).json({ success: false, error: 'Metrics service unavailable' });
-  }
-});
-
-// Analyse géopolitique (Flask IA)
-app.get('/api/geopolitical/report', async (req, res) => {
-  try {
-    const data = await callFlask('/api/geopolitical/report');
-    res.json(data);
-  } catch (error) {
-    console.error('❌ Erreur /api/geopolitical/report:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/geopolitical/crisis-zones', async (req, res) => {
-  try {
-    const data = await callFlask('/api/geopolitical/crisis-zones');
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/geopolitical/relations', async (req, res) => {
-  try {
-    const data = await callFlask('/api/geopolitical/relations');
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Stats d'apprentissage (Flask IA)
-app.get('/api/learning-stats', async (req, res) => {
-  try {
-    const data = await callFlask('/api/learning-stats');
-    res.json(data);
-  } catch (error) {
-    console.error('❌ Erreur /api/learning-stats:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Analyse approfondie d'un article (Flask IA)
-app.post('/api/analyze', async (req, res) => {
-  try {
-    const data = await callFlask('/api/analyze', 'POST', req.body);
-    res.json(data);
-  } catch (error) {
-    console.error('❌ Erreur /api/analyze:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============ ROUTES UTILITAIRES ============
-
-app.get('/health', async (req, res) => {
-  try {
-    const dbTest = await pool.query('SELECT 1');
-    let flaskStatus = 'disconnected';
-    try {
-      await axios.get(`${FLASK_API_URL}/api/health`, { timeout: 5000 });
-      flaskStatus = 'connected';
-    } catch (e) {
-      flaskStatus = 'disconnected';
-    }
-    
-    res.json({ 
-      status: 'OK', 
-      database: 'connected',
-      flask: flaskStatus,
-      timestamp: new Date().toISOString(),
-      environment: NODE_ENV
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'ERROR', error: error.message });
-  }
-});
-
-app.get('/', (req, res) => {
-  res.json({
-    message: 'RSS Aggregator v2.3 - Node.js + Flask IA',
-    status: 'running',
-    architecture: 'Node.js (frontend/RSS) + Flask (IA analysis)',
-    endpoints: {
-      local: ['/api/articles', '/api/feeds', '/api/themes', '/api/refresh'],
-      flask_proxy: ['/api/metrics', '/api/sentiment/stats', '/api/analyze', '/api/geopolitical/*', '/api/learning-stats']
-    }
-  });
-});
-
-// ============ DÉMARRAGE ============
-async function startServer() {
-  try {
-    await initializeDatabase();
-    console.log('✅ Base de données initialisée');
-    
-    // Premier refresh après 5s
-    setTimeout(async () => {
-      await refreshData();
-    }, 5000);
-    
-    // Refresh auto toutes les 30min
-    setInterval(async () => {
-      await refreshData();
-    }, 30 * 60 * 1000);
-
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log('═══════════════════════════════════════');
-      console.log('🚀 RSS Aggregator v2.3 - DÉMARRÉ');
-      console.log(`📡 Node.js: http://0.0.0.0:${PORT}`);
-      console.log(`🧠 Flask IA: ${FLASK_API_URL}`);
-      console.log(`🔄 Auto-refresh: 30 minutes`);
-      console.log('═══════════════════════════════════════');
-    });
-
-  } catch (error) {
-    console.error('❌ Erreur démarrage:', error);
-    process.exit(1);
-  }
-}
-
-startServer();
+// ============ ROUTES API (suite dans le prochain message) ============
