@@ -3,7 +3,7 @@ services:
     name: rss-aggregator
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    startCommand: python app.py
     pythonVersion: 3.12.2
     envVars:
       - key: DATABASE_URL
