@@ -269,17 +269,3 @@ function showAIConfig() {
   }
 }
 // === End UI Helpers ===
-
-
-// --- Auto-added missing frontend functions ---
-function closeModal(){
-  console.warn('Called missing function closeModal - stub executed');
-}
-
-function saveAIConfig(){
-  console.warn('Called missing function saveAIConfig - stub executed');
-}
-
-function testAIConnection(){
-  console.warn('Called missing function testAIConnection - stub executed');
-}
