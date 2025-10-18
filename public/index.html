@@ -152,12 +152,15 @@
       <input type="text" id="newFeedTitle" placeholder="Nom du flux" 
              style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
     </div>
-    <div style="display: flex; gap: 10px;">
-      <button class="btn btn-success" onclick="addNewFeed()">💾 Ajouter le flux</button>
-      <button class="btn btn-secondary" onclick="closeModal('addFeedModal')">❌ Annuler</button>
+    <!-- Remplacer la section des boutons thèmes par : -->
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+  <button class="btn btn-success" onclick="showAddThemeModal()">➕ Nouveau thème</button>
+  <button class="btn btn-primary" onclick="importThemesFromFile()">📁 Charger thèmes défaut</button>
+  <button class="btn btn-secondary" onclick="loadThemesManager()">🔄 Actualiser</button>
+  <button class="btn btn-secondary" onclick="exportThemes()">📥 Exporter</button>
+      </div>
     </div>
   </div>
-</div>
 
 <!-- Modal Ajout Thème -->
 <div id="addThemeModal" class="modal">

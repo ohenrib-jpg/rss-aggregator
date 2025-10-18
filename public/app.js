@@ -1,4 +1,4 @@
-// public/app.js - Version complète et fonctionnelle
+// public/app.js - Version COMPLÈTEMENT corrigée
 const API_BASE = window.__API_BASE__ || (location.origin.includes('http') ? location.origin : 'http://localhost:3000');
 
 window.app = (function () {
@@ -127,27 +127,43 @@ window.app = (function () {
       
       if (json.success && json.articles) {
         state.articles = json.articles.map(normalizeArticle);
+        state.summary = { total_articles: json.totalArticles || json.articles.length };
       } else if (Array.isArray(json)) {
         state.articles = json.map(normalizeArticle);
+        state.summary = { total_articles: json.length };
       } else {
         state.articles = [];
+        state.summary = { total_articles: 0 };
       }
       
       renderArticlesList();
       computeThemesFromArticles();
-      
-      if (json.totalArticles !== undefined) {
-        if (!state.summary) state.summary = {};
-        state.summary.total_articles = json.totalArticles;
-      }
-      
       setMessage("");
       return state.articles;
     } catch (err) {
       console.error("loadArticles error", err);
       setMessage("Erreur chargement articles");
       state.articles = [];
+      state.summary = { total_articles: 0 };
       return [];
+    }
+  }
+
+  // NOUVELLE FONCTION CORRECTE pour charger les thèmes depuis fichier
+  async function loadThemesFromFile() {
+    try {
+      const response = await fetch('/api/themes/load-defaults');
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`✅ ${data.imported} thèmes chargés depuis le fichier`);
+        loadThemesManager();
+      } else {
+        alert('Erreur: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Erreur chargement thèmes fichier:', error);
+      alert('Erreur: ' + error.message);
     }
   }
 
@@ -484,24 +500,6 @@ window.app = (function () {
       }
     } catch (error) {
       alert('Erreur: ' + error.message);
-    }
-  }
-
-  async function importThemesFromFile() {
-    if (confirm('Importer les thèmes géopolitiques depuis le fichier themes.json ?')) {
-      try {
-        const response = await fetch('/api/themes/import', { method: 'POST' });
-        const data = await response.json();
-        
-        if (data.success) {
-          alert(`✅ ${data.imported} thèmes importés sur ${data.total}`);
-          loadThemesManager();
-        } else {
-          alert('Erreur: ' + data.error);
-        }
-      } catch (error) {
-        alert('Erreur: ' + error.message);
-      }
     }
   }
 
@@ -963,61 +961,57 @@ window.app = (function () {
     }
   }
 
-// ============ FONCTIONS MANQUANTES FLUX ET THEMES 18/10============
+  // ========== FONCTIONS EXPORT ==========
 
-async function exportFeeds() {
-  try {
-    const response = await fetch('/api/feeds/manager');
-    const data = await response.json();
-    
-    if (data.success) {
-      const csvContent = "data:text/csv;charset=utf-8," 
-        + "URL,Titre,Statut,Dernier fetch\n"
-        + data.feeds.map(feed => 
-            `"${feed.url}","${feed.title || ''}","${feed.is_active ? 'Actif' : 'Inactif'}","${feed.last_fetched || 'Jamais'}"`
-          ).join("\n");
+  async function exportFeeds() {
+    try {
+      const response = await fetch('/api/feeds/manager');
+      const data = await response.json();
       
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "flux_rss_export.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (data.success) {
+        const csvContent = "data:text/csv;charset=utf-8," 
+          + "URL,Titre,Statut,Dernier fetch\n"
+          + data.feeds.map(feed => 
+              `"${feed.url}","${feed.title || ''}","${feed.is_active ? 'Actif' : 'Inactif'}","${feed.last_fetched || 'Jamais'}"`
+            ).join("\n");
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "flux_rss_export.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      alert('Erreur export: ' + error.message);
     }
-  } catch (error) {
-    alert('Erreur export: ' + error.message);
   }
-}
 
-async function exportThemes() {
-  try {
-    const response = await fetch('/api/themes/manager');
-    const data = await response.json();
-    
-    if (data.success) {
-      const csvContent = "data:text/csv;charset=utf-8," 
-        + "Nom,Couleur,Description,Nombre de mots-clés\n"
-        + data.themes.map(theme => 
-            `"${theme.name}","${theme.color}","${theme.description || ''}","${theme.keywords.length}"`
-          ).join("\n");
+  async function exportThemes() {
+    try {
+      const response = await fetch('/api/themes/manager');
+      const data = await response.json();
       
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "themes_export.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (data.success) {
+        const csvContent = "data:text/csv;charset=utf-8," 
+          + "Nom,Couleur,Description,Nombre de mots-clés\n"
+          + data.themes.map(theme => 
+              `"${theme.name}","${theme.color}","${theme.description || ''}","${theme.keywords.length}"`
+            ).join("\n");
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "themes_export.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      alert('Erreur export: ' + error.message);
     }
-  } catch (error) {
-    alert('Erreur export: ' + error.message);
   }
-}
-
-// Exposer les nouvelles fonctions globales
-window.exportFeeds = exportFeeds;
-window.exportThemes = exportThemes;
 
   // ========== INITIALISATION ==========
   function initializeApp() {
@@ -1097,9 +1091,13 @@ window.exportThemes = exportThemes;
     loadThemesManager,
     showAddThemeModal,
     addNewTheme,
-    importThemesFromFile,
+    loadThemesFromFile, // CORRECTION: Ajout de cette fonction
     editTheme,
     deleteTheme,
+    
+    // Export
+    exportFeeds,
+    exportThemes,
     
     // Graphiques
     updateCharts,
@@ -1128,4 +1126,6 @@ window.loadFeedsManager = window.app.loadFeedsManager;
 window.loadThemesManager = window.app.loadThemesManager;
 window.addNewFeed = window.app.addNewFeed;
 window.addNewTheme = window.app.addNewTheme;
-window.importThemesFromFile = window.app.importThemesFromFile;
+window.importThemesFromFile = window.app.loadThemesFromFile; // CORRECTION: Utiliser la bonne fonction
+window.exportFeeds = window.app.exportFeeds;
+window.exportThemes = window.app.exportThemes;
