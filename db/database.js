@@ -128,6 +128,7 @@ async function createTablesManually(client) {
       name VARCHAR(200) NOT NULL,
       keywords TEXT[],
       color VARCHAR(7) DEFAULT '#6366f1',
+      description TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     )`
   ];

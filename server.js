@@ -395,9 +395,49 @@ async function fileExists(filePath) {
 }
 
 // ========== INITIALISATION DES THÈMES ==========
+// ========== INITIALISATION DES THÈMES CORRIGÉE ==========
+// ========== INITIALISATION DES THÈMES CORRIGÉE ==========
 async function initializeDefaultThemes() {
+  const client = await pool.connect();
   try {
-    const client = await pool.connect();
+    console.log('🔄 Vérification de la structure des thèmes...');
+    
+    // Vérifier si la table themes existe et a la bonne structure
+    const tableCheck = await client.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'themes' AND column_name = 'id'
+    `);
+    
+    if (tableCheck.rows.length > 0 && tableCheck.rows[0].data_type !== 'character varying') {
+      console.warn('⚠️ Structure de la table themes incorrecte, recréation...');
+      
+      // Supprimer et recréer la table avec la bonne structure
+      await client.query('DROP TABLE IF EXISTS theme_analyses CASCADE');
+      await client.query('DROP TABLE IF EXISTS themes CASCADE');
+      
+      await client.query(`
+        CREATE TABLE themes (
+          id VARCHAR(100) PRIMARY KEY,
+          name VARCHAR(200) NOT NULL,
+          keywords TEXT[],
+          color VARCHAR(7) DEFAULT '#6366f1',
+          description TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      
+      await client.query(`
+        CREATE TABLE theme_analyses (
+          id SERIAL PRIMARY KEY,
+          article_id INTEGER REFERENCES articles(id) ON DELETE CASCADE,
+          theme_id VARCHAR(100) REFERENCES themes(id) ON DELETE CASCADE,
+          confidence FLOAT DEFAULT 1.0,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(article_id, theme_id)
+        )
+      `);
+    }
     
     // Vérifier si des thèmes existent déjà
     const existingThemes = await client.query('SELECT COUNT(*) as count FROM themes');
@@ -409,22 +449,33 @@ async function initializeDefaultThemes() {
       const themesPath = path.join(__dirname, 'themes.json');
       if (await fileExists(themesPath)) {
         const themesData = JSON.parse(await fs.readFile(themesPath, 'utf8'));
+        let insertedCount = 0;
         
         for (const theme of themesData.themes) {
-          await client.query(
-            `INSERT INTO themes (id, name, keywords, color, description) 
-             VALUES ($1, $2, $3, $4, $5) 
-             ON CONFLICT (id) DO NOTHING`,
-            [theme.id, theme.name, theme.keywords, theme.color, theme.description || '']
-          );
+          try {
+            await client.query(
+              `INSERT INTO themes (id, name, keywords, color, description) 
+               VALUES ($1, $2, $3, $4, $5) 
+               ON CONFLICT (id) DO NOTHING`,
+              [theme.id, theme.name, theme.keywords, theme.color, theme.description || '']
+            );
+            insertedCount++;
+          } catch (error) {
+            console.warn(`⚠️ Erreur insertion thème ${theme.name}:`, error.message);
+          }
         }
-        console.log(`✅ ${themesData.themes.length} thèmes initialisés`);
+        console.log(`✅ ${insertedCount}/${themesData.themes.length} thèmes initialisés`);
+      } else {
+        console.warn('⚠️ Fichier themes.json non trouvé');
       }
+    } else {
+      console.log(`✅ ${existingThemes.rows[0].count} thèmes déjà existants`);
     }
     
-    client.release();
   } catch (error) {
-    console.warn('⚠️ Erreur initialisation thèmes:', error.message);
+    console.error('❌ Erreur initialisation thèmes:', error.message);
+  } finally {
+    client.release();
   }
 }
 
