@@ -1,14 +1,3 @@
-/**
- * server.js
- * Version complète corrigée — conserve toutes les fonctionnalités :
- * - Analyse sentimentale (lexique dynamique)
- * - Sauvegarde PostgreSQL
- * - Refresh RSS + cron
- * - Routes complètes pour feeds, themes, stats, import/export, analyse thématique
- * - Nodemailer configurable (résilience / notifications)
- * - Axios pour communication Node <-> Flask
- */
-
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -395,46 +384,64 @@ async function refreshData() {
   }
 }
 
-// -------------------- Actualisation des flux RSS (Python) --------------------
-import { spawn } from "child_process";
-import path from "path";
+// ========== FONCTION UTILITAIRE ==========
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
+// ========== INITIALISATION DES THÈMES ==========
+async function initializeDefaultThemes() {
+  try {
+    const client = await pool.connect();
+    
+    // Vérifier si des thèmes existent déjà
+    const existingThemes = await client.query('SELECT COUNT(*) as count FROM themes');
+    
+    if (parseInt(existingThemes.rows[0].count) === 0) {
+      console.log('🔄 Initialisation des thèmes par défaut...');
+      
+      // Charger les thèmes depuis le fichier themes.json
+      const themesPath = path.join(__dirname, 'themes.json');
+      if (await fileExists(themesPath)) {
+        const themesData = JSON.parse(await fs.readFile(themesPath, 'utf8'));
+        
+        for (const theme of themesData.themes) {
+          await client.query(
+            `INSERT INTO themes (id, name, keywords, color, description) 
+             VALUES ($1, $2, $3, $4, $5) 
+             ON CONFLICT (id) DO NOTHING`,
+            [theme.id, theme.name, theme.keywords, theme.color, theme.description || '']
+          );
+        }
+        console.log(`✅ ${themesData.themes.length} thèmes initialisés`);
+      }
+    }
+    
+    client.release();
+  } catch (error) {
+    console.warn('⚠️ Erreur initialisation thèmes:', error.message);
+  }
+}
+
+// -------------------- Actualisation des flux RSS (Python) --------------------
 app.post("/api/refresh", async (req, res) => {
   try {
-    const scriptPath = path.join(__dirname, "modules", "feed_scraper.py");
-    console.log("🚀 Lancement du parseur Python :", scriptPath);
-
-    const py = spawn("python3", [scriptPath]);
-    let output = "";
-    let errorOutput = "";
-
-    py.stdout.on("data", (data) => {
-      output += data.toString();
+    console.log("🔄 Déclenchement manuel du rafraîchissement...");
+    
+    // Utiliser la fonction refreshData existante au lieu d'appeler Python
+    const result = await refreshData();
+    
+    res.json({ 
+      success: true, 
+      message: `Rafraîchissement terminé: ${result.length} articles traités`,
+      result: result
     });
-
-    py.stderr.on("data", (data) => {
-      errorOutput += data.toString();
-    });
-
-    py.on("close", (code) => {
-      console.log("🔍 Python terminé avec code", code);
-      if (errorOutput) console.error("⚠️ STDERR Python:", errorOutput);
-      
-      // Tentative de lecture d’un JSON
-      try {
-        const match = output.match(/\{.*\}/s);
-        const result = match ? JSON.parse(match[0]) : { message: output };
-        res.json({ success: true, result });
-      } catch (err) {
-        console.error("❌ Erreur parsing sortie Python:", err);
-        res.json({
-          success: false,
-          error: "Sortie Python invalide",
-          details: output,
-          stderr: errorOutput,
-        });
-      }
-    });
+    
   } catch (err) {
     console.error("❌ Erreur exécution /api/refresh:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -558,7 +565,6 @@ app.get('/api/feeds/export', async (req, res) => {
 });
 
 // ========== ROUTE LEARNING STATS MANQUANTE ==========
-
 app.get('/api/learning/stats', async (req, res) => {
   try {
     const client = await pool.connect();
@@ -606,7 +612,6 @@ app.get('/api/learning/stats', async (req, res) => {
 });
 
 // ========== ROUTE ARTICLES ==========
-
 app.get('/api/articles', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
@@ -1082,10 +1087,10 @@ async function initializeApplication() {
   try {
     console.log('🚀 Initialisation de l\'application...');
     await initializeDatabase();
-    await initializeDefaultThemes();
-    console.log('✅ Base de données prête');
+    await initializeDefaultThemes(); // ← Ajouter cette ligne
+    console.log('✅ Base de données et thèmes prêts');
 
-    // Premier rafraîchissement après 10 secondes (laisser le temps DB)
+    // Premier rafraîchissement après 10 secondes
     setTimeout(() => {
       console.log('🔄 Rafraîchissement initial...');
       refreshData().catch(err => {
