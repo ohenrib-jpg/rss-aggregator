@@ -108,15 +108,6 @@ def init_db():
             logger.info("✅ Table analyses existe déjà")
         
         cur.close()
-        finally:
-            try:
-                if cur:
-                    cur.close()
-            except Exception:
-                pass
-            if conn:
-                put_connection(conn)
-
         
     except Exception as e:
         logger.error(f"❌ Erreur initialisation DB: {e}")

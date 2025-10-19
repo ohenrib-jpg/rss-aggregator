@@ -59,55 +59,19 @@ def json_error(msg: str, code: int = 500):
     logger.error(f"Error response: {msg}")
     return jsonify({"success": False, "error": str(msg)}), code
 
-
 def normalize_article_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalise un article pour le frontend (plus robuste).
-    - accepte 'raw' stocké comme dict ou comme chaîne JSON
-    - protège les conversions float/int
-    - génère un id stable si absent
-    """
+    """Normalise un article pour le frontend"""
     if not row:
         return {}
-    # Robust raw parsing: may be dict, JSON string, or None
-    raw_val = row.get("raw")
-    raw = None
-    if isinstance(raw_val, dict):
-        raw = raw_val
-    elif isinstance(raw_val, str):
-        try:
-            raw = json.loads(raw_val)
-        except Exception:
-            raw = None
-
-    def safe_float(x, default=0.0):
-        try:
-            return float(x)
-        except Exception:
-            return float(default)
-
-    # compute id: prefer explicit id, then raw.id, else fallback to uuid4
-    _id = row.get("id") or (raw and raw.get("id"))
-    if not _id:
-        try:
-            import uuid
-            _id = str(uuid.uuid4())
-        except Exception:
-            _id = str(hash(str(row)))
-
+    
+    raw = row.get("raw") if isinstance(row.get("raw"), dict) else None
     out = {
-        "id": _id,
+        "id": row.get("id") or (raw and raw.get("id")) or str(hash(str(row))),
         "title": (raw and raw.get("title")) or row.get("title") or "Sans titre",
         "link": (raw and raw.get("link")) or row.get("link") or "#",
         "summary": (raw and raw.get("summary")) or row.get("summary") or row.get("content") or "",
         "themes": (raw and raw.get("themes")) or row.get("themes") or [],
         "sentiment": (raw and raw.get("sentiment")) or row.get("sentiment") or {"score": 0, "sentiment": "neutral"},
-        "confidence": safe_float(row.get("confidence") or (raw and raw.get("confidence")) or 0.5, 0.5),
-        "bayesian_posterior": safe_float(row.get("bayesian_posterior") or (raw and raw.get("bayesian_posterior")) or 0.5, 0.5),
-        "corroboration_strength": safe_float(row.get("corroboration_strength") or (raw and raw.get("corroboration_strength")) or 0.0, 0.0),
-        "raw": raw or None
-    }
-    return out
-,
         "confidence": float(row.get("confidence") or (raw and raw.get("confidence")) or 0.5),
         "bayesian_posterior": float(row.get("bayesian_posterior") or (raw and raw.get("bayesian_posterior")) or 0.5),
         "corroboration_strength": float(row.get("corroboration_strength") or (raw and raw.get("corroboration_strength")) or 0.0),
