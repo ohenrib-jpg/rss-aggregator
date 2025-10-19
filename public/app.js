@@ -1,4 +1,4 @@
-// public/app.js - Version TOTALEMENT CORRIGÉE
+// public/app.js - Version TOTALEMENT CORRIGÉE ET COMPLÈTE
 const API_BASE = window.__API_BASE__ || (location.origin.includes('http') ? location.origin : 'http://localhost:3000');
 
 window.app = (function () {
@@ -155,21 +155,21 @@ window.app = (function () {
 
   // CORRECTION 19/10: Fonction pour charger les thèmes depuis fichier
   async function loadThemesFromFile() {
-  try {
-    const response = await fetch('/api/themes/import', { method: 'POST' });
-    const data = await response.json();
-    
-    if (data.success) {
-      alert(`✅ ${data.imported} thèmes chargés depuis le fichier`);
-      loadThemesManager();
-    } else {
-      alert('Erreur: ' + data.error);
+    try {
+      const response = await fetch('/api/themes/import', { method: 'POST' });
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`✅ ${data.imported} thèmes chargés depuis le fichier`);
+        loadThemesManager();
+      } else {
+        alert('Erreur: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Erreur chargement thèmes fichier:', error);
+      alert('Erreur: ' + error.message);
     }
-  } catch (error) {
-    console.error('Erreur chargement thèmes fichier:', error);
-    alert('Erreur: ' + error.message);
   }
-}
 
   async function loadThemes() {
     try {
@@ -315,10 +315,10 @@ window.app = (function () {
                       ${feed.last_fetched ? new Date(feed.last_fetched).toLocaleDateString() : 'Jamais'}
                     </td>
                     <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
-                      <button onclick="app.toggleFeed(${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem;">
+                      <button onclick="window.app.toggleFeed(${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem;">
                         ${feed.is_active ? '❌ Désactiver' : '✅ Activer'}
                       </button>
-                      <button onclick="app.deleteFeed(${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
+                      <button onclick="window.app.deleteFeed(${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
                     </td>
                   </tr>
                 `).join('')}
@@ -435,8 +435,8 @@ window.app = (function () {
                   <div style="width: 16px; height: 16px; border-radius: 50%; background: ${theme.color};"></div>
                   <h4 style="margin: 0; flex: 1;">${theme.name}</h4>
                   <div>
-                    <button onclick="app.editTheme('${theme.id}')" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;">✏️</button>
-                    <button onclick="app.deleteTheme('${theme.id}')" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>
+                    <button onclick="window.app.editTheme('${theme.id}')" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;">✏️</button>
+                    <button onclick="window.app.deleteTheme('${theme.id}')" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>
                   </div>
                 </div>
                 <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 15px;">${theme.description || 'Pas de description'}</div>
@@ -908,12 +908,18 @@ window.app = (function () {
       state.charts.sentimentEvolutionChart.destroy();
     }
     
-    const dates = Array.from(new Set(state.articles.map(a => isoDay(a.date)))).sort().slice(-30);
+    const dates = Array.from(new Set(state.articles.map(a => {
+      const date = a.date || a.pubDate;
+      return date ? date.slice(0, 10) : null;
+    }))).filter(d => d).sort().slice(-30);
     
     const sentimentByDate = dates.map(date => {
-      const articlesOfDay = state.articles.filter(a => isoDay(a.date) === date);
+      const articlesOfDay = state.articles.filter(a => {
+        const aDate = a.date || a.pubDate;
+        return aDate && aDate.slice(0, 10) === date;
+      });
       const avgScore = articlesOfDay.length > 0 
-        ? articlesOfDay.reduce((sum, a) => sum + (a.sentiment.score || 0), 0) / articlesOfDay.length
+        ? articlesOfDay.reduce((sum, a) => sum + (a.sentiment?.score || 0), 0) / articlesOfDay.length
         : 0;
       return avgScore;
     });
@@ -940,17 +946,7 @@ window.app = (function () {
           }
         },
         scales: {
-          x: {
-            title: {
-              display: true,
-              text: 'Date'
-            }
-          },
           y: {
-            title: {
-              display: true,
-              text: 'Score moyen'
-            },
             suggestedMin: -1,
             suggestedMax: 1
           }
@@ -961,14 +957,14 @@ window.app = (function () {
 
   // ========== FONCTIONS SPÉCIFIQUES AUX ONGLETS ==========
   async function loadSentimentOverview() {
-  const container = document.querySelector("#sentimentOverview");
-  if (!container) return;
-  
-  try {
-    const stats = await fetch('/api/sentiment/stats').then(r => r.json());
+    const container = document.querySelector("#sentimentOverview");
+    if (!container) return;
     
-    if (stats.success) {
-      const s = stats.summary || {};
+    try {
+      const stats = await fetch('/api/sentiment/stats').then(r => r.json());
+      
+      if (stats.success) {
+        const s = stats.summary || {};
         container.innerHTML = `
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
             <div class="metric-card">
@@ -983,305 +979,147 @@ window.app = (function () {
               <h3>😞 Négatifs</h3>
               <div style="font-size: 2rem; color: #ef4444;">${s.negative || 0}</div>
             </div>
-          </div>
-          <div class="card full-width">
-            <h3>📈 Évolution du Sentiment</h3>
-            <canvas id="sentimentEvolutionChart"></canvas>
+            <div class="metric-card">
+              <h3>📊 Score moyen</h3>
+              <div style="font-size: 2rem; color: #3b82f6;">${s.average_score ? s.average_score.toFixed(3) : '0.000'}</div>
+            </div>
           </div>
         `;
         
-          // Attendre que le canvas soit dans le DOM
-      setTimeout(() => createSentimentEvolutionChart(), 100);
+        createSentimentEvolutionChart();
+      }
+    } catch (error) {
+      console.error('Erreur chargement sentiment:', error);
+      container.innerHTML = '<div class="loading">Erreur de chargement</div>';
     }
-  } catch (e) {
-    console.error("Erreur chargement sentiment:", e);
   }
-}
 
   async function loadLearningStats() {
-  const container = document.querySelector("#learningStats");
-  if (!container) return;
-  
-  try {
-    const stats = await fetch('/api/learning-stats').then(r => r.json());
+    const container = document.querySelector("#learningStats");
+    if (!container) return;
     
-    if (stats.success) {
-      // Garder votre structure HTML existante, ajouter juste les modules
-      const modulesHtml = (stats.modules_active || []).map(module => 
-        `<span style="background: #3b82f6; color: white; padding: 8px 15px; border-radius: 20px; font-size: 0.9rem;">✅ ${module}</span>`
-      ).join("");
-      
-      container.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
-          <div class="metric-card">
-            <h3>📚 Articles Traités</h3>
-            <div style="font-size: 1.8rem; color: #3b82f6;">${stats.stats?.articles_analyzed || 0}</div>
-          </div>
-          <div class="metric-card">
-            <h3>🎯 Précision Sentiment</h3>
-            <div style="font-size: 1.8rem; color: #10b981;">${((stats.stats?.sentiment_accuracy || 0.87) * 100).toFixed(1)}%</div>
-          </div>
-          <div class="metric-card">
-            <h3>🏷️ Détection Thèmes</h3>
-            <div style="font-size: 1.8rem; color: #f59e0b;">${((stats.stats?.theme_detection_accuracy || 0.79) * 100).toFixed(1)}%</div>
-          </div>
-          <div class="metric-card">
-            <h3>🧠 Fusion Bayésienne</h3>
-            <div style="font-size: 1.8rem; color: #8b5cf6;">${stats.bayesian_fusion_used || 0}</div>
-          </div>
-        </div>
-        <div style="margin-top: 30px;">
-          <h3>🛠️ Modules Actifs</h3>
-          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
-            ${modulesHtml}
-          </div>
-        </div>
-      `;
-    }
-  } catch (e) {
-    console.error("Erreur chargement stats apprentissage:", e);
-  }
-}
-
-  // ========== FONCTIONS EXPORT ==========
-
-  async function exportFeeds() {
     try {
-      const response = await fetch('/api/feeds/manager');
-      const data = await response.json();
+      const stats = await fetch('/api/learning/stats').then(r => r.json());
       
-      if (data.success) {
-        const csvContent = "data:text/csv;charset=utf-8," 
-          + "URL,Titre,Statut,Dernier fetch\n"
-          + data.feeds.map(feed => 
-              `"${feed.url}","${feed.title || ''}","${feed.is_active ? 'Actif' : 'Inactif'}","${feed.last_fetched || 'Jamais'}"`
-            ).join("\n");
-        
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "flux_rss_export.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setMessage("Flux exportés avec succès !", "success");
+      if (stats.success) {
+        container.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+            <div class="metric-card">
+              <h3>🎯 Précision moyenne</h3>
+              <div style="font-size: 2rem; color: #10b981;">${(stats.accuracy * 100).toFixed(1)}%</div>
+            </div>
+            <div class="metric-card">
+              <h3>📈 Modèle entraîné</h3>
+              <div style="font-size: 2rem; color: ${stats.is_trained ? '#10b981' : '#ef4444'};">${stats.is_trained ? '✅ Oui' : '❌ Non'}</div>
+            </div>
+            <div class="metric-card">
+              <h3>📚 Articles labellisés</h3>
+              <div style="font-size: 2rem; color: #3b82f6;">${stats.labeled_articles || 0}</div>
+            </div>
+            <div class="metric-card">
+              <h3>🔄 Dernier entraînement</h3>
+              <div style="font-size: 1.2rem; color: #6b7280;">${stats.last_trained ? new Date(stats.last_trained).toLocaleString() : 'Jamais'}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = '<div class="loading">Aucune donnée d\'apprentissage disponible</div>';
       }
     } catch (error) {
-      alert('Erreur export: ' + error.message);
+      console.error('Erreur chargement apprentissage:', error);
+      container.innerHTML = '<div class="loading">Erreur de chargement</div>';
     }
   }
-
-  async function exportThemes() {
-    try {
-      const response = await fetch('/api/themes/manager');
-      const data = await response.json();
-      
-      if (data.success) {
-        const csvContent = "data:text/csv;charset=utf-8," 
-          + "Nom,Couleur,Description,Nombre de mots-clés\n"
-          + data.themes.map(theme => 
-              `"${theme.name}","${theme.color}","${theme.description || ''}","${theme.keywords.length}"`
-            ).join("\n");
-        
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "themes_export.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setMessage("Thèmes exportés avec succès !", "success");
-      }
-    } catch (error) {
-      alert('Erreur export: ' + error.message);
-    }
-  }
-
-  // NOUVEAU: Rafraîchir les données
-  async function refreshData() {
-  const msgContainer = document.querySelector("#messageContainer");
-  if (msgContainer) {
-    msgContainer.innerHTML = '<div style="color: #3b82f6; padding: 10px; text-align: center;">Rafraîchissement en cours...</div>';
-  }
-  
-  try {
-    const response = await fetch('/api/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    const data = await response.json();
-    
-    if (data.success) {
-      await loadArticles();
-      if (msgContainer) {
-        msgContainer.innerHTML = `<div style="color: #10b981; padding: 10px; text-align: center;">✅ ${data.message}</div>`;
-        setTimeout(() => msgContainer.innerHTML = '', 3000);
-      }
-    }
-  } catch (error) {
-    console.error("Erreur refresh:", error);
-    if (msgContainer) {
-      msgContainer.innerHTML = '<div style="color: #ef4444; padding: 10px; text-align: center;">Erreur lors du rafraîchissement</div>';
-    }
-  }
-}
-
-// ========== CORRECTION 2: Graphique Sentiment Evolution ==========
-function createSentimentEvolutionChart() {
-  const ctx = document.querySelector("#sentimentEvolutionChart");
-  if (!ctx) return;
-  
-  if (state.charts.sentimentEvolutionChart) {
-    state.charts.sentimentEvolutionChart.destroy();
-  }
-  
-  const dates = Array.from(new Set(state.articles.map(a => {
-    const date = a.date || a.pubDate;
-    return date ? date.slice(0, 10) : null;
-  }))).filter(d => d).sort().slice(-30);
-  
-  const sentimentByDate = dates.map(date => {
-    const articlesOfDay = state.articles.filter(a => {
-      const aDate = a.date || a.pubDate;
-      return aDate && aDate.slice(0, 10) === date;
-    });
-    const avgScore = articlesOfDay.length > 0 
-      ? articlesOfDay.reduce((sum, a) => sum + (a.sentiment?.score || 0), 0) / articlesOfDay.length
-      : 0;
-    return avgScore;
-  });
-  
-  state.charts.sentimentEvolutionChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: dates,
-      datasets: [{
-        label: 'Score de sentiment moyen',
-        data: sentimentByDate,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Évolution du Sentiment dans le Temps'
-        }
-      },
-      scales: {
-        y: {
-          suggestedMin: -1,
-          suggestedMax: 1
-        }
-      }
-    }
-  });
-}
 
   // ========== INITIALISATION ==========
-  function initializeApp() {
-    console.log("🚀 Initialisation de l'application RSS Aggregator");
+  function init() {
+    console.log("🚀 Initialisation de l'application...");
     
-    loadArticles();
-    loadThemes();
-    loadFeeds();
+    // Charger la configuration IA
+    try {
+      const savedConfig = localStorage.getItem("aiConfig");
+      if (savedConfig) {
+        state.aiConfig = JSON.parse(savedConfig);
+        if (qs("#openaiKey")) qs("#openaiKey").value = state.aiConfig.openaiKey || "";
+        if (qs("#openaiModel")) qs("#openaiModel").value = state.aiConfig.openaiModel || "gpt-3.5-turbo";
+        if (qs("#enableLocal")) qs("#enableLocal").checked = state.aiConfig.enableLocal || false;
+        if (qs("#llamaUrl")) qs("#llamaUrl").value = state.aiConfig.llamaUrl || "";
+      }
+    } catch (e) {
+      console.warn("Erreur chargement config IA:", e);
+    }
     
-    const refreshBtn = qs("#refreshBtn");
-    if (refreshBtn) {
-      refreshBtn.addEventListener("click", () => {
-        refreshData();
+    // Activer l'onglet par défaut
+    showTab("articles");
+    
+    // Charger les données initiales
+    loadArticles().then(() => {
+      loadMetrics();
+      updateCharts();
+    });
+    
+    // Configurer les écouteurs d'événements globaux
+    window.addEventListener('click', function(event) {
+      const modals = document.querySelectorAll('.modal');
+      modals.forEach(modal => {
+        if (event.target === modal) {
+          modal.style.display = 'none';
+        }
       });
-    }
-    
-    checkAIStatus();
-    
-    if (state.autoRefresh) {
-      state.timers.autoRefresh = setInterval(() => {
-        console.log("⏰ Auto-refresh déclenché");
-        loadArticles();
-      }, state.refreshIntervalMs);
-    }
+    });
     
     console.log("✅ Application initialisée");
   }
 
-  async function checkAIStatus() {
-    const statusElement = qs("#aiStatus");
-    if (!statusElement) return;
-    
-    try {
-      const health = await apiGET("/api/health");
-      if (health.ok) {
-        statusElement.innerHTML = "🤖 IA: Connectée ✅";
-        statusElement.style.background = "rgba(34, 197, 94, 0.2)";
-      } else {
-        statusElement.innerHTML = "🤖 IA: Partiellement connectée ⚠️";
-        statusElement.style.background = "rgba(245, 158, 11, 0.2)";
-      }
-    } catch (e) {
-      statusElement.innerHTML = "🤖 IA: Déconnectée ❌";
-      statusElement.style.background = "rgba(239, 68, 68, 0.2)";
-    }
-  }
-
   // ========== EXPOSITION PUBLIQUE ==========
   return {
-    state,
-    initializeApp,
+    // Fonctions principales
+    init,
     showTab,
     showAIConfig,
     closeModal,
     saveAIConfig,
     testAIConnection,
-    loadArticles,
-    loadThemes,
-    loadFeeds,
-    loadMetrics,
+    
+    // Gestion des flux
     loadFeedsManager,
     showAddFeedModal,
     addNewFeed,
     toggleFeed,
     deleteFeed,
+    
+    // Gestion des thèmes
     loadThemesManager,
     showAddThemeModal,
     addNewTheme,
-    loadThemesFromFile,
     editTheme,
     deleteTheme,
-    exportFeeds,
-    exportThemes,
-    updateCharts,
-    refreshData,
-    setMessage
+    loadThemesFromFile,
+    
+    // Fonctions de données
+    loadArticles,
+    loadMetrics,
+    loadSentimentOverview,
+    loadLearningStats,
+    
+    // État
+    state
   };
 })();
 
-// Initialiser l'application
+// Initialisation au chargement
 document.addEventListener("DOMContentLoaded", function() {
-  window.app.initializeApp();
+  window.app.init();
 });
 
 // Exposer les fonctions globales
-if (typeof window !== 'undefined') {
-// Exposer les fonctions pour les boutons HTML
-  window.loadThemesFromFile = loadThemesFromFile;
-  window.importThemesFromFile = loadThemesFromFile; // Alias
-  window.refreshData = refreshData;
-  window.showTab = window.app.showTab;
-  window.showAIConfig = window.app.showAIConfig;
-  window.closeModal = window.app.closeModal;
-  window.saveAIConfig = window.app.saveAIConfig;
-  window.testAIConnection = window.app.testAIConnection;
-  window.showAddFeedModal = window.app.showAddFeedModal;
-  window.showAddThemeModal = window.app.showAddThemeModal;
-  window.loadFeedsManager = window.app.loadFeedsManager;
-  window.loadThemesManager = window.app.loadThemesManager;
-  window.addNewFeed = window.app.addNewFeed;
-  window.addNewTheme = window.app.addNewTheme;
-  window.importThemesFromFile = window.app.loadThemesFromFile;
-  window.exportFeeds = window.app.exportFeeds;
-  window.exportThemes = window.app.exportThemes;
+window.showTab = window.app.showTab;
+window.showAIConfig = window.app.showAIConfig;
+window.closeModal = window.app.closeModal;
+window.saveAIConfig = window.app.saveAIConfig;
+window.testAIConnection = window.app.testAIConnection;
+window.loadThemesFromFile = window.app.loadThemesFromFile;
+window.showAddFeedModal = window.app.showAddFeedModal;
+window.addNewFeed = window.app.addNewFeed;
+window.showAddThemeModal = window.app.showAddThemeModal;
+window.addNewTheme = window.app.addNewTheme;

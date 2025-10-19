@@ -1,247 +1,239 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS + IA v2.5</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analyseur d'Actualités IA</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body>
-<div class="container">
-    <!-- En-tête -->
+  <div class="container">
     <header>
-        <div class="header-main">
-            <h1>📊 Agrégateur RSS Thématique + IA</h1>
-            <div style="display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap;">
-                <span style="background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;">Olivier Henri B.</span>
-                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.5</span>
-                <span id="aiStatus" style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem;">🤖 IA: Vérification...</span>
-            </div>
-        </div>
+      <h1>📰 Analyseur d'Actualités IA</h1>
+      <p>Analyse en temps réel des flux RSS avec intelligence artificielle</p>
     </header>
 
-    <!-- Messages -->
     <div id="messageContainer"></div>
 
-    <!-- Barre de statut -->
-    <div class="status-bar">
-        <div class="last-update" id="lastUpdate">Prêt</div>
-        <div class="refresh-controls">
-            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation active</div>
-            <button id="refreshBtn">🔄 Actualiser maintenant</button>
-        </div>
+    <nav class="tabs">
+      <button class="tab active" onclick="showTab('articles')">📋 Articles</button>
+      <button class="tab" onclick="showTab('analysis')">📊 Analyse</button>
+      <button class="tab" onclick="showTab('metrics')">📈 Métriques</button>
+      <button class="tab" onclick="showTab('sentiment')">😊 Sentiment</button>
+      <button class="tab" onclick="showTab('learning')">🧠 Apprentissage</button>
+      <button class="tab" onclick="showTab('feeds')">📡 Flux RSS</button>
+      <button class="tab" onclick="showTab('themes')">🏷️ Thèmes</button>
+      <button class="tab" onclick="showAIConfig()">⚙️ Configuration IA</button>
+    </nav>
+
+    <!-- Onglet Articles -->
+    <div id="articlesTab" class="tab-content active">
+      <h2>📋 Articles Récents</h2>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="window.app.loadArticles()">🔄 Actualiser</button>
+        <button class="btn btn-secondary" onclick="window.app.loadThemesFromFile()">📁 Charger thèmes fichier</button>
+      </div>
+      <div id="articlesList" class="articles-grid">
+        <div class="loading">Chargement des articles...</div>
+      </div>
     </div>
 
-    <!-- Barre d'actions -->
-    <div class="export-bar">
-        <div class="export-controls">
-            <button class="btn btn-secondary" onclick="showAIConfig()">⚙️ Config IA</button>
+    <!-- Onglet Analyse -->
+    <div id="analysisTab" class="tab-content">
+      <h2>📊 Analyse des Données</h2>
+      <div class="charts-grid">
+        <div class="chart-container">
+          <canvas id="themeChart"></canvas>
         </div>
+        <div class="chart-container">
+          <canvas id="timelineChart"></canvas>
+        </div>
+        <div class="chart-container">
+          <canvas id="sentimentChart"></canvas>
+        </div>
+      </div>
     </div>
 
-    <!-- Onglets -->
-    <div class="tab-container">
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('analysis')">📈 Analyse</div>
-            <div class="tab" onclick="showTab('metrics')">🎯 Métriques</div>
-            <div class="tab" onclick="showTab('sentiment')">😊 Sentiment</div>
-            <div class="tab" onclick="showTab('learning')">🧠 Apprentissage</div>
-            <div class="tab" onclick="showTab('feeds')">📰 Flux RSS</div>
-            <div class="tab" onclick="showTab('themes')">🎨 Thèmes</div>
-            <div class="tab" onclick="showTab('articles')">📄 Articles</div>
+    <!-- Onglet Métriques -->
+    <div id="metricsTab" class="tab-content">
+      <h2>📈 Métriques de Performance</h2>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <h3>📊 Total Articles</h3>
+          <div id="m_total" class="metric-value">0</div>
         </div>
-
-        <!-- Analyse -->
-        <div id="analysisTab" class="tab-content active">
-            <div class="dashboard">
-                <div class="card">
-                    <h3>📊 Répartition par Thème</h3>
-                    <canvas id="themeChart"></canvas>
-                </div>
-                <div class="card">
-                    <h3>📈 Évolution Temporelle</h3>
-                    <canvas id="timelineChart"></canvas>
-                </div>
-            </div>
+        <div class="metric-card">
+          <h3>🎯 Confiance Moyenne</h3>
+          <div id="m_confidence" class="metric-value">0.00</div>
         </div>
-
-        <!-- Métriques -->
-        <div id="metricsTab" class="tab-content">
-            <div class="stats-grid">
-                <div class="metric-card"><strong>Total Articles :</strong> <span id="m_total">—</span></div>
-                <div class="metric-card"><strong>Confiance :</strong> <span id="m_confidence">—</span></div>
-                <div class="metric-card"><strong>Bayésien :</strong> <span id="m_posterior">—</span></div>
-                <div class="metric-card"><strong>Corroboration :</strong> <span id="m_corro">—</span></div>
-            </div>
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>📈 Évolution du Sentiment</h3>
-                    <canvas id="sentimentChart"></canvas>
-                </div>
-            </div>
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>🏆 Thèmes Principaux</h3>
-                    <ul id="topThemes" class="top-themes"></ul>
-                </div>
-            </div>
+        <div class="metric-card">
+          <h3>📈 Postérieur Bayesien</h3>
+          <div id="m_posterior" class="metric-value">0.00</div>
         </div>
-
-        <!-- Sentiment (AMÉLIORÉ) -->
-        <div id="sentimentTab" class="tab-content">
-            <div id="sentimentOverview">
-                <div class="loading">Chargement de l'analyse de sentiment...</div>
-            </div>
+        <div class="metric-card">
+          <h3>🔗 Force de Corroboration</h3>
+          <div id="m_corro" class="metric-value">0.00</div>
         </div>
-
-        <!-- Apprentissage -->
-        <div id="learningTab" class="tab-content">
-            <div id="learningStats" class="loading">Chargement des statistiques...</div>
-        </div>
-
-        <!-- Flux RSS avec gestion -->
-        <div id="feedsTab" class="tab-content">
-            <div class="card full-width">
-                <h3>📰 Gestion des Flux RSS</h3>
-                
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button class="btn btn-success" onclick="showAddFeedModal()">➕ Ajouter un flux</button>
-                    <button class="btn btn-secondary" onclick="loadFeedsManager()">🔄 Actualiser</button>
-                    <button class="btn btn-secondary" onclick="exportFeeds()">📥 Exporter</button>
-                </div>
-                
-                <div id="feedsManagerList" class="loading">Chargement des flux...</div>
-            </div>
-        </div>
-
-        <!-- Thèmes avec gestion -->
-        <div id="themesTab" class="tab-content">
-            <div class="card full-width">
-                <h3>🎨 Gestion des Thèmes</h3>
-                
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button class="btn btn-success" onclick="showAddThemeModal()">➕ Nouveau thème</button>
-                    <button class="btn btn-primary" onclick="importThemesFromFile()">📁 Charger thèmes défaut</button>
-                    <button class="btn btn-secondary" onclick="loadThemesManager()">🔄 Actualiser</button>
-                    <button class="btn btn-secondary" onclick="exportThemes()">📥 Exporter</button>
-                </div>
-                
-                <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
-            </div>
-        </div>
-
-        <!-- Articles -->
-        <div id="articlesTab" class="tab-content">
-            <div class="card full-width">
-                <h3>📄 Derniers Articles</h3>
-                <div id="articlesList" class="loading">Chargement...</div>
-            </div>
-        </div>
+      </div>
+      
+      <div class="section">
+        <h3>🏆 Thèmes Principaux</h3>
+        <ul id="topThemes" class="themes-list">
+          <li>Chargement...</li>
+        </ul>
+      </div>
     </div>
-</div>
 
-<!-- Modal Ajout Flux -->
-<div id="addFeedModal" class="modal">
+    <!-- Onglet Sentiment -->
+    <div id="sentimentTab" class="tab-content">
+      <h2>😊 Analyse de Sentiment</h2>
+      <div id="sentimentOverview">
+        <div class="loading">Chargement des données de sentiment...</div>
+      </div>
+      <div class="chart-container">
+        <canvas id="sentimentEvolutionChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Onglet Apprentissage -->
+    <div id="learningTab" class="tab-content">
+      <h2>🧠 Apprentissage Automatique</h2>
+      <div id="learningStats">
+        <div class="loading">Chargement des statistiques d'apprentissage...</div>
+      </div>
+    </div>
+
+    <!-- Onglet Flux RSS -->
+    <div id="feedsTab" class="tab-content">
+      <h2>📡 Gestion des Flux RSS</h2>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="showAddFeedModal()">➕ Ajouter un flux</button>
+        <button class="btn btn-secondary" onclick="window.app.loadFeedsManager()">🔄 Actualiser</button>
+      </div>
+      <div id="feedsManagerList">
+        <div class="loading">Chargement des flux...</div>
+      </div>
+    </div>
+
+    <!-- Onglet Thèmes -->
+    <div id="themesTab" class="tab-content">
+      <h2>🏷️ Gestion des Thèmes</h2>
+      <div class="controls">
+        <button class="btn btn-primary" onclick="showAddThemeModal()">➕ Ajouter un thème</button>
+        <button class="btn btn-secondary" onclick="window.app.loadThemesManager()">🔄 Actualiser</button>
+        <button class="btn btn-secondary" onclick="window.app.loadThemesFromFile()">📁 Charger depuis fichier</button>
+      </div>
+      <div id="themesManagerList">
+        <div class="loading">Chargement des thèmes...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Configuration IA -->
+  <div id="aiConfigModal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeModal('addFeedModal')">&times;</span>
-        <h2>➕ Ajouter un Flux RSS</h2>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">URL du flux RSS:</label>
-            <input type="url" id="newFeedUrl" placeholder="https://example.com/rss.xml" 
-                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        </div>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Titre (optionnel):</label>
-            <input type="text" id="newFeedTitle" placeholder="Nom du flux" 
-                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button class="btn btn-success" onclick="addNewFeed()">💾 Ajouter</button>
-            <button class="btn btn-secondary" onclick="closeModal('addFeedModal')">❌ Annuler</button>
-        </div>
+      <span class="close" onclick="closeModal('aiConfigModal')">&times;</span>
+      <h2>⚙️ Configuration IA</h2>
+      
+      <div class="form-group">
+        <label for="openaiKey">Clé API OpenAI:</label>
+        <input type="password" id="openaiKey" placeholder="sk-...">
+      </div>
+      
+      <div class="form-group">
+        <label for="openaiModel">Modèle OpenAI:</label>
+        <select id="openaiModel">
+          <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+          <option value="gpt-4">gpt-4</option>
+          <option value="gpt-4-turbo">gpt-4-turbo</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="enableLocal"> Activer le modèle local (Llama)
+        </label>
+      </div>
+      
+      <div class="form-group">
+        <label for="llamaUrl">URL API Llama locale:</label>
+        <input type="text" id="llamaUrl" placeholder="http://localhost:8080">
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="saveAIConfig()">💾 Sauvegarder</button>
+        <button class="btn btn-secondary" onclick="testAIConnection()">🔗 Tester la connexion</button>
+        <button class="btn" onclick="closeModal('aiConfigModal')">Annuler</button>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Modal Ajout Thème -->
-<div id="addThemeModal" class="modal">
+  <!-- Modal Ajouter Flux -->
+  <div id="addFeedModal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeModal('addThemeModal')">&times;</span>
-        <h2>🎨 Créer un Thème</h2>
-        <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
-            <input type="text" id="newThemeName" placeholder="⚔️ Conflits Armés" 
-                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        </div>
-        <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
-            <textarea id="newThemeKeywords" placeholder="guerre&#10;conflit&#10;combat&#10;affrontement" 
-                      style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;"></textarea>
-        </div>
-        <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
-            <input type="color" id="newThemeColor" value="#3b82f6" style="width: 100%; height: 40px;">
-        </div>
-        <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
-            <textarea id="newThemeDescription" placeholder="Description du thème..." 
-                      style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button class="btn btn-success" onclick="addNewTheme()">💾 Créer le thème</button>
-            <button class="btn btn-secondary" onclick="closeModal('addThemeModal')">❌ Annuler</button>
-        </div>
+      <span class="close" onclick="closeModal('addFeedModal')">&times;</span>
+      <h2>➕ Ajouter un Flux RSS</h2>
+      
+      <div class="form-group">
+        <label for="newFeedUrl">URL du flux RSS:</label>
+        <input type="url" id="newFeedUrl" placeholder="https://example.com/feed.xml" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="newFeedTitle">Titre (optionnel):</label>
+        <input type="text" id="newFeedTitle" placeholder="Mon flux personnalisé">
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="addNewFeed()">💾 Ajouter le flux</button>
+        <button class="btn" onclick="closeModal('addFeedModal')">Annuler</button>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Modal Configuration IA -->
-<div id="aiConfigModal" class="modal">
+  <!-- Modal Ajouter Thème -->
+  <div id="addThemeModal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeModal('aiConfigModal')">&times;</span>
-        <h2>⚙️ Configuration de l'IA</h2>
-        
-        <div style="margin: 25px 0;">
-            <h3 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Clé API OpenAI :</label>
-                <input type="password" id="openaiKey" placeholder="sk-..." style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <small style="color: #64748b;">Obtenez une clé gratuite sur <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a></small>
-            </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle :</label>
-                <select id="openaiModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (rapide)</option>
-                    <option value="gpt-4">GPT-4 (précis)</option>
-                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                </select>
-            </div>
-        </div>
-
-        <div style="margin: 25px 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-            <h3 style="margin-bottom: 15px;">💻 IA Locale (Llama.cpp)</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" id="enableLocal">
-                    <span>Utiliser l'IA locale (fallback)</span>
-                </label>
-                <small style="color: #64748b; display: block; margin-top: 5px;">Nécessite Llama.cpp installé localement</small>
-            </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">URL Llama.cpp :</label>
-                <input type="text" id="llamaUrl" placeholder="http://localhost:8080" value="http://localhost:8080" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-            </div>
-        </div>
-
-        <div style="display: flex; gap: 10px; margin-top: 25px;">
-            <button class="btn btn-success" onclick="saveAIConfig()">💾 Sauvegarder</button>
-            <button class="btn btn-secondary" onclick="testAIConnection()">🔍 Tester la connexion</button>
-            <button class="btn btn-secondary" onclick="closeModal('aiConfigModal')">❌ Annuler</button>
-        </div>
+      <span class="close" onclick="closeModal('addThemeModal')">&times;</span>
+      <h2>➕ Ajouter un Thème</h2>
+      
+      <div class="form-group">
+        <label for="newThemeName">Nom du thème:</label>
+        <input type="text" id="newThemeName" placeholder="Technologie" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="newThemeKeywords">Mots-clés (un par ligne):</label>
+        <textarea id="newThemeKeywords" rows="6" placeholder="IA
+robot
+intelligence artificielle
+machine learning"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label for="newThemeColor">Couleur:</label>
+        <input type="color" id="newThemeColor" value="#3b82f6">
+      </div>
+      
+      <div class="form-group">
+        <label for="newThemeDescription">Description (optionnel):</label>
+        <textarea id="newThemeDescription" rows="3" placeholder="Description du thème..."></textarea>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="addNewTheme()">💾 Créer le thème</button>
+        <button class="btn" onclick="closeModal('addThemeModal')">Annuler</button>
+      </div>
     </div>
-</div>
+  </div>
 
-<script src="chart-manager.js"></script>
-<script src="app.js" defer></script>
+  <script>
+    // Configuration globale
+    window.__API_BASE__ = "http://localhost:3000";
+  </script>
+  <script src="app.js"></script>
 </body>
 </html>
