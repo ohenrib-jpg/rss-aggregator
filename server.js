@@ -425,71 +425,89 @@ async function processFeedsRefresh(feeds) {
 
 // Fonction pour analyser automatiquement les thèmes après rafraîchissement
 async function autoAnalyzeThemes() {
-  try {
-    console.log('🎨 Début de l\'analyse thématique automatique...');
-    
-    const client = await pool.connect();
-    
-    // Récupérer les articles sans thèmes (limité aux 200 derniers)
-    const articlesResult = await client.query(`
-      SELECT a.id, a.title, a.content 
-      FROM articles a
-      WHERE NOT EXISTS (
-        SELECT 1 FROM theme_analyses ta WHERE ta.article_id = a.id
-      )
-      ORDER BY a.pub_date DESC 
-      LIMIT 200
-    `);
-    
-    const themesResult = await client.query('SELECT id, name, keywords FROM themes');
-    
-    const articles = articlesResult.rows;
-    const themes = themesResult.rows;
-    
-    let analyzedCount = 0;
-    
-    console.log(`🔍 Analyse de ${articles.length} articles sans thèmes...`);
-    
-    for (const article of articles) {
-      const text = ((article.title || '') + ' ' + (article.content || '')).toLowerCase();
-      
-      for (const theme of themes) {
-        const keywords = theme.keywords || [];
-        let matches = 0;
+    try {
+        console.log('🎨 Début de l\'analyse thématique automatique...');
         
-        for (const keyword of keywords) {
-          if (keyword && typeof keyword === 'string') {
-            const normalizedKeyword = keyword.toLowerCase().trim();
-            if (normalizedKeyword && text.includes(normalizedKeyword)) {
-              matches++;
-            }
-          }
+        const client = await pool.connect();
+        
+        // Récupérer TOUS les thèmes avec leurs mots-clés
+        const themesResult = await client.query('SELECT id, name, keywords FROM themes');
+        const themes = themesResult.rows;
+        
+        if (themes.length === 0) {
+            console.warn('⚠️ Aucun thème configuré pour l\'analyse');
+            client.release();
+            return 0;
         }
+        
+        console.log(`🔍 ${themes.length} thèmes disponibles pour l'analyse`);
 
-        if (matches > 0) {
-          const confidence = Math.min(0.95, 0.3 + (matches * 0.15));
-          try {
-            await client.query(`
-              INSERT INTO theme_analyses (article_id, theme_id, confidence)
-              VALUES ($1, $2, $3)
-              ON CONFLICT (article_id, theme_id) DO NOTHING
-            `, [article.id, theme.id, confidence]);
-            analyzedCount++;
-          } catch (e) {
-            // Ignorer les doublons
-          }
+        // Récupérer les 100 derniers articles (avec ou sans thèmes)
+        const articlesResult = await client.query(`
+            SELECT id, title, content 
+            FROM articles 
+            ORDER BY pub_date DESC 
+            LIMIT 100
+        `);
+        
+        const articles = articlesResult.rows;
+        let totalRelations = 0;
+        
+        console.log(`📄 Analyse de ${articles.length} articles...`);
+
+        for (const article of articles) {
+            const text = ((article.title || '') + ' ' + (article.content || '')).toLowerCase();
+            let articleRelations = 0;
+            
+            for (const theme of themes) {
+                const keywords = theme.keywords || [];
+                let matches = 0;
+                
+                // Recherche des mots-clés dans le texte
+                for (const keyword of keywords) {
+                    if (keyword && typeof keyword === 'string') {
+                        const normalizedKeyword = keyword.toLowerCase().trim();
+                        if (normalizedKeyword && normalizedKeyword.length > 2) {
+                            // Recherche exacte du mot-clé
+                            const regex = new RegExp(`\\b${normalizedKeyword}\\b`, 'i');
+                            if (regex.test(text)) {
+                                matches++;
+                            }
+                        }
+                    }
+                }
+
+                // Si au moins 1 mot-clé correspond, créer la relation
+                if (matches > 0) {
+                    const confidence = Math.min(0.95, 0.4 + (matches * 0.1));
+                    try {
+                        await client.query(`
+                            INSERT INTO theme_analyses (article_id, theme_id, confidence)
+                            VALUES ($1, $2, $3)
+                            ON CONFLICT (article_id, theme_id) DO UPDATE SET
+                                confidence = EXCLUDED.confidence
+                        `, [article.id, theme.id, confidence]);
+                        articleRelations++;
+                    } catch (e) {
+                        // Ignorer les erreurs de contrainte
+                    }
+                }
+            }
+            
+            totalRelations += articleRelations;
+            if (articleRelations > 0) {
+                console.log(`   📌 Article "${article.title.substring(0, 40)}..." → ${articleRelations} thèmes`);
+            }
         }
-      }
+        
+        client.release();
+        console.log(`✅ Analyse thématique terminée: ${totalRelations} relations créées/mises à jour`);
+        return totalRelations;
+        
+    } catch (error) {
+        console.error('❌ Erreur analyse thématique automatique:', error.message);
+        return 0;
     }
-    
-    client.release();
-    console.log(`✅ Analyse thématique: ${analyzedCount} relations créées pour ${articles.length} articles`);
-    return analyzedCount;
-    
-  } catch (error) {
-    console.error('❌ Erreur analyse thématique automatique:', error.message);
-    return 0;
-  }
 }
 
 // ========== FONCTION UTILITAIRE ==========
@@ -833,15 +851,23 @@ app.get('/api/articles', async (req, res) => {
   }
 });
 
-// -------------------- Themes (manager, import, export, analyze) --------------------
-app.get('/api/themes', async (req, res) => {
-  try {
-    const themes = await dbManager.getThemes();
-    res.json(themes);
-  } catch (error) {
-    console.error('❌ Erreur route /api/themes:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+// Route pour récupérer un thème spécifique
+app.get('/api/themes/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const client = await pool.connect();
+        const result = await client.query('SELECT * FROM themes WHERE id = $1', [id]);
+        client.release();
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Thème non trouvé' });
+        }
+
+        res.json({ success: true, theme: result.rows[0] });
+    } catch (error) {
+        console.error('❌ Erreur récupération thème:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // themes/manager
@@ -1081,6 +1107,39 @@ app.post('/api/themes/analyze', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// Route de test pour l'analyse thématique
+  app.get('/api/debug/themes', async (req, res) => {
+      try {
+          const client = await pool.connect();
+        
+          const [themes, articles, relations] = await Promise.all([
+              client.query('SELECT id, name, keywords FROM themes'),
+              client.query('SELECT COUNT(*) as count FROM articles'),
+              client.query('SELECT COUNT(*) as count FROM theme_analyses')
+          ]);
+        
+          client.release();
+
+          res.json({
+              success: true,
+              debug: {
+                  themes_count: themes.rows.length,
+                  themes_list: themes.rows.map(t => ({
+                      id: t.id,
+                      name: t.name,
+                      keywords_count: t.keywords ? t.keywords.length : 0,
+                      keywords_sample: t.keywords ? t.keywords.slice(0, 3) : []
+                  })),
+                  articles_count: parseInt(articles.rows[0].count),
+                  relations_count: parseInt(relations.rows[0].count)
+              }
+          });
+      } catch (error) {
+          console.error('❌ Erreur debug thèmes:', error);
+          res.status(500).json({ success: false, error: error.message });
+      }
+  });
 
 // -------------------- Statistiques --------------------
 

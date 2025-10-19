@@ -651,6 +651,17 @@ window.app = (function () {
     }, 1000);
   }
 
+  // ==== Fonction utilitaire pour échapper le HTML ========
+  function escapeHtml(unsafe) {
+      if (!unsafe) return '';
+      return unsafe
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+  }
+
   // ========== RENDU DES DONNÉES ==========
   function renderArticlesList() {
     const container = qs("#articlesList");
@@ -1259,7 +1270,9 @@ window.loadThemesManager = async function () {
 // ========== CORRECTION 3: Fonction editTheme implémentée ==========
 window.editTheme = async function (themeId) {
     try {
-        // Récupérer les données du thème
+        console.log(`✏️ Édition du thème: ${themeId}`);
+        
+        // Récupérer les données du thème depuis l'API
         const response = await fetch('/api/themes/manager');
         const data = await response.json();
 
@@ -1275,38 +1288,38 @@ window.editTheme = async function (themeId) {
             return;
         }
 
-        // Créer un modal d'édition
+        // Créer le modal d'édition
         const modalHtml = `
-      <div id="editThemeModal" class="modal" style="display: block;">
-        <div class="modal-content">
-          <span class="close" onclick="window.closeModal('editThemeModal')">&times;</span>
-          <h2>✏️ Modifier le Thème</h2>
-          <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
-            <input type="text" id="editThemeName" value="${theme.name}" 
-                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-          </div>
-          <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
-            <textarea id="editThemeKeywords" 
-                      style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;">${(theme.keywords || []).join('\n')}</textarea>
-          </div>
-          <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
-            <input type="color" id="editThemeColor" value="${theme.color}" style="width: 100%; height: 40px;">
-          </div>
-          <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
-            <textarea id="editThemeDescription" 
-                      style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">${theme.description || ''}</textarea>
-          </div>
-          <div style="display: flex; gap: 10px;">
-            <button class="btn btn-success" onclick="window.saveThemeEdits('${themeId}')">💾 Enregistrer</button>
-            <button class="btn btn-secondary" onclick="window.closeModal('editThemeModal')">❌ Annuler</button>
-          </div>
-        </div>
-      </div>
-    `;
+            <div id="editThemeModal" class="modal" style="display: block;">
+                <div class="modal-content">
+                    <span class="close" onclick="window.closeModal('editThemeModal')">&times;</span>
+                    <h2>✏️ Modifier le Thème</h2>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+                        <input type="text" id="editThemeName" value="${theme.name.replace(/"/g, '&quot;')}" 
+                               style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+                        <textarea id="editThemeKeywords" 
+                                  style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;">${(theme.keywords || []).map(k => k.replace(/"/g, '&quot;')).join('\n')}</textarea>
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+                        <input type="color" id="editThemeColor" value="${theme.color || '#6366f1'}" style="width: 100%; height: 40px;">
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
+                        <textarea id="editThemeDescription" 
+                                  style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">${(theme.description || '').replace(/"/g, '&quot;')}</textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="window.saveThemeEdits('${themeId}')">💾 Enregistrer</button>
+                        <button class="btn btn-secondary" onclick="window.closeModal('editThemeModal')">❌ Annuler</button>
+                    </div>
+                </div>
+            </div>
+        `;
 
         // Supprimer l'ancien modal s'il existe
         const oldModal = document.querySelector('#editThemeModal');
@@ -1322,7 +1335,7 @@ window.editTheme = async function (themeId) {
 };
 
 // ========== CORRECTION 4: Fonction saveThemeEdits ==========
-window.saveThemeEdits = async function (themeId) {
+window.saveThemeEdits = async function (oldThemeId) {
     try {
         const name = document.querySelector('#editThemeName').value;
         const keywordsText = document.querySelector('#editThemeKeywords').value;
@@ -1338,15 +1351,31 @@ window.saveThemeEdits = async function (themeId) {
             .map(k => k.trim())
             .filter(k => k.length > 0);
 
+        // Générer un nouvel ID basé sur le nom
+        const newThemeId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+
         const response = await fetch('/api/themes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, keywords, color, description })
+            body: JSON.stringify({ 
+                id: newThemeId, 
+                name, 
+                keywords, 
+                color, 
+                description 
+            })
         });
 
         const data = await response.json();
 
         if (data.success) {
+            // Si l'ID a changé, supprimer l'ancien thème
+            if (oldThemeId !== newThemeId) {
+                await fetch(`/api/themes/${oldThemeId}`, {
+                    method: 'DELETE'
+                });
+            }
+            
             window.closeModal('editThemeModal');
             window.loadThemesManager();
             alert('✅ Thème modifié avec succès !');
@@ -1354,6 +1383,7 @@ window.saveThemeEdits = async function (themeId) {
             alert('Erreur: ' + data.error);
         }
     } catch (error) {
+        console.error('❌ Erreur sauvegarde thème:', error);
         alert('Erreur: ' + error.message);
     }
 };
