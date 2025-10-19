@@ -587,30 +587,30 @@ window.app = (function () {
   }
 
   function loadTabData(tabName) {
-    switch(tabName) {
-      case "analysis":
-        updateCharts();
-        break;
-      case "metrics":
-        loadMetrics();
-        break;
-      case "sentiment":
-        loadSentimentOverview();
-        break;
-      case "learning":
-        loadLearningStats();
-        break;
-      case "feeds":
-        loadFeedsManager();
-        break;
-      case "themes":
-        loadThemesManager();
-        break;
-      case "articles":
-        loadArticles();
-        break;
-    }
+  switch(tabName) {
+    case "analysis":
+      updateCharts();
+      break;
+    case "metrics":
+      loadMetrics();
+      break;
+    case "sentiment":
+      loadSentimentOverview();
+      break;
+    case "learning":
+      loadLearningStats(); // ← Doit appeler la fonction corrigée
+      break;
+    case "feeds":
+      loadFeedsManager();
+      break;
+    case "themes":
+      loadThemesManager();
+      break;
+    case "articles":
+      loadArticles();
+      break;
   }
+}
 
   function showAIConfig() {
     const modal = qs("#aiConfigModal");
@@ -995,41 +995,59 @@ window.app = (function () {
   }
 
   async function loadLearningStats() {
-    const container = document.querySelector("#learningStats");
-    if (!container) return;
-    
-    try {
-      const stats = await fetch('/api/learning/stats').then(r => r.json());
-      
-      if (stats.success) {
-        container.innerHTML = `
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
-            <div class="metric-card">
-              <h3>🎯 Précision moyenne</h3>
-              <div style="font-size: 2rem; color: #10b981;">${(stats.accuracy * 100).toFixed(1)}%</div>
-            </div>
-            <div class="metric-card">
-              <h3>📈 Modèle entraîné</h3>
-              <div style="font-size: 2rem; color: ${stats.is_trained ? '#10b981' : '#ef4444'};">${stats.is_trained ? '✅ Oui' : '❌ Non'}</div>
-            </div>
-            <div class="metric-card">
-              <h3>📚 Articles labellisés</h3>
-              <div style="font-size: 2rem; color: #3b82f6;">${stats.labeled_articles || 0}</div>
-            </div>
-            <div class="metric-card">
-              <h3>🔄 Dernier entraînement</h3>
-              <div style="font-size: 1.2rem; color: #6b7280;">${stats.last_trained ? new Date(stats.last_trained).toLocaleString() : 'Jamais'}</div>
-            </div>
-          </div>
-        `;
-      } else {
-        container.innerHTML = '<div class="loading">Aucune donnée d\'apprentissage disponible</div>';
-      }
-    } catch (error) {
-      console.error('Erreur chargement apprentissage:', error);
-      container.innerHTML = '<div class="loading">Erreur de chargement</div>';
+  const container = document.querySelector("#learningStats");
+  if (!container) return;
+
+  try {
+    container.innerHTML = '<div class="loading">Chargement des statistiques...</div>';
+
+    // Utiliser la route corrigée
+    const response = await fetch('/api/learning/stats');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+    
+    const stats = await response.json();
+
+    if (stats.success) {
+      container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+          <div class="metric-card">
+            <h3>🎯 Précision moyenne</h3>
+            <div style="font-size: 2rem; color: #10b981;">${(stats.accuracy * 100).toFixed(1)}%</div>
+          </div>
+          <div class="metric-card">
+            <h3>📈 Modèle entraîné</h3>
+            <div style="font-size: 2rem; color: ${stats.is_trained ? '#10b981' : '#ef4444'};">${stats.is_trained ? '✅ Oui' : '❌ Non'}</div>
+          </div>
+          <div class="metric-card">
+            <h3>📚 Articles analysés</h3>
+            <div style="font-size: 2rem; color: #3b82f6;">${stats.labeled_articles || stats.total_articles_processed || 0}</div>
+          </div>
+          <div class="metric-card">
+            <h3>🔄 Dernier entraînement</h3>
+            <div style="font-size: 1.2rem; color: #6b7280;">${stats.last_trained ? new Date(stats.last_trained).toLocaleString('fr-FR') : 'Jamais'}</div>
+          </div>
+        </div>
+        <div style="margin-top: 25px; padding: 20px; background: #f8fafc; border-radius: 12px;">
+          <h3 style="margin-bottom: 15px;">🤖 Modules actifs</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            ${(stats.modules_active || []).map(module => `
+              <div style="padding: 10px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
+                ✅ ${module}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = '<div class="loading">Aucune donnée d\'apprentissage disponible</div>';
+    }
+  } catch (error) {
+    console.error('❌ Erreur chargement apprentissage:', error);
+    container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement des statistiques</div>';
   }
+}
 
   // ========== INITIALISATION ==========
   function init() {
