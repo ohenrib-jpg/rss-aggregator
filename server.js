@@ -212,6 +212,13 @@ const sentimentAnalyzer = new SelfLearningSentiment();
 class PostgreSQLManager {
   async saveArticle(articleData) {
     const { title, content, link, pubDate, feedUrl, sentiment } = articleData;
+    
+    // Validation des données critiques
+    if (!link || link === '#' || link.startsWith('#')) {
+      console.warn('⚠️ Article sans lien valide ignoré:', title?.substring(0, 50));
+      return null;
+    }
+
     try {
       const result = await pool.query(`
         INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
@@ -222,14 +229,30 @@ class PostgreSQLManager {
           pub_date = EXCLUDED.pub_date,
           sentiment_score = EXCLUDED.sentiment_score,
           sentiment_type = EXCLUDED.sentiment_type,
-          sentiment_confidence = EXCLUDED.sentiment_confidence
-        RETURNING *
-      `, [title, content, link, pubDate, feedUrl, 
-          sentiment?.score || 0, sentiment?.sentiment || 'neutral', sentiment?.confidence || 0]);
-      return result.rows[0];
+          sentiment_confidence = EXCLUDED.sentiment_confidence,
+          updated_at = NOW()
+        RETURNING id
+      `, [
+        title || 'Sans titre', 
+        content || '',
+        link,
+        pubDate, 
+        feedUrl,
+        sentiment?.score || 0, 
+        sentiment?.sentiment || 'neutral', 
+        sentiment?.confidence || 0
+      ]);
+      
+      if (result.rows[0]) {
+        console.log(`💾 Article sauvegardé: ${title?.substring(0, 50)}...`);
+        return result.rows[0];
+      }
+      return null;
+      
     } catch (error) {
       console.error('❌ Erreur sauvegarde article:', error.message);
-      throw error;
+      // Ne pas throw pour éviter de bloquer le processus
+      return null;
     }
   }
 
@@ -294,7 +317,7 @@ const dbManager = new PostgreSQLManager();
 // -------------------- Rafraîchissement RSS (refreshData) --------------------
 async function refreshData() {
   try {
-    console.log('🔄 Rafraîchissement des flux RSS...');
+    console.log('🔄 Début du rafraîchissement des flux RSS...');
     const feeds = await dbManager.getFeeds();
     
     if (feeds.length === 0) {
@@ -316,71 +339,156 @@ async function refreshData() {
         }
       }
       
-      return await refreshData(); // Réessayer après insertion
+      // Recharger les feeds après insertion
+      const updatedFeeds = await dbManager.getFeeds();
+      return await processFeedsRefresh(updatedFeeds);
     }
 
-    const allArticles = [];
-    const limitedFeeds = feeds.slice(0, 10); // Limiter à 10 flux max
+    return await processFeedsRefresh(feeds);
     
-    for (const feedUrl of limitedFeeds) {
-      try {
-        console.log(`📥 Récupération: ${feedUrl}`);
-        
-        const feed = await parser.parseURL(feedUrl);
-        if (!feed.items || feed.items.length === 0) {
-          console.warn(`⚠️ Aucun article dans ${feedUrl}`);
-          continue;
-        }
-        
-        const limitedItems = feed.items.slice(0, 15); // 15 articles par flux
-        console.log(`✓ ${limitedItems.length} articles trouvés`);
-        
-        for (const item of limitedItems) {
-          try {
-            let pubDate = new Date();
-            if (item.pubDate) pubDate = new Date(item.pubDate);
-            else if (item.isoDate) pubDate = new Date(item.isoDate);
-
-            let content = '';
-            if (item.contentEncoded) content = item.contentEncoded.replace(/<[^>]*>/g, ' ').substring(0, 1000);
-            else if (item.content) content = item.content.replace(/<[^>]*>/g, ' ').substring(0, 1000);
-            else if (item.summary) content = item.summary.replace(/<[^>]*>/g, ' ').substring(0, 1000);
-            else if (item.description) content = item.description.replace(/<[^>]*>/g, ' ').substring(0, 1000);
-            content = content.replace(/\s+/g, ' ').trim();
-
-            const fullText = (item.title || '') + ' ' + content;
-            const sentimentResult = sentimentAnalyzer.analyze(fullText);
-
-            const articleData = {
-              title: item.title || 'Sans titre',
-              content: content,
-              link: item.link || `#${Date.now()}_${Math.random()}`,
-              pubDate: pubDate.toISOString(),
-              feedUrl: feedUrl,
-              sentiment: sentimentResult
-            };
-
-            await dbManager.saveArticle(articleData);
-            allArticles.push(articleData);
-            
-          } catch (itemError) {
-            console.error(`❌ Erreur traitement article: ${itemError.message}`);
-          }
-        }
-        
-        // Délai entre les flux pour éviter la surcharge
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-      } catch (error) {
-        console.error(`❌ Erreur flux ${feedUrl}:`, error.message);
-      }
-    }
-
-    console.log(`✅ ${allArticles.length} articles rafraîchis`);
-    return allArticles;
   } catch (error) {
     console.error('❌ Erreur rafraîchissement:', error);
     return [];
+  }
+}
+
+// NOUVELLE FONCTION POUR TRAITER LES FLUX
+async function processFeedsRefresh(feeds) {
+  const allArticles = [];
+  const limitedFeeds = feeds.slice(0, 15); // Augmenter à 15 flux max
+  
+  console.log(`📥 Traitement de ${limitedFeeds.length} flux RSS...`);
+  
+  for (const feedUrl of limitedFeeds) {
+    try {
+      console.log(`🔍 Récupération: ${feedUrl}`);
+      
+      const feed = await parser.parseURL(feedUrl);
+      if (!feed.items || feed.items.length === 0) {
+        console.warn(`⚠️ Aucun article dans ${feedUrl}`);
+        continue;
+      }
+      
+      const limitedItems = feed.items.slice(0, 20); // 20 articles par flux
+      console.log(`✓ ${limitedItems.length} articles trouvés dans ${feedUrl}`);
+      
+      for (const item of limitedItems) {
+        try {
+          let pubDate = new Date();
+          if (item.pubDate) pubDate = new Date(item.pubDate);
+          else if (item.isoDate) pubDate = new Date(item.isoDate);
+
+          // Extraction du contenu améliorée
+          let content = '';
+          if (item.contentEncoded) content = item.contentEncoded;
+          else if (item.content) content = item.content;
+          else if (item.summary) content = item.summary;
+          else if (item.description) content = item.description;
+          
+          // Nettoyage HTML et limitation
+          content = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 1500);
+
+          const fullText = (item.title || '') + ' ' + content;
+          const sentimentResult = sentimentAnalyzer.analyze(fullText);
+
+          const articleData = {
+            title: item.title || 'Sans titre',
+            content: content,
+            link: item.link || `#${Date.now()}_${Math.random()}`,
+            pubDate: pubDate.toISOString(),
+            feedUrl: feedUrl,
+            sentiment: sentimentResult
+          };
+
+          // Sauvegarde IMMÉDIATE de chaque article
+          const savedArticle = await dbManager.saveArticle(articleData);
+          if (savedArticle) {
+            allArticles.push(articleData);
+          }
+          
+        } catch (itemError) {
+          console.error(`❌ Erreur traitement article: ${itemError.message}`);
+        }
+      }
+      
+      // Délai réduit entre les flux
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+    } catch (error) {
+      console.error(`❌ Erreur flux ${feedUrl}:`, error.message);
+    }
+  }
+
+  console.log(`✅ ${allArticles.length} articles traités et sauvegardés`);
+  return allArticles;
+}
+
+// Fonction pour analyser automatiquement les thèmes après rafraîchissement
+async function autoAnalyzeThemes() {
+  try {
+    console.log('🎨 Début de l\'analyse thématique automatique...');
+    
+    const client = await pool.connect();
+    
+    // Récupérer les articles sans thèmes (limité aux 200 derniers)
+    const articlesResult = await client.query(`
+      SELECT a.id, a.title, a.content 
+      FROM articles a
+      WHERE NOT EXISTS (
+        SELECT 1 FROM theme_analyses ta WHERE ta.article_id = a.id
+      )
+      ORDER BY a.pub_date DESC 
+      LIMIT 200
+    `);
+    
+    const themesResult = await client.query('SELECT id, name, keywords FROM themes');
+    
+    const articles = articlesResult.rows;
+    const themes = themesResult.rows;
+    
+    let analyzedCount = 0;
+    
+    console.log(`🔍 Analyse de ${articles.length} articles sans thèmes...`);
+    
+    for (const article of articles) {
+      const text = ((article.title || '') + ' ' + (article.content || '')).toLowerCase();
+      
+      for (const theme of themes) {
+        const keywords = theme.keywords || [];
+        let matches = 0;
+        
+        for (const keyword of keywords) {
+          if (keyword && typeof keyword === 'string') {
+            const normalizedKeyword = keyword.toLowerCase().trim();
+            if (normalizedKeyword && text.includes(normalizedKeyword)) {
+              matches++;
+            }
+          }
+        }
+
+        if (matches > 0) {
+          const confidence = Math.min(0.95, 0.3 + (matches * 0.15));
+          try {
+            await client.query(`
+              INSERT INTO theme_analyses (article_id, theme_id, confidence)
+              VALUES ($1, $2, $3)
+              ON CONFLICT (article_id, theme_id) DO NOTHING
+            `, [article.id, theme.id, confidence]);
+            analyzedCount++;
+          } catch (e) {
+            // Ignorer les doublons
+          }
+        }
+      }
+    }
+    
+    client.release();
+    console.log(`✅ Analyse thématique: ${analyzedCount} relations créées pour ${articles.length} articles`);
+    return analyzedCount;
+    
+  } catch (error) {
+    console.error('❌ Erreur analyse thématique automatique:', error.message);
+    return 0;
   }
 }
 
@@ -394,8 +502,6 @@ async function fileExists(filePath) {
   }
 }
 
-// ========== INITIALISATION DES THÈMES ==========
-// ========== INITIALISATION DES THÈMES CORRIGÉE ==========
 // ========== INITIALISATION DES THÈMES CORRIGÉE ==========
 async function initializeDefaultThemes() {
   const client = await pool.connect();
@@ -484,13 +590,29 @@ app.post("/api/refresh", async (req, res) => {
   try {
     console.log("🔄 Déclenchement manuel du rafraîchissement...");
     
-    // Utiliser la fonction refreshData existante au lieu d'appeler Python
-    const result = await refreshData();
+    // Étape 1: Rafraîchir les articles
+    const articles = await refreshData();
+    
+    // Étape 2: Analyser automatiquement les thèmes si des articles ont été trouvés
+    let thematicResults = { analyzed: 0 };
+    if (articles.length > 0) {
+      const analyzedCount = await autoAnalyzeThemes();
+      thematicResults = { analyzed: analyzedCount };
+    }
+    
+    // Étape 3: Récupérer le nouveau total
+    const client = await pool.connect();
+    const countResult = await client.query('SELECT COUNT(*) as total FROM articles');
+    client.release();
     
     res.json({ 
       success: true, 
-      message: `Rafraîchissement terminé: ${result.length} articles traités`,
-      result: result
+      message: `Rafraîchissement terminé: ${articles.length} articles traités`,
+      details: {
+        articles_processed: articles.length,
+        total_articles: parseInt(countResult.rows[0].total),
+        thematic_analysis: thematicResults
+      }
     });
     
   } catch (err) {
