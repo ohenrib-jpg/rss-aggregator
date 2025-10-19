@@ -1123,3 +1123,419 @@ window.showAddFeedModal = window.app.showAddFeedModal;
 window.addNewFeed = window.app.addNewFeed;
 window.showAddThemeModal = window.app.showAddThemeModal;
 window.addNewTheme = window.app.addNewTheme;
+
+// Corrections pour app.js - À ajouter/remplacer dans le fichier existant
+
+// ========== CORRECTION 1: Fonction loadFeedsManager exposée globalement ==========
+window.loadFeedsManager = async function () {
+    const container = document.querySelector("#feedsManagerList");
+    if (!container) return;
+
+    try {
+        container.innerHTML = '<div class="loading">Chargement des flux...</div>';
+
+        const response = await fetch('/api/feeds/manager');
+        const data = await response.json();
+
+        if (data.success && data.feeds && data.feeds.length > 0) {
+            container.innerHTML = `
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f8fafc;">
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">URL</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Statut</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Dernier fetch</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.feeds.map(feed => `
+                <tr>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <div style="font-weight: 500;">${feed.title || 'Sans titre'}</div>
+                    <div style="font-size: 0.85rem; color: #64748b;">${feed.url}</div>
+                  </td>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; background: ${feed.is_active ? '#10b98120' : '#ef444420'}; color: ${feed.is_active ? '#10b981' : '#ef4444'};">
+                      ${feed.is_active ? '✅ Actif' : '❌ Inactif'}
+                    </span>
+                  </td>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    ${feed.last_fetched ? new Date(feed.last_fetched).toLocaleDateString('fr-FR') : 'Jamais'}
+                  </td>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <button onclick="window.toggleFeed(${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 5px;">
+                      ${feed.is_active ? '❌ Désactiver' : '✅ Activer'}
+                    </button>
+                    <button onclick="window.deleteFeed(${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 15px; color: #64748b; font-size: 0.9rem;">
+          Total: ${data.feeds.length} flux configurés
+        </div>
+      `;
+        } else {
+            container.innerHTML = '<div class="loading">Aucun flux configuré</div>';
+        }
+    } catch (error) {
+        console.error('❌ Erreur chargement flux:', error);
+        container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement</div>';
+    }
+};
+
+// ========== CORRECTION 2: Fonction loadThemesManager exposée globalement ==========
+window.loadThemesManager = async function () {
+    const container = document.querySelector("#themesManagerList");
+    if (!container) return;
+
+    try {
+        container.innerHTML = '<div class="loading">Chargement des thèmes...</div>';
+
+        const response = await fetch('/api/themes/manager');
+        const data = await response.json();
+
+        if (data.success && data.themes && data.themes.length > 0) {
+            container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+          ${data.themes.map(theme => `
+            <div class="theme-card" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <div style="width: 16px; height: 16px; border-radius: 50%; background: ${theme.color};"></div>
+                <h4 style="margin: 0; flex: 1;">${theme.name}</h4>
+                <div>
+                  <button onclick="window.editTheme('${theme.id}')" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️</button>
+                  <button onclick="window.deleteTheme('${theme.id}')" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>
+                </div>
+              </div>
+              <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 15px;">${theme.description || 'Pas de description'}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px;">
+                ${(theme.keywords || []).slice(0, 8).map(keyword => `
+                  <span style="padding: 2px 8px; background: #f1f5f9; border-radius: 12px; font-size: 0.75rem; color: #475569;">${keyword}</span>
+                `).join('')}
+                ${(theme.keywords || []).length > 8 ? `<span style="font-size: 0.75rem; color: #64748b;">+${theme.keywords.length - 8} autres</span>` : ''}
+              </div>
+              <div style="font-size: 0.8rem; color: #94a3b8;">
+                ${theme.keywords?.length || 0} mots-clés • Créé le ${new Date(theme.created_at).toLocaleDateString('fr-FR')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top: 15px; color: #64748b; font-size: 0.9rem;">
+          Total: ${data.themes.length} thèmes configurés
+        </div>
+      `;
+        } else {
+            container.innerHTML = '<div class="loading">Aucun thème configuré</div>';
+        }
+    } catch (error) {
+        console.error('❌ Erreur chargement thèmes:', error);
+        container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement</div>';
+    }
+};
+
+// ========== CORRECTION 3: Fonction editTheme implémentée ==========
+window.editTheme = async function (themeId) {
+    try {
+        // Récupérer les données du thème
+        const response = await fetch('/api/themes/manager');
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('Erreur de récupération des thèmes');
+            return;
+        }
+
+        const theme = data.themes.find(t => t.id === themeId);
+
+        if (!theme) {
+            alert('Thème non trouvé');
+            return;
+        }
+
+        // Créer un modal d'édition
+        const modalHtml = `
+      <div id="editThemeModal" class="modal" style="display: block;">
+        <div class="modal-content">
+          <span class="close" onclick="window.closeModal('editThemeModal')">&times;</span>
+          <h2>✏️ Modifier le Thème</h2>
+          <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+            <input type="text" id="editThemeName" value="${theme.name}" 
+                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          </div>
+          <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+            <textarea id="editThemeKeywords" 
+                      style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;">${(theme.keywords || []).join('\n')}</textarea>
+          </div>
+          <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+            <input type="color" id="editThemeColor" value="${theme.color}" style="width: 100%; height: 40px;">
+          </div>
+          <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
+            <textarea id="editThemeDescription" 
+                      style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">${theme.description || ''}</textarea>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-success" onclick="window.saveThemeEdits('${themeId}')">💾 Enregistrer</button>
+            <button class="btn btn-secondary" onclick="window.closeModal('editThemeModal')">❌ Annuler</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+        // Supprimer l'ancien modal s'il existe
+        const oldModal = document.querySelector('#editThemeModal');
+        if (oldModal) oldModal.remove();
+
+        // Ajouter le nouveau modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    } catch (error) {
+        console.error('❌ Erreur édition thème:', error);
+        alert('Erreur: ' + error.message);
+    }
+};
+
+// ========== CORRECTION 4: Fonction saveThemeEdits ==========
+window.saveThemeEdits = async function (themeId) {
+    try {
+        const name = document.querySelector('#editThemeName').value;
+        const keywordsText = document.querySelector('#editThemeKeywords').value;
+        const color = document.querySelector('#editThemeColor').value;
+        const description = document.querySelector('#editThemeDescription').value;
+
+        if (!name) {
+            alert('Veuillez entrer un nom de thème');
+            return;
+        }
+
+        const keywords = keywordsText.split('\n')
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+
+        const response = await fetch('/api/themes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, keywords, color, description })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            window.closeModal('editThemeModal');
+            window.loadThemesManager();
+            alert('✅ Thème modifié avec succès !');
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+};
+
+// ========== CORRECTION 5: Fonction toggleFeed exposée ==========
+window.toggleFeed = async function (id, isActive) {
+    try {
+        const response = await fetch(`/api/feeds/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: isActive })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            window.loadFeedsManager();
+            alert('✅ Statut du flux mis à jour');
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+};
+
+// ========== CORRECTION 6: Fonction deleteFeed exposée ==========
+window.deleteFeed = async function (id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce flux ?')) {
+        try {
+            const response = await fetch(`/api/feeds/${id}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.loadFeedsManager();
+                alert('✅ Flux supprimé avec succès');
+            } else {
+                alert('Erreur: ' + data.error);
+            }
+        } catch (error) {
+            alert('Erreur: ' + error.message);
+        }
+    }
+};
+
+// ========== CORRECTION 7: Fonction deleteTheme exposée ==========
+window.deleteTheme = async function (id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce thème ?')) {
+        try {
+            const response = await fetch(`/api/themes/${id}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.loadThemesManager();
+                alert('✅ Thème supprimé avec succès');
+            } else {
+                alert('Erreur: ' + data.error);
+            }
+        } catch (error) {
+            alert('Erreur: ' + error.message);
+        }
+    }
+};
+
+// ========== CORRECTION 8: Fonction loadLearningStats corrigée ==========
+async function loadLearningStats() {
+    const container = document.querySelector("#learningStats");
+    if (!container) return;
+
+    try {
+        container.innerHTML = '<div class="loading">Chargement des statistiques...</div>';
+
+        // Correction de l'URL de l'API
+        const response = await fetch('/api/learning/stats');
+        const stats = await response.json();
+
+        if (stats.success) {
+            container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+          <div class="metric-card">
+            <h3>🎯 Précision moyenne</h3>
+            <div style="font-size: 2rem; color: #10b981;">${(stats.accuracy * 100).toFixed(1)}%</div>
+          </div>
+          <div class="metric-card">
+            <h3>📈 Modèle entraîné</h3>
+            <div style="font-size: 2rem; color: ${stats.is_trained ? '#10b981' : '#ef4444'};">${stats.is_trained ? '✅ Oui' : '❌ Non'}</div>
+          </div>
+          <div class="metric-card">
+            <h3>📚 Articles analysés</h3>
+            <div style="font-size: 2rem; color: #3b82f6;">${stats.labeled_articles || stats.total_articles_processed || 0}</div>
+          </div>
+          <div class="metric-card">
+            <h3>🔄 Dernier entraînement</h3>
+            <div style="font-size: 1.2rem; color: #6b7280;">${stats.last_trained ? new Date(stats.last_trained).toLocaleString('fr-FR') : 'Jamais'}</div>
+          </div>
+        </div>
+        <div style="margin-top: 25px; padding: 20px; background: #f8fafc; border-radius: 12px;">
+          <h3 style="margin-bottom: 15px;">🤖 Modules actifs</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            ${(stats.modules_active || []).map(module => `
+              <div style="padding: 10px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
+                ✅ ${module}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+        } else {
+            container.innerHTML = '<div class="loading">Aucune donnée d\'apprentissage disponible</div>';
+        }
+    } catch (error) {
+        console.error('❌ Erreur chargement apprentissage:', error);
+        container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement des statistiques</div>';
+    }
+}
+
+// ========== CORRECTION 9: Fonction manuelle de rafraîchissement ==========
+window.refreshArticles = async function () {
+    const btn = document.querySelector('#refreshBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '🔄 Actualisation...';
+    }
+
+    try {
+        const response = await fetch('/api/refresh', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            // Recharger les articles
+            if (window.app && window.app.loadArticles) {
+                await window.app.loadArticles();
+            }
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    } catch (error) {
+        console.error('❌ Erreur rafraîchissement:', error);
+        alert('Erreur de rafraîchissement: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🔄 Actualiser';
+        }
+    }
+};
+
+// ========== CORRECTION 10: Fonction computeThemesFromArticles améliorée ==========
+function computeThemesFromArticles() {
+    const themeCounts = {};
+
+    if (!window.app || !window.app.state || !window.app.state.articles) {
+        console.warn('❌ Aucun article disponible pour calculer les thèmes');
+        return;
+    }
+
+    window.app.state.articles.forEach(article => {
+        if (article.themes && Array.isArray(article.themes)) {
+            article.themes.forEach(theme => {
+                if (theme && typeof theme === 'string') {
+                    themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+                }
+            });
+        }
+    });
+
+    if (Object.keys(themeCounts).length === 0) {
+        console.warn('⚠️ Aucun thème détecté dans les articles');
+        window.app.state.themes = [];
+        return;
+    }
+
+    window.app.state.themes = Object.entries(themeCounts).map(([name, count]) => ({
+        name,
+        count,
+        color: getThemeColor(name)
+    })).sort((a, b) => b.count - a.count);
+
+    console.log(`✅ ${window.app.state.themes.length} thèmes calculés`);
+}
+
+// Exposer la fonction globalement si elle n'existe pas déjà
+if (window.app && !window.app.computeThemesFromArticles) {
+    window.app.computeThemesFromArticles = computeThemesFromArticles;
+}
+
+// ========== ATTACHER LES ÉVÉNEMENTS AU CHARGEMENT ==========
+document.addEventListener('DOMContentLoaded', function () {
+    // Bouton d'actualisation principal
+    const refreshBtn = document.querySelector('#refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', window.refreshArticles);
+    }
+
+    console.log('✅ Corrections JavaScript chargées');
+});

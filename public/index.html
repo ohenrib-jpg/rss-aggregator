@@ -103,95 +103,243 @@
         </div>
 
         <!-- Flux RSS avec gestion -->
-<div id="feedsTab" class="tab-content">
-  <div class="card full-width">
-    <h3>📰 Gestion des Flux RSS</h3>
-    
-    <!-- Barre d'actions -->
-    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-      <button class="btn btn-success" onclick="showAddFeedModal()">➕ Ajouter un flux</button>
-      <button class="btn btn-secondary" onclick="loadFeedsManager()">🔄 Actualiser</button>
-      <button class="btn btn-secondary" onclick="exportFeeds()">📥 Exporter</button>
-    </div>
-    
-    <!-- Liste des flux -->
-    <div id="feedsManagerList" class="loading">Chargement des flux...</div>
-  </div>
-</div>
+        <div id="feedsTab" class="tab-content">
+            <div class="card full-width">
+                <h3>📰 Gestion des Flux RSS</h3>
 
-<!-- Thèmes avec gestion -->
-<div id="themesTab" class="tab-content">
-  <div class="card full-width">
-    <h3>🎨 Gestion des Thèmes</h3>
-    
-    <!-- Barre d'actions -->
-    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-      <button class="btn btn-success" onclick="showAddThemeModal()">➕ Nouveau thème</button>
-      <button class="btn btn-secondary" onclick="importThemesFromFile()">📁 Importer thèmes</button>
-      <button class="btn btn-secondary" onclick="loadThemesManager()">🔄 Actualiser</button>
-      <button class="btn btn-secondary" onclick="exportThemes()">📥 Exporter</button>
-    </div>
-    
-    <!-- Liste des thèmes -->
-    <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
-  </div>
-</div>
+                <!-- Barre d'actions -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="window.showAddFeedModal()">➕ Ajouter un flux</button>
+                    <button class="btn btn-secondary" onclick="window.loadFeedsManager()">🔄 Actualiser</button>
+                    <button class="btn btn-secondary" onclick="window.exportFeeds()">📥 Exporter</button>
+                </div>
 
-<!-- Modal Ajout Flux -->
-<div id="addFeedModal" class="modal">
-  <div class="modal-content">
-    <span class="close" onclick="closeModal('addFeedModal')">&times;</span>
-    <h2>➕ Ajouter un Flux RSS</h2>
-    <div style="margin: 20px 0;">
-      <label style="display: block; margin-bottom: 8px; font-weight: 600;">URL du flux RSS:</label>
-      <input type="url" id="newFeedUrl" placeholder="https://example.com/rss.xml" 
-             style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-    </div>
-    <div style="margin: 20px 0;">
-      <label style="display: block; margin-bottom: 8px; font-weight: 600;">Titre (optionnel):</label>
-      <input type="text" id="newFeedTitle" placeholder="Nom du flux" 
-             style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-    </div>
-    <!-- Remplacer la section des boutons thèmes par : -->
-<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-  <button class="btn btn-success" onclick="showAddThemeModal()">➕ Nouveau thème</button>
-  <button class="btn btn-primary" onclick="importThemesFromFile()">📁 Charger thèmes défaut</button>
-  <button class="btn btn-secondary" onclick="loadThemesManager()">🔄 Actualiser</button>
-  <button class="btn btn-secondary" onclick="exportThemes()">📥 Exporter</button>
-      </div>
-    </div>
-  </div>
+                <!-- Liste des flux -->
+                <div id="feedsManagerList" class="loading">Chargement des flux...</div>
+            </div>
+        </div>
 
-<!-- Modal Ajout Thème -->
-<div id="addThemeModal" class="modal">
-  <div class="modal-content">
-    <span class="close" onclick="closeModal('addThemeModal')">&times;</span>
-    <h2>🎨 Créer un Thème</h2>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
-      <input type="text" id="newThemeName" placeholder="⚔️ Conflits Armés" 
-             style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-    </div>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
-      <textarea id="newThemeKeywords" placeholder="guerre&#10;conflit&#10;combat&#10;affrontement" 
-                style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;"></textarea>
-    </div>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
-      <input type="color" id="newThemeColor" value="#3b82f6" style="width: 100%; height: 40px;">
-    </div>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
-      <textarea id="newThemeDescription" placeholder="Description du thème..." 
-                style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
-    </div>
-    <div style="display: flex; gap: 10px;">
-      <button class="btn btn-success" onclick="addNewTheme()">💾 Créer le thème</button>
-      <button class="btn btn-secondary" onclick="closeModal('addThemeModal')">❌ Annuler</button>
-    </div>
-  </div>
-</div>
+        <!-- Thèmes avec gestion -->
+        <div id="themesTab" class="tab-content">
+            <div class="card full-width">
+                <h3>🎨 Gestion des Thèmes</h3>
+
+                <!-- Barre d'actions -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="window.showAddThemeModal()">➕ Nouveau thème</button>
+                    <button class="btn btn-primary" onclick="window.importThemesFromFile()">📁 Charger thèmes défaut</button>
+                    <button class="btn btn-secondary" onclick="window.loadThemesManager()">🔄 Actualiser</button>
+                    <button class="btn btn-secondary" onclick="window.exportThemes()">📥 Exporter</button>
+                </div>
+
+                <!-- Liste des thèmes -->
+                <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
+            </div>
+        </div>
+
+        <!-- Modal Ajout Flux -->
+        <div id="addFeedModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="window.closeModal('addFeedModal')">&times;</span>
+                <h2>➕ Ajouter un Flux RSS</h2>
+                <div style="margin: 20px 0;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">URL du flux RSS:</label>
+                    <input type="url" id="newFeedUrl" placeholder="https://example.com/rss.xml"
+                           style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                </div>
+                <div style="margin: 20px 0;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Titre (optionnel):</label>
+                    <input type="text" id="newFeedTitle" placeholder="Nom du flux"
+                           style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="window.addNewFeed()">💾 Ajouter</button>
+                    <button class="btn btn-secondary" onclick="window.closeModal('addFeedModal')">❌ Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Ajout Thème -->
+        <div id="addThemeModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="window.closeModal('addThemeModal')">&times;</span>
+                <h2>🎨 Créer un Thème</h2>
+                <div style="margin: 15px 0;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+                    <input type="text" id="newThemeName" placeholder="⚔️ Conflits Armés"
+                           style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                </div>
+                <div style="margin: 15px 0;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+                    <textarea id="newThemeKeywords" placeholder="guerre&#10;conflit&#10;combat&#10;affrontement"
+                              style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;"></textarea>
+                </div>
+                <div style="margin: 15px 0;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+                    <input type="color" id="newThemeColor" value="#3b82f6" style="width: 100%; height: 40px;">
+                </div>
+                <div style="margin: 15px 0;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
+                    <textarea id="newThemeDescription" placeholder="Description du thème..."
+                              style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="window.addNewTheme()">💾 Créer le thème</button>
+                    <button class="btn btn-secondary" onclick="window.closeModal('addThemeModal')">❌ Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Script pour exposer les fonctions d'export -->
+        <script>
+            // Fonction d'export des flux
+            window.exportFeeds = async function () {
+                try {
+                    const response = await fetch('/api/feeds/export');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `feeds-export-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    alert('✅ Flux exportés avec succès !');
+                } catch (error) {
+                    console.error('❌ Erreur export flux:', error);
+                    alert('Erreur: ' + error.message);
+                }
+            };
+
+            // Fonction d'export des thèmes
+            window.exportThemes = async function () {
+                try {
+                    const response = await fetch('/api/themes/export');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `themes-export-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    alert('✅ Thèmes exportés avec succès !');
+                } catch (error) {
+                    console.error('❌ Erreur export thèmes:', error);
+                    alert('Erreur: ' + error.message);
+                }
+            };
+
+            // Fonction d'import des thèmes depuis fichier
+            window.importThemesFromFile = async function () {
+                if (!confirm('Voulez-vous importer les thèmes depuis le fichier themes.json ?\n\nCela mettra à jour les thèmes existants.')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/themes/import', { method: 'POST' });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        alert(`✅ ${data.imported} thèmes importés avec succès !`);
+                        window.loadThemesManager();
+                    } else {
+                        alert('❌ Erreur: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur import thèmes:', error);
+                    alert('Erreur: ' + error.message);
+                }
+            };
+
+            // Fonction pour afficher le modal d'ajout de flux
+            window.showAddFeedModal = function () {
+                document.getElementById('addFeedModal').style.display = 'block';
+            };
+
+            // Fonction pour afficher le modal d'ajout de thème
+            window.showAddThemeModal = function () {
+                document.getElementById('addThemeModal').style.display = 'block';
+            };
+
+            // Fonction pour ajouter un nouveau flux
+            window.addNewFeed = async function () {
+                const url = document.getElementById('newFeedUrl').value;
+                const title = document.getElementById('newFeedTitle').value;
+
+                if (!url) {
+                    alert('Veuillez entrer une URL');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/feeds', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url, title })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        window.closeModal('addFeedModal');
+                        window.loadFeedsManager();
+                        document.getElementById('newFeedUrl').value = '';
+                        document.getElementById('newFeedTitle').value = '';
+                        alert('✅ Flux ajouté avec succès !');
+                    } else {
+                        alert('❌ Erreur: ' + data.error);
+                    }
+                } catch (error) {
+                    alert('❌ Erreur: ' + error.message);
+                }
+            };
+
+            // Fonction pour ajouter un nouveau thème
+            window.addNewTheme = async function () {
+                const name = document.getElementById('newThemeName').value;
+                const keywordsText = document.getElementById('newThemeKeywords').value;
+                const color = document.getElementById('newThemeColor').value;
+                const description = document.getElementById('newThemeDescription').value;
+
+                if (!name) {
+                    alert('Veuillez entrer un nom de thème');
+                    return;
+                }
+
+                const keywords = keywordsText.split('\n')
+                    .map(k => k.trim())
+                    .filter(k => k.length > 0);
+
+                try {
+                    const response = await fetch('/api/themes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, keywords, color, description })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        window.closeModal('addThemeModal');
+                        window.loadThemesManager();
+                        document.getElementById('newThemeName').value = '';
+                        document.getElementById('newThemeKeywords').value = '';
+                        document.getElementById('newThemeColor').value = '#3b82f6';
+                        document.getElementById('newThemeDescription').value = '';
+                        alert('✅ Thème créé avec succès !');
+                    } else {
+                        alert('❌ Erreur: ' + data.error);
+                    }
+                } catch (error) {
+                    alert('❌ Erreur: ' + error.message);
+                }
+            };
+
+            console.log('✅ Fonctions d\'export et d\'import chargées');
+        </script>
 
         <!-- Articles -->
         <div id="articlesTab" class="tab-content">
