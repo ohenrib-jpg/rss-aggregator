@@ -13,10 +13,10 @@
     <!-- En-tête -->
     <header>
         <div class="header-main">
-            <h1>📊 Agrégateur RSS Thématique + IA - Toujours en test</h1>
+            <h1>📊 Agrégateur RSS Thématique + IA</h1>
             <div style="display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap;">
                 <span style="background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;">Olivier Henri B.</span>
-                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.3</span>
+                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.5</span>
                 <span id="aiStatus" style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem;">🤖 IA: Vérification...</span>
             </div>
         </div>
@@ -27,19 +27,16 @@
 
     <!-- Barre de statut -->
     <div class="status-bar">
-        <div class="last-update" id="lastUpdate">Chargement...</div>
+        <div class="last-update" id="lastUpdate">Prêt</div>
         <div class="refresh-controls">
-            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation</div>
-            <button id="refreshBtn">🔄 Actualiser</button>
+            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation active</div>
+            <button id="refreshBtn">🔄 Actualiser maintenant</button>
         </div>
     </div>
 
     <!-- Barre d'actions -->
     <div class="export-bar">
         <div class="export-controls">
-            <button class="btn btn-success export-btn json">📥 JSON</button>
-            <button class="btn btn-success export-btn csv">📥 CSV</button>
-            <button class="btn btn-secondary export-btn stats">📊 Stats IA</button>
             <button class="btn btn-secondary" onclick="showAIConfig()">⚙️ Config IA</button>
         </div>
     </div>
@@ -92,106 +89,48 @@
             </div>
         </div>
 
-        <!-- Sentiment -->
+        <!-- Sentiment (AMÉLIORÉ) -->
         <div id="sentimentTab" class="tab-content">
-            <div id="sentimentOverview" class="loading">Analyse de sentiment...</div>
+            <div id="sentimentOverview">
+                <div class="loading">Chargement de l'analyse de sentiment...</div>
+            </div>
         </div>
 
         <!-- Apprentissage -->
         <div id="learningTab" class="tab-content">
-            <div id="learningStats" class="loading">Chargement...</div>
+            <div id="learningStats" class="loading">Chargement des statistiques...</div>
         </div>
 
         <!-- Flux RSS avec gestion -->
-<div id="feedsTab" class="tab-content">
-  <div class="card full-width">
-    <h3>📰 Gestion des Flux RSS</h3>
-    
-    <!-- Barre d'actions -->
-    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-      <button class="btn btn-success" onclick="showAddFeedModal()">➕ Ajouter un flux</button>
-      <button class="btn btn-secondary" onclick="loadFeedsManager()">🔄 Actualiser</button>
-      <button class="btn btn-secondary" onclick="exportFeeds()">📥 Exporter</button>
-    </div>
-    
-    <!-- Liste des flux -->
-    <div id="feedsManagerList" class="loading">Chargement des flux...</div>
-  </div>
-</div>
+        <div id="feedsTab" class="tab-content">
+            <div class="card full-width">
+                <h3>📰 Gestion des Flux RSS</h3>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="showAddFeedModal()">➕ Ajouter un flux</button>
+                    <button class="btn btn-secondary" onclick="loadFeedsManager()">🔄 Actualiser</button>
+                    <button class="btn btn-secondary" onclick="exportFeeds()">📥 Exporter</button>
+                </div>
+                
+                <div id="feedsManagerList" class="loading">Chargement des flux...</div>
+            </div>
+        </div>
 
-<!-- Thèmes avec gestion -->
-<div id="themesTab" class="tab-content">
-  <div class="card full-width">
-    <h3>🎨 Gestion des Thèmes</h3>
-    
-    <!-- Barre d'actions -->
-    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-      <button class="btn btn-success" onclick="showAddThemeModal()">➕ Nouveau thème</button>
-      <button class="btn btn-secondary" onclick="importThemesFromFile()">📁 Importer thèmes</button>
-      <button class="btn btn-secondary" onclick="loadThemesManager()">🔄 Actualiser</button>
-      <button class="btn btn-secondary" onclick="exportThemes()">📥 Exporter</button>
-    </div>
-    
-    <!-- Liste des thèmes -->
-    <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
-  </div>
-</div>
-
-<!-- Modal Ajout Flux -->
-<div id="addFeedModal" class="modal">
-  <div class="modal-content">
-    <span class="close" onclick="closeModal('addFeedModal')">&times;</span>
-    <h2>➕ Ajouter un Flux RSS</h2>
-    <div style="margin: 20px 0;">
-      <label style="display: block; margin-bottom: 8px; font-weight: 600;">URL du flux RSS:</label>
-      <input type="url" id="newFeedUrl" placeholder="https://example.com/rss.xml" 
-             style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-    </div>
-    <div style="margin: 20px 0;">
-      <label style="display: block; margin-bottom: 8px; font-weight: 600;">Titre (optionnel):</label>
-      <input type="text" id="newFeedTitle" placeholder="Nom du flux" 
-             style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-    </div>
-    <!-- Remplacer la section des boutons thèmes par : -->
-<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-  <button class="btn btn-success" onclick="showAddThemeModal()">➕ Nouveau thème</button>
-  <button class="btn btn-primary" onclick="importThemesFromFile()">📁 Charger thèmes défaut</button>
-  <button class="btn btn-secondary" onclick="loadThemesManager()">🔄 Actualiser</button>
-  <button class="btn btn-secondary" onclick="exportThemes()">📥 Exporter</button>
-      </div>
-    </div>
-  </div>
-
-<!-- Modal Ajout Thème -->
-<div id="addThemeModal" class="modal">
-  <div class="modal-content">
-    <span class="close" onclick="closeModal('addThemeModal')">&times;</span>
-    <h2>🎨 Créer un Thème</h2>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
-      <input type="text" id="newThemeName" placeholder="⚔️ Conflits Armés" 
-             style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-    </div>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
-      <textarea id="newThemeKeywords" placeholder="guerre&#10;conflit&#10;combat&#10;affrontement" 
-                style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;"></textarea>
-    </div>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
-      <input type="color" id="newThemeColor" value="#3b82f6" style="width: 100%; height: 40px;">
-    </div>
-    <div style="margin: 15px 0;">
-      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
-      <textarea id="newThemeDescription" placeholder="Description du thème..." 
-                style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
-    </div>
-    <div style="display: flex; gap: 10px;">
-      <button class="btn btn-success" onclick="addNewTheme()">💾 Créer le thème</button>
-      <button class="btn btn-secondary" onclick="closeModal('addThemeModal')">❌ Annuler</button>
-    </div>
-  </div>
-</div>
+        <!-- Thèmes avec gestion -->
+        <div id="themesTab" class="tab-content">
+            <div class="card full-width">
+                <h3>🎨 Gestion des Thèmes</h3>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="showAddThemeModal()">➕ Nouveau thème</button>
+                    <button class="btn btn-primary" onclick="importThemesFromFile()">📁 Charger thèmes défaut</button>
+                    <button class="btn btn-secondary" onclick="loadThemesManager()">🔄 Actualiser</button>
+                    <button class="btn btn-secondary" onclick="exportThemes()">📥 Exporter</button>
+                </div>
+                
+                <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
+            </div>
+        </div>
 
         <!-- Articles -->
         <div id="articlesTab" class="tab-content">
@@ -203,12 +142,56 @@
     </div>
 </div>
 
-<!-- Modal Stats IA -->
-<div id="learningStatsModal" class="modal">
+<!-- Modal Ajout Flux -->
+<div id="addFeedModal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeModal('learningStatsModal')">&times;</span>
-        <h2>📊 Statistiques d'Apprentissage IA</h2>
-        <div id="modalLearningStats" class="loading">Chargement...</div>
+        <span class="close" onclick="closeModal('addFeedModal')">&times;</span>
+        <h2>➕ Ajouter un Flux RSS</h2>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">URL du flux RSS:</label>
+            <input type="url" id="newFeedUrl" placeholder="https://example.com/rss.xml" 
+                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        </div>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Titre (optionnel):</label>
+            <input type="text" id="newFeedTitle" placeholder="Nom du flux" 
+                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn btn-success" onclick="addNewFeed()">💾 Ajouter</button>
+            <button class="btn btn-secondary" onclick="closeModal('addFeedModal')">❌ Annuler</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ajout Thème -->
+<div id="addThemeModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('addThemeModal')">&times;</span>
+        <h2>🎨 Créer un Thème</h2>
+        <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+            <input type="text" id="newThemeName" placeholder="⚔️ Conflits Armés" 
+                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        </div>
+        <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+            <textarea id="newThemeKeywords" placeholder="guerre&#10;conflit&#10;combat&#10;affrontement" 
+                      style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;"></textarea>
+        </div>
+        <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+            <input type="color" id="newThemeColor" value="#3b82f6" style="width: 100%; height: 40px;">
+        </div>
+        <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
+            <textarea id="newThemeDescription" placeholder="Description du thème..." 
+                      style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn btn-success" onclick="addNewTheme()">💾 Créer le thème</button>
+            <button class="btn btn-secondary" onclick="closeModal('addThemeModal')">❌ Annuler</button>
+        </div>
     </div>
 </div>
 
@@ -258,9 +241,7 @@
     </div>
 </div>
 
-
 <script src="chart-manager.js"></script>
-
 <script src="app.js" defer></script>
 </body>
 </html>
