@@ -1280,4 +1280,7 @@ process.on('SIGINT', async () => {
   }
   process.exit(0);
 });
+
+startServer();
+
 module.exports = { app, startServer, refreshData, sendMail };
