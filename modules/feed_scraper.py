@@ -144,3 +144,7 @@ def refresh_all_feeds():
     
     logger.info(f"✅ Actualisation terminée: {total_articles} articles traités, {total_saved} nouveaux sauvegardés")
     return total_saved
+
+if __name__ == "__main__":
+    saved = refresh_all_feeds()
+    print({"success": True, "saved": saved})
