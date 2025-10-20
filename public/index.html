@@ -13,11 +13,11 @@
     <!-- En-tête -->
     <header>
         <div class="header-main">
-            <h1>📊 Agrégateur RSS Thématique + IA - Toujours en test</h1>
+            <h1>📊 Agrégateur RSS Thématique + IA</h1>
             <div style="display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap;">
                 <span style="background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;">Olivier Henri B.</span>
-                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.3</span>
-                <span id="aiStatus" style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem;">🤖 IA: Vérification...</span>
+                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.5</span>
+                <span id="aiStatus" style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem;">🤖 IA: Prêt</span>
             </div>
         </div>
     </header>
@@ -27,388 +27,74 @@
 
     <!-- Barre de statut -->
     <div class="status-bar">
-        <div class="last-update" id="lastUpdate">Chargement...</div>
+        <div class="last-update" id="lastUpdate">Prêt</div>
         <div class="refresh-controls">
-            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation</div>
-            <button id="refreshBtn">🔄 Actualiser</button>
+            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation active</div>
+            <button id="refreshBtn" onclick="window.app.refreshArticles()">🔄 Actualiser</button>
         </div>
     </div>
 
     <!-- Barre d'actions -->
     <div class="export-bar">
         <div class="export-controls">
-            <button class="btn btn-success export-btn json">📥 JSON</button>
-            <button class="btn btn-success export-btn csv">📥 CSV</button>
-            <button class="btn btn-secondary export-btn stats">📊 Stats IA</button>
-            <button class="btn btn-secondary" onclick="showAIConfig()">⚙️ Config IA</button>
+            <button class="btn btn-success" onclick="window.app.exportToJSON()">📥 Exporter JSON</button>
+            <button class="btn btn-success" onclick="window.app.exportArticlesToCSV()">📥 Exporter CSV</button>
+            <button class="btn btn-secondary" onclick="window.app.showTab('learning')">📊 Stats IA</button>
+            <button class="btn btn-secondary" onclick="window.app.showTab('settings')">⚙️ Paramètres</button>
         </div>
     </div>
 
     <!-- Onglets -->
     <div class="tab-container">
         <div class="tabs">
-            <div class="tab active" onclick="showTab('analysis')">📈 Analyse</div>
-            <div class="tab" onclick="showTab('metrics')">🎯 Métriques</div>
-            <div class="tab" onclick="showTab('sentiment')">😊 Sentiment</div>
-            <div class="tab" onclick="showTab('learning')">🧠 Apprentissage</div>
-            <div class="tab" onclick="showTab('feeds')">📰 Flux RSS</div>
-            <div class="tab" onclick="showTab('themes')">🎨 Thèmes</div>
-            <div class="tab" onclick="showTab('articles')">📄 Articles</div>
+            <div class="tab active" onclick="window.app.showTab('articles')">📄 Articles</div>
+            <div class="tab" onclick="window.app.showTab('analysis')">📈 Analyse</div>
+            <div class="tab" onclick="window.app.showTab('metrics')">🎯 Métriques</div>
+            <div class="tab" onclick="window.app.showTab('sentiment')">😊 Sentiment</div>
+            <div class="tab" onclick="window.app.showTab('learning')">🧠 Apprentissage</div>
+            <div class="tab" onclick="window.app.showTab('feeds')">📰 Flux RSS</div>
+            <div class="tab" onclick="window.app.showTab('themes')">🎨 Thèmes</div>
+            <div class="tab" onclick="window.app.showTab('settings')">⚙️ Paramètres</div>
+        </div>
+
+        <!-- Articles -->
+        <div id="articlesTab" class="tab-content active">
+            <div class="card full-width">
+                <h3>📄 Derniers Articles</h3>
+                <div id="articlesList" class="loading">Chargement...</div>
+            </div>
         </div>
 
         <!-- Analyse -->
-        <div id="analysisTab" class="tab-content active">
+        <div id="analysisTab" class="tab-content">
             <div class="dashboard">
                 <div class="card">
                     <h3>📊 Répartition par Thème</h3>
-                    <canvas id="themeChart"></canvas>
+                    <canvas id="themeChart" style="max-height: 400px;"></canvas>
                 </div>
                 <div class="card">
                     <h3>📈 Évolution Temporelle</h3>
-                    <canvas id="timelineChart"></canvas>
+                    <canvas id="timelineChart" style="max-height: 400px;"></canvas>
                 </div>
+            </div>
+            <div class="card full-width" style="margin-top: 20px;">
+                <h3>🔄 Évolution des Thèmes</h3>
+                <canvas id="themeEvolutionChart" style="max-height: 400px;"></canvas>
             </div>
         </div>
 
         <!-- Métriques -->
         <div id="metricsTab" class="tab-content">
             <div class="stats-grid">
-                <div class="metric-card"><strong>Total Articles :</strong> <span id="m_total">—</span></div>
-                <div class="metric-card"><strong>Confiance :</strong> <span id="m_confidence">—</span></div>
-                <div class="metric-card"><strong>Bayésien :</strong> <span id="m_posterior">—</span></div>
-                <div class="metric-card"><strong>Corroboration :</strong> <span id="m_corro">—</span></div>
-            </div>
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>📈 Évolution du Sentiment</h3>
-                    <canvas id="sentimentChart"></canvas>
+                <div class="metric-card">
+                    <strong>Total Articles :</strong>
+                    <span id="m_total" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #3b82f6;">—</span>
                 </div>
-            </div>
-            <div class="dashboard">
-                <div class="card full-width">
-                    <h3>🏆 Thèmes Principaux</h3>
-                    <ul id="topThemes" class="top-themes"></ul>
+                <div class="metric-card">
+                    <strong>Confiance :</strong>
+                    <span id="m_confidence" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #10b981;">—</span>
                 </div>
-            </div>
-        </div>
-
-        <!-- Sentiment -->
-        <div id="sentimentTab" class="tab-content">
-            <div id="sentimentOverview" class="loading">Analyse de sentiment...</div>
-        </div>
-
-        <!-- Apprentissage -->
-        <div id="learningTab" class="tab-content">
-            <div id="learningStats" class="loading">Chargement...</div>
-        </div>
-
-        <!-- Flux RSS avec gestion -->
-        <div id="feedsTab" class="tab-content">
-            <div class="card full-width">
-                <h3>📰 Gestion des Flux RSS</h3>
-
-                <!-- Barre d'actions -->
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button class="btn btn-success" onclick="window.showAddFeedModal()">➕ Ajouter un flux</button>
-                    <button class="btn btn-secondary" onclick="window.loadFeedsManager()">🔄 Actualiser</button>
-                    <button class="btn btn-secondary" onclick="window.exportFeeds()">📥 Exporter</button>
-                </div>
-
-                <!-- Liste des flux -->
-                <div id="feedsManagerList" class="loading">Chargement des flux...</div>
-            </div>
-        </div>
-
-        <!-- Thèmes avec gestion -->
-        <div id="themesTab" class="tab-content">
-            <div class="card full-width">
-                <h3>🎨 Gestion des Thèmes</h3>
-
-                <!-- Barre d'actions -->
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <button class="btn btn-success" onclick="window.showAddThemeModal()">➕ Nouveau thème</button>
-                    <button class="btn btn-primary" onclick="window.importThemesFromFile()">📁 Charger thèmes défaut</button>
-                    <button class="btn btn-secondary" onclick="window.loadThemesManager()">🔄 Actualiser</button>
-                    <button class="btn btn-secondary" onclick="window.exportThemes()">📥 Exporter</button>
-                </div>
-
-                <!-- Liste des thèmes -->
-                <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
-            </div>
-        </div>
-
-        <!-- Modal Ajout Flux -->
-        <div id="addFeedModal" class="modal">
-            <div class="modal-content">
-                <span class="close" onclick="window.closeModal('addFeedModal')">&times;</span>
-                <h2>➕ Ajouter un Flux RSS</h2>
-                <div style="margin: 20px 0;">
-                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">URL du flux RSS:</label>
-                    <input type="url" id="newFeedUrl" placeholder="https://example.com/rss.xml"
-                           style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                </div>
-                <div style="margin: 20px 0;">
-                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Titre (optionnel):</label>
-                    <input type="text" id="newFeedTitle" placeholder="Nom du flux"
-                           style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="window.addNewFeed()">💾 Ajouter</button>
-                    <button class="btn btn-secondary" onclick="window.closeModal('addFeedModal')">❌ Annuler</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Ajout Thème -->
-        <div id="addThemeModal" class="modal">
-            <div class="modal-content">
-                <span class="close" onclick="window.closeModal('addThemeModal')">&times;</span>
-                <h2>🎨 Créer un Thème</h2>
-                <div style="margin: 15px 0;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
-                    <input type="text" id="newThemeName" placeholder="⚔️ Conflits Armés"
-                           style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                </div>
-                <div style="margin: 15px 0;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
-                    <textarea id="newThemeKeywords" placeholder="guerre&#10;conflit&#10;combat&#10;affrontement"
-                              style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;"></textarea>
-                </div>
-                <div style="margin: 15px 0;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
-                    <input type="color" id="newThemeColor" value="#3b82f6" style="width: 100%; height: 40px;">
-                </div>
-                <div style="margin: 15px 0;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
-                    <textarea id="newThemeDescription" placeholder="Description du thème..."
-                              style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="window.addNewTheme()">💾 Créer le thème</button>
-                    <button class="btn btn-secondary" onclick="window.closeModal('addThemeModal')">❌ Annuler</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Script pour exposer les fonctions d'export -->
-        <script>
-            // Fonction d'export des flux
-            window.exportFeeds = async function () {
-                try {
-                    const response = await fetch('/api/feeds/export');
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `feeds-export-${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    alert('✅ Flux exportés avec succès !');
-                } catch (error) {
-                    console.error('❌ Erreur export flux:', error);
-                    alert('Erreur: ' + error.message);
-                }
-            };
-
-            // Fonction d'export des thèmes
-            window.exportThemes = async function () {
-                try {
-                    const response = await fetch('/api/themes/export');
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `themes-export-${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    alert('✅ Thèmes exportés avec succès !');
-                } catch (error) {
-                    console.error('❌ Erreur export thèmes:', error);
-                    alert('Erreur: ' + error.message);
-                }
-            };
-
-            // Fonction d'import des thèmes depuis fichier
-            window.importThemesFromFile = async function () {
-                if (!confirm('Voulez-vous importer les thèmes depuis le fichier themes.json ?\n\nCela mettra à jour les thèmes existants.')) {
-                    return;
-                }
-
-                try {
-                    const response = await fetch('/api/themes/import', { method: 'POST' });
-                    const data = await response.json();
-
-                    if (data.success) {
-                        alert(`✅ ${data.imported} thèmes importés avec succès !`);
-                        window.loadThemesManager();
-                    } else {
-                        alert('❌ Erreur: ' + data.error);
-                    }
-                } catch (error) {
-                    console.error('❌ Erreur import thèmes:', error);
-                    alert('Erreur: ' + error.message);
-                }
-            };
-
-            // Fonction pour afficher le modal d'ajout de flux
-            window.showAddFeedModal = function () {
-                document.getElementById('addFeedModal').style.display = 'block';
-            };
-
-            // Fonction pour afficher le modal d'ajout de thème
-            window.showAddThemeModal = function () {
-                document.getElementById('addThemeModal').style.display = 'block';
-            };
-
-            // Fonction pour ajouter un nouveau flux
-            window.addNewFeed = async function () {
-                const url = document.getElementById('newFeedUrl').value;
-                const title = document.getElementById('newFeedTitle').value;
-
-                if (!url) {
-                    alert('Veuillez entrer une URL');
-                    return;
-                }
-
-                try {
-                    const response = await fetch('/api/feeds', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url, title })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        window.closeModal('addFeedModal');
-                        window.loadFeedsManager();
-                        document.getElementById('newFeedUrl').value = '';
-                        document.getElementById('newFeedTitle').value = '';
-                        alert('✅ Flux ajouté avec succès !');
-                    } else {
-                        alert('❌ Erreur: ' + data.error);
-                    }
-                } catch (error) {
-                    alert('❌ Erreur: ' + error.message);
-                }
-            };
-
-            // Fonction pour ajouter un nouveau thème
-            window.addNewTheme = async function () {
-                const name = document.getElementById('newThemeName').value;
-                const keywordsText = document.getElementById('newThemeKeywords').value;
-                const color = document.getElementById('newThemeColor').value;
-                const description = document.getElementById('newThemeDescription').value;
-
-                if (!name) {
-                    alert('Veuillez entrer un nom de thème');
-                    return;
-                }
-
-                const keywords = keywordsText.split('\n')
-                    .map(k => k.trim())
-                    .filter(k => k.length > 0);
-
-                try {
-                    const response = await fetch('/api/themes', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, keywords, color, description })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        window.closeModal('addThemeModal');
-                        window.loadThemesManager();
-                        document.getElementById('newThemeName').value = '';
-                        document.getElementById('newThemeKeywords').value = '';
-                        document.getElementById('newThemeColor').value = '#3b82f6';
-                        document.getElementById('newThemeDescription').value = '';
-                        alert('✅ Thème créé avec succès !');
-                    } else {
-                        alert('❌ Erreur: ' + data.error);
-                    }
-                } catch (error) {
-                    alert('❌ Erreur: ' + error.message);
-                }
-            };
-
-            console.log('✅ Fonctions d\'export et d\'import chargées');
-        </script>
-
-        <!-- Articles -->
-        <div id="articlesTab" class="tab-content">
-            <div class="card full-width">
-                <h3>📄 Derniers Articles</h3>
-                <div id="articlesList" class="loading">Chargement...</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Stats IA -->
-<div id="learningStatsModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeModal('learningStatsModal')">&times;</span>
-        <h2>📊 Statistiques d'Apprentissage IA</h2>
-        <div id="modalLearningStats" class="loading">Chargement...</div>
-    </div>
-</div>
-
-<!-- Modal Configuration IA -->
-<div id="aiConfigModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeModal('aiConfigModal')">&times;</span>
-        <h2>⚙️ Configuration de l'IA</h2>
-        
-        <div style="margin: 25px 0;">
-            <h3 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Clé API OpenAI :</label>
-                <input type="password" id="openaiKey" placeholder="sk-..." style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <small style="color: #64748b;">Obtenez une clé gratuite sur <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a></small>
-            </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle :</label>
-                <select id="openaiModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (rapide)</option>
-                    <option value="gpt-4">GPT-4 (précis)</option>
-                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                </select>
-            </div>
-        </div>
-
-        <div style="margin: 25px 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-            <h3 style="margin-bottom: 15px;">💻 IA Locale (Llama.cpp)</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" id="enableLocal">
-                    <span>Utiliser l'IA locale (fallback)</span>
-                </label>
-                <small style="color: #64748b; display: block; margin-top: 5px;">Nécessite Llama.cpp installé localement</small>
-            </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 600;">URL Llama.cpp :</label>
-                <input type="text" id="llamaUrl" placeholder="http://localhost:8080" value="http://localhost:8080" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-            </div>
-        </div>
-
-        <div style="display: flex; gap: 10px; margin-top: 25px;">
-            <button class="btn btn-success" onclick="saveAIConfig()">💾 Sauvegarder</button>
-            <button class="btn btn-secondary" onclick="testAIConnection()">🔍 Tester la connexion</button>
-            <button class="btn btn-secondary" onclick="closeModal('aiConfigModal')">❌ Annuler</button>
-        </div>
-    </div>
-</div>
-
-
-<script src="chart-manager.js"></script>
-
-<script src="app.js" defer></script>
-</body>
-</html>
+                <div class="metric-card">
+                    <strong>Bayésien :</strong>
+                    <span id="m_posterior" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #8b5cf6;">—</span>
+                
