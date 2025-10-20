@@ -1139,6 +1139,154 @@ window.app = (function () {
     console.log("✅ Application initialisée");
   }
 
+
+    // ========== FONCTIONS D'INTERFACE IA & MODALES ==========
+    function showAIConfig() {
+        // Affiche le modal de configuration IA si présent
+        const modal = qs('#aiConfigModal');
+        if (modal) {
+            modal.style.display = 'block';
+            // remplir les champs si on a une config
+            try {
+                const cfg = state.aiConfig || JSON.parse(localStorage.getItem('aiConfig') || '{}');
+                if (qs('#openaiKey')) qs('#openaiKey').value = cfg.openaiKey || '';
+                if (qs('#openaiModel')) qs('#openaiModel').value = cfg.openaiModel || 'gpt-3.5-turbo';
+                if (qs('#enableLocal')) qs('#enableLocal').checked = !!cfg.enableLocal;
+                if (qs('#llamaUrl')) qs('#llamaUrl').value = cfg.llamaUrl || '';
+            } catch (e) { /* ignore */ }
+        } else {
+            alert('Configuration IA: modal #aiConfigModal introuvable dans le HTML.');
+        }
+    }
+
+    function saveAIConfig() {
+        try {
+            const cfg = {
+                openaiKey: qs('#openaiKey') ? qs('#openaiKey').value.trim() : '',
+                openaiModel: qs('#openaiModel') ? qs('#openaiModel').value.trim() : '',
+                enableLocal: qs('#enableLocal') ? qs('#enableLocal').checked : false,
+                llamaUrl: qs('#llamaUrl') ? qs('#llamaUrl').value.trim() : ''
+            };
+            state.aiConfig = cfg;
+            localStorage.setItem('aiConfig', JSON.stringify(cfg));
+            setMessage('✅ Configuration IA sauvegardée', 'success');
+            closeModal('aiConfigModal');
+        } catch (e) {
+            console.error('Erreur sauvegarde config IA', e);
+            setMessage('Erreur sauvegarde config IA: '+e.message, 'error');
+        }
+    }
+
+    async function testAIConnection() {
+        // Test basique: vérifier que la config existe et, si enableLocal, tenter un ping
+        try {
+            const cfg = state.aiConfig || JSON.parse(localStorage.getItem('aiConfig') || '{}');
+            if (!cfg) {
+                setMessage('Aucune configuration IA détectée', 'warning');
+                return false;
+            }
+            if (cfg.enableLocal && cfg.llamaUrl) {
+                const url = cfg.llamaUrl.replace(/\/+$/, '') + '/health';
+                try {
+                    const res = await fetch(url, { method: 'GET' , mode: 'cors' });
+                    if (res.ok) {
+                        setMessage('✅ Connexion au modèle local OK', 'success');
+                        return true;
+                    } else {
+                        setMessage('❌ Modèle local non joignable ('+res.status+')', 'error');
+                        return false;
+                    }
+                } catch (err) {
+                    setMessage('❌ Échec connexion modèle local: ' + err.message, 'error');
+                    return false;
+                }
+            } else if (cfg.openaiKey) {
+                // Nous ne pouvons pas tester la clé OpenAI côté client sans backend, indiquer l'état
+                setMessage('ℹ️ Clé OpenAI configurée (test côté serveur requis)', 'info');
+                return true;
+            } else {
+                setMessage('⚠️ Aucune méthode IA configurée (OpenAI ou Local)', 'warning');
+                return false;
+            }
+        } catch (e) {
+            console.error('Erreur testAIConnection', e);
+            setMessage('Erreur test IA: '+e.message, 'error');
+            return false;
+        }
+    }
+
+    function showAddThemeModal() {
+        const modal = qs('#addThemeModal');
+        if (modal) {
+            modal.style.display = 'block';
+        } else {
+            // create a small inline modal if not present
+            const html = `
+              <div id="addThemeModal" class="modal" style="display:block;">
+                <div class="modal-content" style="max-width:600px;margin:40px auto;padding:20px;background:white;border-radius:8px;">
+                  <span class="close" onclick="window.app.closeModal('addThemeModal')">&times;</span>
+                  <h3>Ajouter un thème</h3>
+                  <div style="margin-top:8px;">
+                    <input id="newThemeName" placeholder="Nom du thème" style="width:100%;padding:8px;margin-bottom:8px;">
+                    <textarea id="newThemeKeywords" placeholder="Mots-clés (un par ligne)" style="width:100%;height:120px;padding:8px;"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                      <input id="newThemeColor" type="color" value="#3b82f6">
+                      <button class="btn btn-success" onclick="window.app.addNewTheme()">💾 Ajouter</button>
+                      <button class="btn btn-secondary" onclick="window.app.closeModal('addThemeModal')">Annuler</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+    }
+
+    function showAddFeedModal() {
+        const modal = qs('#addFeedModal');
+        if (modal) {
+            modal.style.display = 'block';
+        } else {
+            const html = `
+              <div id="addFeedModal" class="modal" style="display:block;">
+                <div class="modal-content" style="max-width:600px;margin:40px auto;padding:20px;background:white;border-radius:8px;">
+                  <span class="close" onclick="window.app.closeModal('addFeedModal')">&times;</span>
+                  <h3>Ajouter un flux</h3>
+                  <div style="margin-top:8px;">
+                    <input id="newFeedUrl" placeholder="URL du flux" style="width:100%;padding:8px;margin-bottom:8px;">
+                    <button class="btn btn-success" onclick="(function(){ const url=qs('#newFeedUrl').value; if(url) window.app.addNewFeed(url); })()">💾 Ajouter</button>
+                    <button class="btn btn-secondary" onclick="window.app.closeModal('addFeedModal')">Annuler</button>
+                  </div>
+                </div>
+              </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+    }
+
+    
+    async function addNewFeed(url) {
+        try {
+            const feedUrl = url || (qs('#newFeedUrl') ? qs('#newFeedUrl').value.trim() : '');
+            if (!feedUrl) {
+                alert('Veuillez fournir une URL de flux valide');
+                return;
+            }
+            setMessage('Ajout du flux...', 'info');
+            const res = await apiPOST('/feeds', { url: feedUrl });
+            if (res.success) {
+                closeModal('addFeedModal');
+                setMessage('✅ Flux ajouté', 'success');
+                if (window.loadFeedsManager) window.loadFeedsManager();
+            } else {
+                throw new Error(res.error || 'Erreur ajout flux');
+            }
+        } catch (e) {
+            console.error('Erreur addNewFeed', e);
+            alert('Erreur ajout flux: ' + e.message);
+        }
+    }
+
   // ========== EXPOSITION PUBLIQUE ==========
   return {
     // Fonctions principales
