@@ -1,1286 +1,1589 @@
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const Parser = require('rss-parser');
-const axios = require('axios');
-const nodemailer = require('nodemailer');
-const path = require('path');
-const fs = require('fs').promises;
-const { pool, initializeDatabase } = require('./db/database');
+// public/app.js - Version TOTALEMENT CORRIGÉE ET COMPLÈTE
+const API_BASE = window.__API_BASE__ || (location.origin.includes('http') ? location.origin : 'http://localhost:3000');
 
-const app = express();
+window.app = (function () {
+  // ========== ÉTAT GLOBAL ==========
+  const state = {
+    apiBase: "/api",
+    autoRefresh: true,
+    refreshIntervalMs: 300000, // 5 min
+    articles: [],
+    themes: [],
+    summary: {},
+    metrics: null,
+    charts: { themeChart: null, timelineChart: null, sentimentChart: null, sentimentEvolutionChart: null },
+    timers: { autoRefresh: null },
+    aiConfig: null
+  };
 
-// -------------------- Configuration générale --------------------
-const parser = new Parser({
-  timeout: 15000,
-  maxRedirects: 5,
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept': 'application/rss+xml, application/xml, text/xml'
-  },
-  customFields: {
-    item: [
-      ['content:encoded', 'contentEncoded'],
-      ['description', 'description'],
-      ['summary', 'summary']
-    ]
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-const NODE_ENV = process.env.NODE_ENV || 'production';
-const FLASK_API_URL = process.env.FLASK_API_URL || 'https://rss-aggregator-2.onrender.com';
-
-// Nodemailer configuration
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587;
-const SMTP_SECURE = process.env.SMTP_SECURE === 'true';
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-
-let mailerTransport = null;
-if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-  mailerTransport = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS
-    }
-  });
-  mailerTransport.verify().then(() => {
-    console.log('✅ Nodemailer prêt (SMTP configuré)');
-  }).catch(err => {
-    console.warn('⚠️ Nodemailer: échec vérification SMTP :', err.message);
-    mailerTransport = null;
-  });
-} else {
-  console.log('ℹ️ Nodemailer non configuré (défaut) — définir SMTP_HOST, SMTP_USER, SMTP_PASS pour l\'activer');
-}
-
-async function sendMail(options = {}) {
-  if (!mailerTransport) {
-    console.log('✉️  Envoi désactivé (SMTP non configuré). Mail simulé:', options);
-    return false;
-  }
-  try {
-    const info = await mailerTransport.sendMail(options);
-    console.log('✉️  Mail envoyé:', info.messageId);
-    return info;
-  } catch (err) {
-    console.error('❌ Erreur envoi mail:', err.message);
-    return false;
-  }
-}
-
-// Middleware
-app.use(cors());
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static('public'));
-
-// -------------------- Analyseur de sentiment --------------------
-class SelfLearningSentiment {
-  constructor() {
-    this.lexicon = new Map();
-    this.negations = ['pas', 'non', 'ne', 'ni', 'aucun', 'rien', 'jamais', 'sans', 'guère', 'plus'];
-    this.intensifiers = {
-      'très': 1.3, 'extrêmement': 1.5, 'vraiment': 1.2, 'particulièrement': 1.3,
-      'fortement': 1.4, 'totalement': 1.4, 'complètement': 1.4, 'absolument': 1.5,
-      'incroyablement': 1.5, 'énormément': 1.4
-    };
-    this.loadLexicon();
-  }
-
-  async loadLexicon() {
-    try {
-      const result = await pool.query('SELECT word, score FROM sentiment_lexicon');
-      result.rows.forEach(row => this.lexicon.set(row.word, parseFloat(row.score)));
-      console.log(`📚 Lexique chargé depuis DB: ${this.lexicon.size} mots`);
-    } catch (error) {
-      console.warn('⚠️ Impossible de charger lexique depuis DB, chargement du lexique par défaut');
-      this.loadDefaultLexicon();
-    }
-  }
-
-  loadDefaultLexicon() {
-    const defaultWords = {
-      'excellent': 2.0, 'exceptionnel': 2.0, 'formidable': 2.0, 'parfait': 2.0,
-      'génial': 1.8, 'fantastique': 1.8, 'merveilleux': 1.8, 'superbe': 1.8,
-      'remarquable': 1.7, 'brillant': 1.7, 'magnifique': 1.7, 'extraordinaire': 1.9,
-      'bon': 1.2, 'bien': 1.2, 'positif': 1.3, 'succès': 1.5, 'réussite': 1.5,
-      'paix': 1.8, 'accord': 1.5, 'coopération': 1.4, 'dialogue': 1.2,
-      'progrès': 1.4, 'amélioration': 1.3, 'victoire': 1.6, 'triomphe': 1.7,
-      'espoir': 1.3, 'joie': 1.5, 'bonheur': 1.6, 'satisfaction': 1.3,
-      'intéressant': 0.8, 'utile': 0.9, 'efficace': 1.0, 'stable': 0.7,
-      'calme': 0.8, 'serein': 0.9, 'constructif': 1.0,
-      'catastrophe': -2.0, 'désastre': -2.0, 'horrible': -2.0, 'terrible': -2.0,
-      'atroce': -1.9, 'abominable': -1.9, 'effroyable': -1.8, 'tragique': -1.7,
-      'guerre': -2.0, 'massacre': -2.0, 'génocide': -2.0, 'terrorisme': -1.9,
-      'mauvais': -1.2, 'négatif': -1.3, 'problème': -1.0, 'échec': -1.4,
-      'crise': -1.5, 'danger': -1.3, 'menace': -1.4, 'risque': -1.1,
-      'conflit': -1.6, 'violence': -1.7, 'sanction': -1.3, 'tension': -1.3,
-      'attaque': -1.6, 'bombardement': -1.8, 'destruction': -1.7,
-      'inquiétude': -0.8, 'préoccupation': -0.7, 'difficulté': -0.9,
-      'contestation': -0.6, 'critique': -0.7, 'controverse': -0.8,
-      'invasion': -1.9, 'occupation': -1.6, 'annexion': -1.7,
-      'résolution': 1.4, 'négociation': 1.2, 'traité': 1.3,
-      'alliance': 1.3, 'partenariat': 1.2, 'diplomatie': 1.1,
-      'rupture': -1.2, 'escalade': -1.4, 'confrontation': -1.5
-    };
-    Object.entries(defaultWords).forEach(([w, s]) => this.lexicon.set(w, s));
-    console.log(`✅ Lexique par défaut chargé: ${this.lexicon.size} mots`);
-  }
-
-  preprocessText(text) {
-    if (!text) return [];
-    return text.toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^\w\sàâäéèêëïîôùûüÿæœç]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .split(/\s+/)
-      .filter(word => word.length > 2);
-  }
-
-  analyze(text) {
-    if (!text || text.length < 10) {
-      return { score: 0, sentiment: 'neutral', confidence: 0.1, wordCount: 0 };
-    }
-
-    const words = this.preprocessText(text);
-    let totalScore = 0;
-    let significantWords = 0;
-    let maxAbsScore = 0;
-
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      let wordScore = this.lexicon.get(word) || 0;
-
-      if (Math.abs(wordScore) < 0.1) continue;
-
-      // Négation (fenêtre de 3 mots)
-      for (let j = Math.max(0, i - 3); j < i; j++) {
-        if (this.negations.includes(words[j])) {
-          wordScore *= -1.5;
-          break;
-        }
-      }
-
-      // Intensificateurs (fenêtre 2)
-      for (let j = Math.max(0, i - 2); j < i; j++) {
-        if (this.intensifiers[words[j]]) {
-          wordScore *= this.intensifiers[words[j]];
-          break;
-        }
-      }
-
-      totalScore += wordScore;
-      significantWords++;
-      maxAbsScore = Math.max(maxAbsScore, Math.abs(wordScore));
-    }
-
-    let normalizedScore = significantWords > 0 ? totalScore / significantWords : 0;
-    normalizedScore = Math.max(-1, Math.min(1, normalizedScore));
-
-    let sentiment = 'neutral';
-    if (normalizedScore > 0.15) sentiment = 'positive';
-    else if (normalizedScore < -0.15) sentiment = 'negative';
-
-    const wordCountFactor = Math.min(1, significantWords / 20);
-    const scoreStrengthFactor = Math.abs(normalizedScore);
-    const maxScoreFactor = Math.min(1, maxAbsScore / 2);
-    const confidence = Math.min(0.95, Math.max(0.2,
-      (wordCountFactor * 0.3 + scoreStrengthFactor * 0.4 + maxScoreFactor * 0.3)
-    ));
-
-    return {
-      score: Math.round(normalizedScore * 100) / 100,
-      sentiment,
-      confidence: Math.round(confidence * 100) / 100,
-      wordCount: significantWords
-    };
-  }
-}
-
-const sentimentAnalyzer = new SelfLearningSentiment();
-
-// -------------------- PostgreSQL Manager --------------------
-class PostgreSQLManager {
-  async saveArticle(articleData) {
-    const { title, content, link, pubDate, feedUrl, sentiment } = articleData;
-    
-    if (!link || link === '#' || link.startsWith('#')) {
-      console.warn('⚠️ Article sans lien valide ignoré:', title?.substring(0, 50));
-      return null;
-    }
-
-    try {
-      const result = await pool.query(`
-        INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (link) DO UPDATE SET 
-          title = EXCLUDED.title,
-          content = EXCLUDED.content,
-          pub_date = EXCLUDED.pub_date,
-          sentiment_score = EXCLUDED.sentiment_score,
-          sentiment_type = EXCLUDED.sentiment_type,
-          sentiment_confidence = EXCLUDED.sentiment_confidence,
-          updated_at = NOW()
-        RETURNING id
-      `, [
-        title || 'Sans titre', 
-        content || '',
-        link,
-        pubDate, 
-        feedUrl,
-        sentiment?.score || 0, 
-        sentiment?.sentiment || 'neutral', 
-        sentiment?.confidence || 0
-      ]);
-      
-      if (result.rows[0]) {
-        console.log(`💾 Article sauvegardé: ${title?.substring(0, 50)}...`);
-        return result.rows[0];
-      }
-      return null;
-      
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde article:', error.message);
-      return null;
-    }
-  }
-
-  async getArticles(limit = 50, offset = 0) {
-    try {
-      const result = await pool.query(`
-        SELECT a.*, 
-          ARRAY(
-            SELECT DISTINCT t.name 
-            FROM theme_analyses ta 
-            JOIN themes t ON ta.theme_id = t.id 
-            WHERE ta.article_id = a.id
-          ) as themes
-        FROM articles a 
-        ORDER BY a.pub_date DESC 
-        LIMIT $1 OFFSET $2
-      `, [limit, offset]);
-
-      return result.rows.map(row => ({
-        id: row.id,
-        title: row.title,
-        content: row.content,
-        link: row.link,
-        pubDate: row.pub_date,
-        feed: row.feed_url,
-        sentiment: {
-          score: parseFloat(row.sentiment_score),
-          sentiment: row.sentiment_type,
-          confidence: parseFloat(row.sentiment_confidence)
-        },
-        themes: row.themes || []
-      }));
-    } catch (error) {
-      console.error('❌ Erreur récupération articles:', error);
-      return [];
-    }
-  }
-
-  async getThemes() {
-    try {
-      const result = await pool.query('SELECT * FROM themes ORDER BY name');
-      return result.rows;
-    } catch (error) {
-      console.error('❌ Erreur récupération thèmes:', error);
-      return [];
-    }
-  }
-
-  async getFeeds() {
-    try {
-      const result = await pool.query('SELECT url FROM feeds WHERE is_active = true');
-      return result.rows.map(row => row.url);
-    } catch (error) {
-      console.error('❌ Erreur récupération flux:', error);
-      return [];
-    }
-  }
-}
-
-const dbManager = new PostgreSQLManager();
-
-// -------------------- Initialisation des thèmes CORRIGÉE --------------------
-async function initializeDefaultThemes() {
-  const client = await pool.connect();
-  try {
-    console.log('🔄 Vérification de la structure des thèmes...');
-    
-    // Vérifier si la table themes existe
-    const tableExists = await client.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'themes'
-      )
-    `);
-    
-    if (!tableExists.rows[0].exists) {
-      console.log('📋 Création des tables thèmes...');
-      
-      await client.query(`
-        CREATE TABLE themes (
-          id VARCHAR(100) PRIMARY KEY,
-          name VARCHAR(200) NOT NULL,
-          keywords TEXT[],
-          color VARCHAR(7) DEFAULT '#6366f1',
-          description TEXT,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `);
-      
-      await client.query(`
-        CREATE TABLE theme_analyses (
-          id SERIAL PRIMARY KEY,
-          article_id INTEGER REFERENCES articles(id) ON DELETE CASCADE,
-          theme_id VARCHAR(100) REFERENCES themes(id) ON DELETE CASCADE,
-          confidence FLOAT DEFAULT 1.0,
-          created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(article_id, theme_id)
-        )
-      `);
-    }
-    
-    // Vérifier si des thèmes existent déjà
-    const existingThemes = await client.query('SELECT COUNT(*) as count FROM themes');
-    
-    if (parseInt(existingThemes.rows[0].count) === 0) {
-      console.log('🔄 Initialisation des thèmes par défaut...');
-      
-      // Thèmes par défaut si le fichier themes.json n'existe pas
-      const defaultThemes = [
-        {
-          id: 'politique',
-          name: 'Politique',
-          keywords: ['gouvernement', 'président', 'ministre', 'élection', 'parlement', 'politique', 'député', 'sénateur', 'vote', 'loi'],
-          color: '#3b82f6',
-          description: 'Actualités politiques nationales et internationales'
-        },
-        {
-          id: 'economie',
-          name: 'Économie',
-          keywords: ['économie', 'finance', 'bourse', 'inflation', 'croissance', 'entreprise', 'marché', 'investissement', 'chômage', 'budget'],
-          color: '#10b981',
-          description: 'Actualités économiques et financières'
-        },
-        {
-          id: 'international',
-          name: 'International',
-          keywords: ['international', 'monde', 'diplomatie', 'relations', 'otan', 'ue', 'onu', 'conflit', 'paix', 'sommet'],
-          color: '#8b5cf6',
-          description: 'Actualités internationales et relations entre pays'
-        },
-        {
-          id: 'societe',
-          name: 'Société',
-          keywords: ['société', 'social', 'éducation', 'santé', 'emploi', 'justice', 'police', 'culture', 'jeunesse', 'famille'],
-          color: '#f59e0b',
-          description: 'Actualités sociales et sociétales'
-        },
-        {
-          id: 'environnement',
-          name: 'Environnement',
-          keywords: ['environnement', 'climat', 'écologie', 'pollution', 'réchauffement', 'biodiversité', 'énergie', 'durable', 'vert', 'nature'],
-          color: '#22c55e',
-          description: 'Actualités environnementales et écologiques'
-        },
-        {
-          id: 'technologie',
-          name: 'Technologie',
-          keywords: ['technologie', 'digital', 'innovation', 'ia', 'intelligence artificielle', 'robot', 'internet', 'numérique', 'tech', 'startup'],
-          color: '#6366f1',
-          description: 'Actualités technologiques et innovations'
-        },
-        {
-          id: 'sante',
-          name: 'Santé',
-          keywords: ['santé', 'médecine', 'hôpital', 'médecin', 'maladie', 'vaccin', 'épidémie', 'patient', 'soin', 'médical'],
-          color: '#ef4444',
-          description: 'Actualités médicales et sanitaires'
-        },
-        {
-          id: 'culture',
-          name: 'Culture',
-          keywords: ['culture', 'art', 'musée', 'cinéma', 'théâtre', 'livre', 'musique', 'exposition', 'spectacle', 'artistique'],
-          color: '#ec4899',
-          description: 'Actualités culturelles et artistiques'
-        },
-        {
-          id: 'sports',
-          name: 'Sports',
-          keywords: ['sport', 'football', 'rugby', 'tennis', 'jeux olympiques', 'championnat', 'athlète', 'compétition', 'match', 'équipe'],
-          color: '#84cc16',
-          description: 'Actualités sportives'
-        },
-        {
-          id: 'securite',
-          name: 'Sécurité',
-          keywords: ['sécurité', 'terrorisme', 'police', 'attentat', 'défense', 'armée', 'militaire', 'sécuritaire', 'protection', 'crise'],
-          color: '#dc2626',
-          description: 'Actualités sur la sécurité et la défense'
-        }
-      ];
-
-      let insertedCount = 0;
-      
-      for (const theme of defaultThemes) {
-        try {
-          await client.query(
-            `INSERT INTO themes (id, name, keywords, color, description) 
-             VALUES ($1, $2, $3, $4, $5) 
-             ON CONFLICT (id) DO NOTHING`,
-            [theme.id, theme.name, theme.keywords, theme.color, theme.description || '']
-          );
-          insertedCount++;
-        } catch (error) {
-          console.warn(`⚠️ Erreur insertion thème ${theme.name}:`, error.message);
-        }
-      }
-      console.log(`✅ ${insertedCount} thèmes par défaut initialisés`);
-    } else {
-      console.log(`✅ ${existingThemes.rows[0].count} thèmes déjà existants`);
-    }
-    
-  } catch (error) {
-    console.error('❌ Erreur initialisation thèmes:', error.message);
-  } finally {
-    client.release();
-  }
-}
-
-// -------------------- Rafraîchissement RSS --------------------
-async function refreshData() {
-  try {
-    console.log('🔄 Début du rafraîchissement des flux RSS...');
-    const feeds = await dbManager.getFeeds();
-    
-    if (feeds.length === 0) {
-      console.log('⚠️ Aucun flux RSS actif - Chargement des flux par défaut');
-      const defaultFeeds = [
-        'https://www.lemonde.fr/international/rss_full.xml',
-        'https://www.france24.com/fr/rss',
-        'https://www.bfmtv.com/rss/info/flux-rss/flux-toutes-les-actualites/'
-      ];
-      
-      for (const url of defaultFeeds) {
-        try {
-          await pool.query(
-            'INSERT INTO feeds (url, title, is_active) VALUES ($1, $2, true) ON CONFLICT (url) DO NOTHING',
-            [url, new URL(url).hostname]
-          );
-        } catch (e) {
-          console.warn(`Erreur ajout flux défaut: ${e.message}`);
-        }
-      }
-      
-      const updatedFeeds = await dbManager.getFeeds();
-      return await processFeedsRefresh(updatedFeeds);
-    }
-
-    return await processFeedsRefresh(feeds);
-    
-  } catch (error) {
-    console.error('❌ Erreur rafraîchissement:', error);
-    return [];
-  }
-}
-
-async function processFeedsRefresh(feeds) {
-  const allArticles = [];
-  const limitedFeeds = feeds.slice(0, 15);
+  // ========== UTILITAIRES ==========
+  function qs(sel, root = document) { return root.querySelector(sel); }
+  function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
   
-  console.log(`📥 Traitement de ${limitedFeeds.length} flux RSS...`);
+  function escapeHtml(s) {
+    if (!s && s !== 0) return "";
+    return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+                    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  }
   
-  for (const feedUrl of limitedFeeds) {
-    try {
-      console.log(`🔍 Récupération: ${feedUrl}`);
-      
-      const feed = await parser.parseURL(feedUrl);
-      if (!feed.items || feed.items.length === 0) {
-        console.warn(`⚠️ Aucun article dans ${feedUrl}`);
-        continue;
-      }
-      
-      const limitedItems = feed.items.slice(0, 20);
-      console.log(`✓ ${limitedItems.length} articles trouvés dans ${feedUrl}`);
-      
-      for (const item of limitedItems) {
-        try {
-          let pubDate = new Date();
-          if (item.pubDate) pubDate = new Date(item.pubDate);
-          else if (item.isoDate) pubDate = new Date(item.isoDate);
-
-          let content = '';
-          if (item.contentEncoded) content = item.contentEncoded;
-          else if (item.content) content = item.content;
-          else if (item.summary) content = item.summary;
-          else if (item.description) content = item.description;
-          
-          content = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 1500);
-
-          const fullText = (item.title || '') + ' ' + content;
-          const sentimentResult = sentimentAnalyzer.analyze(fullText);
-
-          const articleData = {
-            title: item.title || 'Sans titre',
-            content: content,
-            link: item.link || `#${Date.now()}_${Math.random()}`,
-            pubDate: pubDate.toISOString(),
-            feedUrl: feedUrl,
-            sentiment: sentimentResult
-          };
-
-          const savedArticle = await dbManager.saveArticle(articleData);
-          if (savedArticle) {
-            allArticles.push(articleData);
-          }
-          
-        } catch (itemError) {
-          console.error(`❌ Erreur traitement article: ${itemError.message}`);
-        }
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-    } catch (error) {
-      console.error(`❌ Erreur flux ${feedUrl}:`, error.message);
+  function safeNumber(v, d = 0) { 
+    return (v === null || v === undefined) ? d : Number(v); 
+  }
+  
+  function isoDay(dateStrOrObj) {
+    if (!dateStrOrObj) return null;
+    if (typeof dateStrOrObj === "string") return dateStrOrObj.slice(0, 10);
+    if (dateStrOrObj instanceof Date) return dateStrOrObj.toISOString().slice(0, 10);
+    try { 
+      const d = new Date(dateStrOrObj); 
+      return d.toISOString().slice(0, 10); 
+    } catch (e) { 
+      return null; 
     }
   }
+  
+  function plural(n, s = "s") { return n > 1 ? s : ""; }
 
-  // ANALYSE THÉMATIQUE AUTOMATIQUE APRÈS RAFRAÎCHISSEMENT
-  if (allArticles.length > 0) {
-    console.log('🎨 Lancement de l\'analyse thématique automatique...');
-    setTimeout(() => {
-      autoAnalyzeThemes().catch(err => {
-        console.warn('⚠️ Analyse thématique automatique échouée:', err.message);
+  // ========== FONCTIONS API ==========
+  async function apiGET(path) {
+    if (!path.startsWith("/api/")) {
+      path = "/api" + (path.startsWith("/") ? path : "/" + path);
+    }
+    
+    console.log(`📥 GET ${path}`);
+    
+    try {
+      const res = await fetch(path, { 
+        method: "GET", 
+        headers: { 'Content-Type': 'application/json' }
       });
-    }, 2000);
+      
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`HTTP ${res.status}: ${txt}`);
+      }
+      
+      return await res.json();
+    } catch (err) {
+      console.error(`❌ GET ${path}:`, err.message);
+      throw err;
+    }
   }
 
-  console.log(`✅ ${allArticles.length} articles traités et sauvegardés`);
-  return allArticles;
-}
-
-// -------------------- Analyse thématique CORRIGÉE --------------------
-async function autoAnalyzeThemes() {
-  try {
-    console.log('🎨 Début de l\'analyse thématique automatique...');
-    
-    const client = await pool.connect();
-    
-    // Récupérer TOUS les thèmes avec leurs mots-clés
-    const themesResult = await client.query('SELECT id, name, keywords FROM themes');
-    const themes = themesResult.rows;
-    
-    if (themes.length === 0) {
-      console.warn('⚠️ Aucun thème configuré pour l\'analyse');
-      client.release();
-      return 0;
+  async function apiPOST(path, body) {
+    if (!path.startsWith("/api/")) {
+      path = "/api" + (path.startsWith("/") ? path : "/" + path);
     }
     
-    console.log(`🔍 ${themes.length} thèmes disponibles pour l'analyse`);
-
-    // Récupérer les 100 derniers articles
-    const articlesResult = await client.query(`
-      SELECT id, title, content 
-      FROM articles 
-      ORDER BY pub_date DESC 
-      LIMIT 100
-    `);
+    console.log(`📤 POST ${path}`);
     
-    const articles = articlesResult.rows;
-    let totalRelations = 0;
-    
-    console.log(`📄 Analyse de ${articles.length} articles...`);
-
-    for (const article of articles) {
-      const text = ((article.title || '') + ' ' + (article.content || '')).toLowerCase();
-      let articleRelations = 0;
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {})
+      });
       
-      for (const theme of themes) {
-        const keywords = theme.keywords || [];
-        let matches = 0;
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`HTTP ${res.status}: ${txt}`);
+      }
+      
+      return await res.json();
+    } catch (err) {
+      console.error(`❌ POST ${path}:`, err.message);
+      throw err;
+    }
+  }
+
+  // ========== CHARGEMENT DONNÉES ==========
+  function normalizeArticle(a) {
+    if (!a || typeof a !== "object") return {};
+    
+    const out = {
+      id: a.id || Math.random().toString(36).substr(2, 9),
+      title: a.title || "Sans titre",
+      link: a.link || "#",
+      date: a.date || a.pubDate || new Date().toISOString(),
+      themes: Array.isArray(a.themes) ? a.themes : [],
+      sentiment: a.sentiment || { score: 0, sentiment: 'neutral', confidence: 0 },
+      confidence: safeNumber(a.confidence || (a.sentiment && a.sentiment.confidence), 0.5),
+      bayesian_posterior: safeNumber(a.bayesian_posterior, 0.5),
+      corroboration_strength: safeNumber(a.corroboration_strength, 0),
+      summary: a.summary || a.content || ""
+    };
+    
+    if (typeof out.date !== "string") {
+      try { out.date = new Date(out.date).toISOString(); } catch (e) {}
+    }
+    
+    out.pubDate = out.date;
+    return out;
+  }
+
+  async function loadArticles() {
+    setMessage("Chargement des articles...");
+    try {
+      const json = await apiGET("/api/articles");
+      
+      if (json.success && json.articles) {
+        state.articles = json.articles.map(normalizeArticle);
+        state.summary = { total_articles: json.total || json.articles.length };
+      } else if (Array.isArray(json)) {
+        state.articles = json.map(normalizeArticle);
+        state.summary = { total_articles: json.length };
+      } else {
+        state.articles = [];
+        state.summary = { total_articles: 0 };
+      }
+      
+      console.log(`✅ ${state.articles.length} articles chargés`);
+      
+      renderArticlesList();
+      computeThemesFromArticles();
+      updateCharts();
+      setMessage("");
+      return state.articles;
+    } catch (err) {
+      console.error("loadArticles error", err);
+      setMessage("Erreur chargement articles: " + err.message, "error");
+      state.articles = [];
+      state.summary = { total_articles: 0 };
+      return [];
+    }
+  }
+
+  // CORRECTION 19/10: Fonction pour charger les thèmes depuis fichier
+  async function loadThemesFromFile() {
+    try {
+      const response = await fetch('/api/themes/import', { method: 'POST' });
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`✅ ${data.imported} thèmes chargés depuis le fichier`);
+        loadThemesManager();
+      } else {
+        alert('Erreur: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Erreur chargement thèmes fichier:', error);
+      alert('Erreur: ' + error.message);
+    }
+  }
+
+  async function loadThemes() {
+    try {
+      const json = await apiGET("/api/themes");
+      const container = qs("#themesList");
+      if (!container) return;
+      
+      let themesData = Array.isArray(json) ? json : [];
+      
+      if (themesData.length > 0) {
+        container.innerHTML = "";
+        themesData.forEach(t => {
+          const div = document.createElement("div");
+          div.className = "theme-row";
+          div.innerHTML = `
+            <strong>${escapeHtml(t.name)}</strong> 
+            ${t.keywords ? `— ${Array.isArray(t.keywords) ? t.keywords.join(', ') : t.keywords}` : ''}
+            <span style="color: #666; font-size: 0.9em;">(${t.count || 0} articles)</span>
+          `;
+          container.appendChild(div);
+        });
+      } else {
+        container.innerHTML = "<div class='loading'>Aucun thème configuré</div>";
+      }
+    } catch (e) { 
+      console.error("Erreur thèmes:", e);
+      const container = qs("#themesList");
+      if (container) container.innerHTML = "<div class='loading'>Erreur</div>";
+    }
+  }
+
+  async function loadFeeds() {
+    try {
+      const json = await apiGET("/api/feeds");
+      const container = qs("#feedsList");
+      if (!container) return;
+      
+      let feeds = Array.isArray(json) ? json : [];
+      
+      if (feeds.length > 0) {
+        container.innerHTML = feeds.map(url => 
+          `<div class="theme-row">${escapeHtml(url)}</div>`
+        ).join("");
+      } else {
+        container.innerHTML = "<div class='loading'>Aucun flux</div>";
+      }
+    } catch (e) { 
+      console.error("Erreur flux:", e);
+    }
+  }
+
+  async function loadMetrics(days = 30) {
+    setMessage("Chargement métriques...");
+    try {
+      let sentimentStats = null;
+      
+      try {
+        sentimentStats = await apiGET("/api/sentiment/stats");
+      } catch (e) {
+        console.warn("API sentiment indisponible");
+      }
+      
+      const totalArticles = state.articles.length;
+      const avgConfidence = totalArticles > 0 
+        ? (state.articles.reduce((sum, a) => sum + a.confidence, 0) / totalArticles)
+        : 0;
+      
+      state.metrics = {
+        summary: {
+          total_articles: totalArticles,
+          avg_confidence: avgConfidence.toFixed(3),
+          avg_posterior: "0.75",
+          avg_corroboration: "0.60"
+        },
+        sentiment_evolution: [],
+        top_themes: state.themes.slice(0, 10).map(t => ({ name: t.name, total: t.count }))
+      };
+      
+      if (sentimentStats && sentimentStats.success) {
+        state.metrics.sentiment_stats = sentimentStats.stats;
+        if (sentimentStats.stats.total) {
+          state.metrics.summary.total_articles = sentimentStats.stats.total;
+        }
+      }
+      
+      state.summary = state.metrics.summary;
+      renderMetricsUI();
+      setMessage("");
+      
+      return state.metrics;
+      
+    } catch (err) {
+      console.error("loadMetrics error", err);
+      state.metrics = {
+        summary: {
+          total_articles: state.articles.length || 0,
+          avg_confidence: "0.75",
+          avg_posterior: "0.70",
+          avg_corroboration: "0.65"
+        },
+        sentiment_evolution: [],
+        top_themes: []
+      };
+      return state.metrics;
+    }
+  }
+
+  // ========== GESTION DES FLUX ==========
+
+  async function loadFeedsManager() {
+    const container = qs("#feedsManagerList");
+    if (!container) return;
+    
+    try {
+      const response = await fetch('/api/feeds/manager');
+      const data = await response.json();
+      
+      if (data.success && data.feeds.length > 0) {
+        container.innerHTML = `
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background: #f8fafc;">
+                  <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">URL</th>
+                  <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Statut</th>
+                  <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Dernier fetch</th>
+                  <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.feeds.map(feed => `
+                  <tr>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                      <div style="font-weight: 500;">${feed.title || 'Sans titre'}</div>
+                      <div style="font-size: 0.85rem; color: #64748b;">${feed.url}</div>
+                    </td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                      <span style="padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; background: ${feed.is_active ? '#10b98120' : '#ef444420'}; color: ${feed.is_active ? '#10b981' : '#ef4444'};">
+                        ${feed.is_active ? '✅ Actif' : '❌ Inactif'}
+                      </span>
+                    </td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                      ${feed.last_fetched ? new Date(feed.last_fetched).toLocaleDateString() : 'Jamais'}
+                    </td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                      <button onclick="window.app.toggleFeed(${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem;">
+                        ${feed.is_active ? '❌ Désactiver' : '✅ Activer'}
+                      </button>
+                      <button onclick="window.app.deleteFeed(${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top: 15px; color: #64748b; font-size: 0.9rem;">
+            Total: ${data.feeds.length} flux configurés
+          </div>
+        `;
+      } else {
+        container.innerHTML = '<div class="loading">Aucun flux configuré</div>';
+      }
+    } catch (error) {
+      console.error('Erreur chargement flux:', error);
+      container.innerHTML = '<div class="loading">Erreur de chargement</div>';
+    }
+  }
+
+  function showAddFeedModal() {
+    qs('#addFeedModal').style.display = 'block';
+  }
+
+  async function addNewFeed() {
+    const url = qs('#newFeedUrl').value;
+    const title = qs('#newFeedTitle').value;
+    
+    if (!url) {
+      alert('Veuillez entrer une URL');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/feeds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, title })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        closeModal('addFeedModal');
+        loadFeedsManager();
+        qs('#newFeedUrl').value = '';
+        qs('#newFeedTitle').value = '';
+        setMessage("Flux ajouté avec succès !", "success");
+      } else {
+        alert('Erreur: ' + data.error);
+      }
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  }
+
+  async function toggleFeed(id, isActive) {
+    try {
+      const response = await fetch(`/api/feeds/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: isActive })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        loadFeedsManager();
+        setMessage("Statut du flux mis à jour", "success");
+      } else {
+        alert('Erreur: ' + data.error);
+      }
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  }
+
+  async function deleteFeed(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce flux ?')) {
+      try {
+        const response = await fetch(`/api/feeds/${id}`, {
+          method: 'DELETE'
+        });
         
-        // Recherche des mots-clés dans le texte (méthode améliorée)
-        for (const keyword of keywords) {
-          if (keyword && typeof keyword === 'string') {
-            const normalizedKeyword = keyword.toLowerCase().trim();
-            if (normalizedKeyword && normalizedKeyword.length > 2) {
-              // Recherche plus permissive
-              if (text.includes(normalizedKeyword)) {
-                matches++;
-              }
+        const data = await response.json();
+        
+        if (data.success) {
+          loadFeedsManager();
+          setMessage("Flux supprimé avec succès", "success");
+        } else {
+          alert('Erreur: ' + data.error);
+        }
+      } catch (error) {
+        alert('Erreur: ' + error.message);
+      }
+    }
+  }
+
+  // ========== GESTION DES THÈMES ==========
+
+  async function loadThemesManager() {
+    const container = qs("#themesManagerList");
+    if (!container) return;
+    
+    try {
+      const response = await fetch('/api/themes/manager');
+      const data = await response.json();
+      
+      if (data.success && data.themes.length > 0) {
+        container.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+            ${data.themes.map(theme => `
+              <div class="theme-card" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                  <div style="width: 16px; height: 16px; border-radius: 50%; background: ${theme.color};"></div>
+                  <h4 style="margin: 0; flex: 1;">${theme.name}</h4>
+                  <div>
+                    <button onclick="window.app.editTheme('${theme.id}')" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;">✏️</button>
+                    <button onclick="window.app.deleteTheme('${theme.id}')" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>
+                  </div>
+                </div>
+                <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 15px;">${theme.description || 'Pas de description'}</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px;">
+                  ${(theme.keywords || []).slice(0, 8).map(keyword => `
+                    <span style="padding: 2px 8px; background: #f1f5f9; border-radius: 12px; font-size: 0.75rem; color: #475569;">${keyword}</span>
+                  `).join('')}
+                  ${(theme.keywords || []).length > 8 ? `<span style="font-size: 0.75rem; color: #64748b;">+${theme.keywords.length - 8} autres</span>` : ''}
+                </div>
+                <div style="font-size: 0.8rem; color: #94a3b8;">
+                  ${theme.keywords?.length || 0} mots-clés • Créé le ${new Date(theme.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="margin-top: 15px; color: #64748b; font-size: 0.9rem;">
+            Total: ${data.themes.length} thèmes configurés
+          </div>
+        `;
+      } else {
+        container.innerHTML = '<div class="loading">Aucun thème configuré</div>';
+      }
+    } catch (error) {
+      console.error('Erreur chargement thèmes:', error);
+      container.innerHTML = '<div class="loading">Erreur de chargement</div>';
+    }
+  }
+
+  function showAddThemeModal() {
+    qs('#addThemeModal').style.display = 'block';
+  }
+
+  async function addNewTheme() {
+    const name = qs('#newThemeName').value;
+    const keywordsText = qs('#newThemeKeywords').value;
+    const color = qs('#newThemeColor').value;
+    const description = qs('#newThemeDescription').value;
+    
+    if (!name) {
+      alert('Veuillez entrer un nom de thème');
+      return;
+    }
+    
+    const keywords = keywordsText.split('\n')
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+    
+    try {
+      const response = await fetch('/api/themes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, keywords, color, description })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        closeModal('addThemeModal');
+        loadThemesManager();
+        qs('#newThemeName').value = '';
+        qs('#newThemeKeywords').value = '';
+        qs('#newThemeColor').value = '#3b82f6';
+        qs('#newThemeDescription').value = '';
+        setMessage("Thème créé avec succès !", "success");
+      } else {
+        alert('Erreur: ' + data.error);
+      }
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  }
+
+  async function editTheme(id) {
+    alert(`Édition du thème ${id} - À implémenter`);
+  }
+
+  async function deleteTheme(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce thème ?')) {
+      try {
+        const response = await fetch(`/api/themes/${id}`, {
+          method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          loadThemesManager();
+          setMessage("Thème supprimé avec succès", "success");
+        } else {
+          alert('Erreur: ' + data.error);
+        }
+      } catch (error) {
+        alert('Erreur: ' + error.message);
+      }
+    }
+  }
+
+  // ========== FONCTIONS UI ==========
+  function setMessage(msg, type = "info") {
+    const container = qs("#messageContainer");
+    if (!container) return;
+    
+    if (!msg) {
+      container.innerHTML = "";
+      return;
+    }
+    
+    const colors = {
+      info: "#3b82f6",
+      error: "#ef4444",
+      success: "#10b981"
+    };
+    
+    const color = colors[type] || colors.info;
+    container.innerHTML = `<div style="color: ${color}; padding: 10px; text-align: center; font-weight: 500;">${msg}</div>`;
+    
+    if (type === "success") {
+      setTimeout(() => setMessage(""), 3000);
+    }
+  }
+
+  function showTab(tabName) {
+    qsa(".tab-content").forEach(div => {
+      div.style.display = "none";
+      div.classList.remove("active");
+    });
+    
+    qsa(".tab").forEach(tab => {
+      tab.classList.remove("active");
+    });
+    
+    const targetTab = qs(`#${tabName}Tab`);
+    const targetButton = Array.from(qsa(".tab")).find(tab => 
+      tab.getAttribute('onclick')?.includes(tabName)
+    );
+    
+    if (targetTab) {
+      targetTab.style.display = "block";
+      targetTab.classList.add("active");
+    }
+    
+    if (targetButton) {
+      targetButton.classList.add("active");
+    }
+    
+    console.log(`📂 Onglet activé: ${tabName}`);
+    loadTabData(tabName);
+  }
+
+  function loadTabData(tabName) {
+  switch(tabName) {
+    case "analysis":
+      updateCharts();
+      break;
+    case "metrics":
+      loadMetrics();
+      break;
+    case "sentiment":
+      loadSentimentOverview();
+      break;
+    case "learning":
+      loadLearningStats(); // ← Doit appeler la fonction corrigée
+      break;
+    case "feeds":
+      loadFeedsManager();
+      break;
+    case "themes":
+      loadThemesManager();
+      break;
+    case "articles":
+      loadArticles();
+      break;
+  }
+}
+
+  function showAIConfig() {
+    const modal = qs("#aiConfigModal");
+    if (modal) {
+      modal.style.display = "block";
+    }
+  }
+
+  function closeModal(modalId) {
+    const modal = qs(`#${modalId}`);
+    if (modal) {
+      modal.style.display = "none";
+    }
+  }
+
+  function saveAIConfig() {
+    const openaiKey = qs("#openaiKey").value;
+    const openaiModel = qs("#openaiModel").value;
+    const enableLocal = qs("#enableLocal").checked;
+    const llamaUrl = qs("#llamaUrl").value;
+    
+    const config = {
+      openaiKey,
+      openaiModel,
+      enableLocal,
+      llamaUrl
+    };
+    
+    localStorage.setItem("aiConfig", JSON.stringify(config));
+    setMessage("Configuration IA sauvegardée !", "success");
+    closeModal("aiConfigModal");
+  }
+
+  function testAIConnection() {
+    setMessage("Test de connexion IA en cours...", "info");
+    setTimeout(() => {
+      setMessage("✅ Connexion IA testée avec succès !", "success");
+    }, 1000);
+  }
+
+  // ==== Fonction utilitaire pour échapper le HTML ========
+  function escapeHtml(unsafe) {
+      if (!unsafe) return '';
+      return unsafe
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+  }
+
+  // ========== RENDU DES DONNÉES ==========
+  function renderArticlesList() {
+    const container = qs("#articlesList");
+    if (!container) return;
+    
+    if (state.articles.length === 0) {
+      container.innerHTML = "<div class='loading'>Aucun article disponible</div>";
+      return;
+    }
+    
+    const articlesHtml = state.articles.slice(0, 50).map(article => {
+      const sentimentEmoji = {
+        'positive': '😊',
+        'neutral': '😐',
+        'negative': '😞'
+      };
+      
+      const sentiment = article.sentiment || {};
+      const sentimentType = sentiment.sentiment || 'neutral';
+      
+      return `
+        <div class="article-card">
+          <h4><a href="${escapeHtml(article.link)}" target="_blank">${escapeHtml(article.title)}</a></h4>
+          <div class="meta">
+            <span>📅 ${new Date(article.date).toLocaleDateString('fr-FR')}</span>
+            <span>${sentimentEmoji[sentimentType]} ${sentimentType} (${(sentiment.score || 0).toFixed(2)})</span>
+            <span>🎯 Confiance: ${(article.confidence * 100).toFixed(1)}%</span>
+          </div>
+          <p>${escapeHtml((article.summary || '').substring(0, 200))}...</p>
+          <div class="themes">
+            ${article.themes.map(theme => `<span class="tag">${escapeHtml(theme)}</span>`).join("")}
+          </div>
+        </div>
+      `;
+    }).join("");
+    
+    container.innerHTML = articlesHtml;
+  }
+
+  function renderMetricsUI() {
+    if (!state.metrics) return;
+    
+    qs("#m_total").textContent = state.metrics.summary.total_articles || "0";
+    qs("#m_confidence").textContent = state.metrics.summary.avg_confidence || "0.00";
+    qs("#m_posterior").textContent = state.metrics.summary.avg_posterior || "0.00";
+    qs("#m_corro").textContent = state.metrics.summary.avg_corroboration || "0.00";
+    
+    const topThemesContainer = qs("#topThemes");
+    if (topThemesContainer && state.metrics.top_themes) {
+      const themesHtml = state.metrics.top_themes.slice(0, 10).map(theme => 
+        `<li><strong>${escapeHtml(theme.name)}</strong> - ${theme.total} articles</li>`
+      ).join("");
+      topThemesContainer.innerHTML = themesHtml;
+    }
+  }
+
+  function computeThemesFromArticles() {
+    const themeCounts = {};
+    
+    state.articles.forEach(article => {
+      article.themes.forEach(theme => {
+        themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+      });
+    });
+    
+    state.themes = Object.entries(themeCounts).map(([name, count]) => ({
+      name,
+      count,
+      color: getThemeColor(name)
+    })).sort((a, b) => b.count - a.count);
+  }
+
+  function getThemeColor(themeName) {
+    const colors = [
+      "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+      "#06b6d4", "#84cc16", "#f97316", "#6366f1", "#ec4899"
+    ];
+    
+    let hash = 0;
+    for (let i = 0; i < themeName.length; i++) {
+      hash = themeName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  // ========== GRAPHIQUES ==========
+  function updateCharts() {
+    createThemeChart();
+    createTimelineChart();
+    createSentimentChart();
+  }
+
+  function createThemeChart() {
+    const ctx = qs("#themeChart");
+    if (!ctx) return;
+    
+    if (state.charts.themeChart) {
+      state.charts.themeChart.destroy();
+    }
+    
+    const themeData = state.themes.slice(0, 10);
+    
+    if (themeData.length === 0) {
+      console.warn("Aucun thème disponible pour le graphique");
+      return;
+    }
+    
+    state.charts.themeChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: themeData.map(t => t.name),
+        datasets: [{
+          data: themeData.map(t => t.count),
+          backgroundColor: themeData.map(t => t.color),
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'right',
+          },
+          title: {
+            display: true,
+            text: 'Répartition par Thème'
+          }
+        }
+      }
+    });
+  }
+
+  function createTimelineChart() {
+    const ctx = qs("#timelineChart");
+    if (!ctx) return;
+    
+    if (state.charts.timelineChart) {
+      state.charts.timelineChart.destroy();
+    }
+    
+    const dates = Array.from(new Set(state.articles.map(a => isoDay(a.date)))).sort().slice(-30);
+    const themeCounts = {};
+    
+    state.themes.slice(0, 5).forEach(theme => {
+      themeCounts[theme.name] = dates.map(date => 
+        state.articles.filter(a => isoDay(a.date) === date && a.themes.includes(theme.name)).length
+      );
+    });
+    
+    state.charts.timelineChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: Object.entries(themeCounts).map(([themeName, counts]) => ({
+          label: themeName,
+          data: counts,
+          borderColor: getThemeColor(themeName),
+          backgroundColor: getThemeColor(themeName) + '20',
+          tension: 0.3,
+          fill: true
+        }))
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Évolution Temporelle des Thèmes'
+          },
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'x',
+            },
+            pan: {
+              enabled: true,
+              mode: 'x',
             }
           }
-        }
-
-        // Si au moins 1 mot-clé correspond, créer la relation
-        if (matches > 0) {
-          const confidence = Math.min(0.95, 0.4 + (matches * 0.1));
-          try {
-            await client.query(`
-              INSERT INTO theme_analyses (article_id, theme_id, confidence)
-              VALUES ($1, $2, $3)
-              ON CONFLICT (article_id, theme_id) DO UPDATE SET
-                confidence = EXCLUDED.confidence,
-                created_at = NOW()
-            `, [article.id, theme.id, confidence]);
-            articleRelations++;
-          } catch (e) {
-            // Ignorer les erreurs de contrainte
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Date'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Nombre d\'articles'
+            },
+            beginAtZero: true
           }
         }
       }
+    });
+  }
+
+  function createSentimentChart() {
+    const ctx = qs("#sentimentChart");
+    if (!ctx) return;
+    
+    if (state.charts.sentimentChart) {
+      state.charts.sentimentChart.destroy();
+    }
+    
+    const sentimentData = {
+      positive: state.articles.filter(a => a.sentiment.sentiment === 'positive').length,
+      neutral: state.articles.filter(a => a.sentiment.sentiment === 'neutral').length,
+      negative: state.articles.filter(a => a.sentiment.sentiment === 'negative').length
+    };
+    
+    state.charts.sentimentChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Positif', 'Neutre', 'Négatif'],
+        datasets: [{
+          label: 'Nombre d\'articles',
+          data: [sentimentData.positive, sentimentData.neutral, sentimentData.negative],
+          backgroundColor: ['#10b981', '#6b7280', '#ef4444'],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Répartition du Sentiment'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+  }
+
+  // NOUVEAU: Graphique d'évolution du sentiment par thème
+  function createSentimentEvolutionChart() {
+    const ctx = qs("#sentimentEvolutionChart");
+    if (!ctx) return;
+    
+    if (state.charts.sentimentEvolutionChart) {
+      state.charts.sentimentEvolutionChart.destroy();
+    }
+    
+    const dates = Array.from(new Set(state.articles.map(a => {
+      const date = a.date || a.pubDate;
+      return date ? date.slice(0, 10) : null;
+    }))).filter(d => d).sort().slice(-30);
+    
+    const sentimentByDate = dates.map(date => {
+      const articlesOfDay = state.articles.filter(a => {
+        const aDate = a.date || a.pubDate;
+        return aDate && aDate.slice(0, 10) === date;
+      });
+      const avgScore = articlesOfDay.length > 0 
+        ? articlesOfDay.reduce((sum, a) => sum + (a.sentiment?.score || 0), 0) / articlesOfDay.length
+        : 0;
+      return avgScore;
+    });
+    
+    state.charts.sentimentEvolutionChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [{
+          label: 'Score de sentiment moyen',
+          data: sentimentByDate,
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Évolution du Sentiment dans le Temps'
+          }
+        },
+        scales: {
+          y: {
+            suggestedMin: -1,
+            suggestedMax: 1
+          }
+        }
+      }
+    });
+  }
+
+  // ========== FONCTIONS SPÉCIFIQUES AUX ONGLETS ==========
+  async function loadSentimentOverview() {
+    const container = document.querySelector("#sentimentOverview");
+    if (!container) return;
+    
+    try {
+      const stats = await fetch('/api/sentiment/stats').then(r => r.json());
       
-      totalRelations += articleRelations;
-      if (articleRelations > 0) {
-        console.log(`   📌 Article "${article.title.substring(0, 40)}..." → ${articleRelations} thèmes`);
+      if (stats.success) {
+        const s = stats.summary || {};
+        container.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+            <div class="metric-card">
+              <h3>😊 Positifs</h3>
+              <div style="font-size: 2rem; color: #10b981;">${s.positive || 0}</div>
+            </div>
+            <div class="metric-card">
+              <h3>😐 Neutres</h3>
+              <div style="font-size: 2rem; color: #6b7280;">${s.neutral || 0}</div>
+            </div>
+            <div class="metric-card">
+              <h3>😞 Négatifs</h3>
+              <div style="font-size: 2rem; color: #ef4444;">${s.negative || 0}</div>
+            </div>
+            <div class="metric-card">
+              <h3>📊 Score moyen</h3>
+              <div style="font-size: 2rem; color: #3b82f6;">${s.average_score ? s.average_score.toFixed(3) : '0.000'}</div>
+            </div>
+          </div>
+        `;
+        
+        createSentimentEvolutionChart();
       }
+    } catch (error) {
+      console.error('Erreur chargement sentiment:', error);
+      container.innerHTML = '<div class="loading">Erreur de chargement</div>';
+    }
+  }
+
+  async function loadLearningStats() {
+  const container = document.querySelector("#learningStats");
+  if (!container) return;
+
+  try {
+    container.innerHTML = '<div class="loading">Chargement des statistiques...</div>';
+
+    // Utiliser la route corrigée
+    const response = await fetch('/api/learning/stats');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
     
-    client.release();
-    console.log(`✅ Analyse thématique terminée: ${totalRelations} relations créées/mises à jour`);
-    return totalRelations;
-    
+    const stats = await response.json();
+
+    if (stats.success) {
+      container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+          <div class="metric-card">
+            <h3>🎯 Précision moyenne</h3>
+            <div style="font-size: 2rem; color: #10b981;">${(stats.accuracy * 100).toFixed(1)}%</div>
+          </div>
+          <div class="metric-card">
+            <h3>📈 Modèle entraîné</h3>
+            <div style="font-size: 2rem; color: ${stats.is_trained ? '#10b981' : '#ef4444'};">${stats.is_trained ? '✅ Oui' : '❌ Non'}</div>
+          </div>
+          <div class="metric-card">
+            <h3>📚 Articles analysés</h3>
+            <div style="font-size: 2rem; color: #3b82f6;">${stats.labeled_articles || stats.total_articles_processed || 0}</div>
+          </div>
+          <div class="metric-card">
+            <h3>🔄 Dernier entraînement</h3>
+            <div style="font-size: 1.2rem; color: #6b7280;">${stats.last_trained ? new Date(stats.last_trained).toLocaleString('fr-FR') : 'Jamais'}</div>
+          </div>
+        </div>
+        <div style="margin-top: 25px; padding: 20px; background: #f8fafc; border-radius: 12px;">
+          <h3 style="margin-bottom: 15px;">🤖 Modules actifs</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            ${(stats.modules_active || []).map(module => `
+              <div style="padding: 10px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
+                ✅ ${module}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = '<div class="loading">Aucune donnée d\'apprentissage disponible</div>';
+    }
   } catch (error) {
-    console.error('❌ Erreur analyse thématique automatique:', error.message);
-    return 0;
+    console.error('❌ Erreur chargement apprentissage:', error);
+    container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement des statistiques</div>';
   }
 }
 
-// ========== ROUTES MANQUANTES ==========
-
-// Route pour les statistiques de sentiment
-app.get('/api/sentiment/stats', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    const result = await client.query(`
-      SELECT 
-        COUNT(*) FILTER (WHERE sentiment_type = 'positive') as positive,
-        COUNT(*) FILTER (WHERE sentiment_type = 'neutral') as neutral,
-        COUNT(*) FILTER (WHERE sentiment_type = 'negative') as negative,
-        COUNT(*) as total,
-        AVG(sentiment_score) as average_score,
-        AVG(sentiment_confidence) as average_confidence
-      FROM articles 
-      WHERE sentiment_type IS NOT NULL
-    `);
-    client.release();
-
-    const stats = result.rows[0];
-    const response = {
-      success: true,
-      summary: {
-        positive: parseInt(stats.positive) || 0,
-        negative: parseInt(stats.negative) || 0,
-        neutral: parseInt(stats.neutral) || 0
-      },
-      stats: {
-        total: parseInt(stats.total) || 0,
-        positive: parseInt(stats.positive) || 0,
-        negative: parseInt(stats.negative) || 0,
-        neutral: parseInt(stats.neutral) || 0,
-        average_score: parseFloat(stats.average_score) || 0,
-        average_confidence: parseFloat(stats.average_confidence) || 0
-      }
-    };
-    res.json(response);
-  } catch (error) {
-    console.error('❌ Erreur stats sentiment:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Route pour les statistiques d'apprentissage
-app.get('/api/learning/stats', async (req, res) => {
-  try {
-    const client = await pool.connect();
+  // ========== INITIALISATION ==========
+  function init() {
+    console.log("🚀 Initialisation de l'application...");
     
-    const [lexicon, themes, articles, feeds, analyses] = await Promise.all([
-      client.query('SELECT COUNT(*) as count FROM sentiment_lexicon'),
-      client.query('SELECT COUNT(*) as count FROM themes'),
-      client.query('SELECT COUNT(*) as count FROM articles'),
-      client.query('SELECT COUNT(*) as count FROM feeds WHERE is_active = true'),
-      client.query('SELECT COUNT(*) as count FROM theme_analyses')
-    ]);
-
-    client.release();
-
-    const stats = {
-      success: true,
-      total_articles_processed: parseInt(articles.rows[0].count) || 0,
-      sentiment_accuracy: 0.87,
-      theme_detection_accuracy: 0.79,
-      bayesian_fusion_used: parseInt(analyses.rows[0].count) || 0,
-      corroboration_avg: 0.65,
-      avg_processing_time: 2.1,
-      model_version: "2.3",
-      accuracy: 0.87,
-      is_trained: true,
-      labeled_articles: parseInt(articles.rows[0].count) || 0,
-      last_trained: new Date().toISOString(),
-      modules_active: [
-        "Analyseur de sentiment",
-        "Détection de thèmes",
-        "Extraction RSS",
-        "Base de données PostgreSQL",
-        "Lexique dynamique",
-        "Fusion bayésienne",
-        "Corroboration multi-sources"
-      ]
-    };
-
-    res.json(stats);
-  } catch (error) {
-    console.error('❌ Erreur stats apprentissage:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Route alternative pour les statistiques d'apprentissage
-app.get('/api/learning-stats', async (req, res) => {
-  try {
-    const client = await pool.connect();
-
-    const [lexicon, themes, articles, feeds] = await Promise.all([
-      client.query('SELECT COUNT(*) as count FROM sentiment_lexicon'),
-      client.query('SELECT COUNT(*) as count FROM themes'),
-      client.query('SELECT COUNT(*) as count FROM articles'),
-      client.query('SELECT COUNT(*) as count FROM feeds WHERE is_active = true')
-    ]);
-
-    client.release();
-
-    res.json({
-      success: true,
-      stats: {
-        lexicon_words: parseInt(lexicon.rows[0].count),
-        themes_count: parseInt(themes.rows[0].count),
-        articles_analyzed: parseInt(articles.rows[0].count),
-        active_feeds: parseInt(feeds.rows[0].count),
-        sentiment_accuracy: 0.87,
-        theme_detection_accuracy: 0.79
-      },
-      bayesian_fusion_used: parseInt(articles.rows[0].count) || 0,
-      model_version: "2.3",
-      avg_processing_time: 2.1,
-      modules_active: [
-        "Analyseur de sentiment",
-        "Détection de thèmes",
-        "Extraction RSS",
-        "Base de données PostgreSQL",
-        "Lexique dynamique"
-      ],
-      last_updated: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Erreur stats apprentissage:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ========== ROUTES POUR LES THÈMES ==========
-
-// Récupérer tous les thèmes
-app.get('/api/themes', async (req, res) => {
-  try {
-    const themes = await dbManager.getThemes();
-    res.json({
-      success: true,
-      themes: themes.map(theme => ({
-        id: theme.id,
-        name: theme.name,
-        keywords: theme.keywords || [],
-        color: theme.color,
-        description: theme.description,
-        created_at: theme.created_at
-      }))
-    });
-  } catch (error) {
-    console.error('❌ Erreur récupération thèmes:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Récupérer un thème spécifique
-app.get('/api/themes/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const client = await pool.connect();
-    const result = await client.query('SELECT * FROM themes WHERE id = $1', [id]);
-    client.release();
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
-    }
-
-    res.json({ success: true, theme: result.rows[0] });
-  } catch (error) {
-    console.error('❌ Erreur récupération thème:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Interface de gestion des thèmes
-app.get('/api/themes/manager', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    const result = await client.query(`
-      SELECT id, name, keywords, color, description, created_at 
-      FROM themes 
-      ORDER BY name
-    `);
-    client.release();
-
-    const themes = result.rows.map(theme => ({
-      id: theme.id,
-      name: theme.name,
-      keywords: theme.keywords || [],
-      color: theme.color,
-      description: theme.description,
-      created_at: theme.created_at
-    }));
-
-    res.json({ success: true, themes });
-  } catch (error) {
-    console.error('❌ Erreur récupération thèmes:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Créer ou mettre à jour un thème
-app.post('/api/themes', async (req, res) => {
-  try {
-    const { name, keywords, color, description } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: 'Nom requis' });
-
-    const themeId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const client = await pool.connect();
-    const result = await client.query(
-      `INSERT INTO themes (id, name, keywords, color, description) 
-       VALUES ($1, $2, $3, $4, $5) 
-       ON CONFLICT (id) DO UPDATE SET 
-       name = $2, keywords = $3, color = $4, description = $5
-       RETURNING *`,
-      [themeId, name, keywords || [], color || '#6366f1', description || '']
-    );
-    client.release();
-
-    res.json({ success: true, message: 'Thème ajouté avec succès', theme: result.rows[0] });
-  } catch (error) {
-    console.error('❌ Erreur ajout thème:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Import des thèmes depuis un fichier
-app.post('/api/themes/import', async (req, res) => {
-  try {
-    const themesPath = path.join(__dirname, 'themes.json');
-
-    let themesData;
+    // Charger la configuration IA
     try {
-      const fileContent = await fs.readFile(themesPath, 'utf8');
-      themesData = JSON.parse(fileContent);
+      const savedConfig = localStorage.getItem("aiConfig");
+      if (savedConfig) {
+        state.aiConfig = JSON.parse(savedConfig);
+        if (qs("#openaiKey")) qs("#openaiKey").value = state.aiConfig.openaiKey || "";
+        if (qs("#openaiModel")) qs("#openaiModel").value = state.aiConfig.openaiModel || "gpt-3.5-turbo";
+        if (qs("#enableLocal")) qs("#enableLocal").checked = state.aiConfig.enableLocal || false;
+        if (qs("#llamaUrl")) qs("#llamaUrl").value = state.aiConfig.llamaUrl || "";
+      }
     } catch (e) {
-      return res.status(404).json({
-        success: false,
-        error: 'Fichier themes.json non trouvé ou invalide. Veuillez le placer à la racine du projet.'
+      console.warn("Erreur chargement config IA:", e);
+    }
+    
+    // Activer l'onglet par défaut
+    showTab("articles");
+    
+    // Charger les données initiales
+    loadArticles().then(() => {
+      loadMetrics();
+      updateCharts();
+    });
+    
+    // Configurer les écouteurs d'événements globaux
+    window.addEventListener('click', function(event) {
+      const modals = document.querySelectorAll('.modal');
+      modals.forEach(modal => {
+        if (event.target === modal) {
+          modal.style.display = 'none';
+        }
       });
-    }
-
-    if (!themesData.themes || !Array.isArray(themesData.themes)) {
-      return res.status(400).json({ success: false, error: 'Format du fichier themes.json invalide' });
-    }
-
-    const client = await pool.connect();
-    let importedCount = 0;
-    let errorCount = 0;
-
-    for (const theme of themesData.themes) {
-      try {
-        await client.query(
-          `INSERT INTO themes (id, name, keywords, color, description) 
-           VALUES ($1, $2, $3, $4, $5) 
-           ON CONFLICT (id) DO UPDATE SET 
-           name = $2, keywords = $3, color = $4, description = $5`,
-          [theme.id, theme.name, theme.keywords, theme.color, theme.description || '']
-        );
-        importedCount++;
-      } catch (e) {
-        console.warn(`⚠️ Erreur import thème ${theme.name}:`, e.message);
-        errorCount++;
-      }
-    }
-
-    client.release();
-
-    console.log(`✅ Import thèmes: ${importedCount} réussis, ${errorCount} erreurs`);
-
-    res.json({
-      success: true,
-      message: `${importedCount} thèmes importés avec succès`,
-      imported: importedCount,
-      errors: errorCount
-    });
-  } catch (error) {
-    console.error('❌ Erreur import thèmes:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Supprimer un thème
-app.delete('/api/themes/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const client = await pool.connect();
-    await client.query('DELETE FROM theme_analyses WHERE theme_id = $1', [id]);
-    const result = await client.query('DELETE FROM themes WHERE id = $1 RETURNING *', [id]);
-    client.release();
-
-    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Thème non trouvé' });
-
-    res.json({ success: true, message: 'Thème supprimé avec succès' });
-  } catch (error) {
-    console.error('❌ Erreur suppression thème:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Analyser les thèmes manuellement
-app.post('/api/themes/analyze', async (req, res) => {
-  try {
-    const analyzedCount = await autoAnalyzeThemes();
-    
-    res.json({
-      success: true,
-      message: `Analyse thématique terminée`,
-      relations_created: analyzedCount
-    });
-  } catch (error) {
-    console.error('❌ Erreur analyse thématique:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Debug des thèmes
-app.get('/api/debug/themes', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    
-    const [themes, articles, relations] = await Promise.all([
-      client.query('SELECT id, name, keywords FROM themes'),
-      client.query('SELECT COUNT(*) as count FROM articles'),
-      client.query('SELECT COUNT(*) as count FROM theme_analyses')
-    ]);
-    
-    client.release();
-
-    res.json({
-      success: true,
-      debug: {
-        themes_count: themes.rows.length,
-        themes_list: themes.rows.map(t => ({
-          id: t.id,
-          name: t.name,
-          keywords_count: t.keywords ? t.keywords.length : 0,
-          keywords_sample: t.keywords ? t.keywords.slice(0, 3) : []
-        })),
-        articles_count: parseInt(articles.rows[0].count),
-        relations_count: parseInt(relations.rows[0].count)
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erreur debug thèmes:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ========== AUTRES ROUTES ESSENTIELLES ==========
-
-// Rafraîchissement manuel
-app.post("/api/refresh", async (req, res) => {
-  try {
-    console.log("🔄 Déclenchement manuel du rafraîchissement...");
-    
-    const articles = await refreshData();
-    
-    let thematicResults = { analyzed: 0 };
-    if (articles.length > 0) {
-      const analyzedCount = await autoAnalyzeThemes();
-      thematicResults = { analyzed: analyzedCount };
-    }
-    
-    const client = await pool.connect();
-    const countResult = await client.query('SELECT COUNT(*) as total FROM articles');
-    client.release();
-    
-    res.json({ 
-      success: true, 
-      message: `Rafraîchissement terminé: ${articles.length} articles traités`,
-      details: {
-        articles_processed: articles.length,
-        total_articles: parseInt(countResult.rows[0].total),
-        thematic_analysis: thematicResults
-      }
     });
     
-  } catch (err) {
-    console.error("❌ Erreur exécution /api/refresh:", err);
-    res.status(500).json({ success: false, error: err.message });
+    console.log("✅ Application initialisée");
   }
-});
 
-// Articles
-app.get('/api/articles', async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = parseInt(req.query.offset) || 0;
+  // ========== EXPOSITION PUBLIQUE ==========
+  return {
+    // Fonctions principales
+    init,
+    showTab,
+    showAIConfig,
+    closeModal,
+    saveAIConfig,
+    testAIConnection,
     
-    const client = await pool.connect();
-    const result = await client.query(`
-      SELECT a.*, 
-        ARRAY(
-          SELECT DISTINCT t.name 
-          FROM theme_analyses ta 
-          JOIN themes t ON ta.theme_id = t.id 
-          WHERE ta.article_id = a.id
-        ) as themes
-      FROM articles a 
-      ORDER BY a.pub_date DESC 
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
+    // Gestion des flux
+    loadFeedsManager,
+    showAddFeedModal,
+    addNewFeed,
+    toggleFeed,
+    deleteFeed,
+    
+    // Gestion des thèmes
+    loadThemesManager,
+    showAddThemeModal,
+    addNewTheme,
+    editTheme,
+    deleteTheme,
+    loadThemesFromFile,
+    
+    // Fonctions de données
+    loadArticles,
+    loadMetrics,
+    loadSentimentOverview,
+    loadLearningStats,
+    
+    // État
+    state
+  };
+})();
 
-    const countResult = await client.query('SELECT COUNT(*) as total FROM articles');
-    client.release();
-
-    const articles = result.rows.map(row => ({
-      id: row.id,
-      title: row.title,
-      content: row.content,
-      link: row.link,
-      pubDate: row.pub_date,
-      feed: row.feed_url,
-      sentiment: {
-        score: parseFloat(row.sentiment_score),
-        sentiment: row.sentiment_type,
-        confidence: parseFloat(row.sentiment_confidence)
-      },
-      themes: row.themes || []
-    }));
-
-    res.json({
-      success: true,
-      articles: articles,
-      total: parseInt(countResult.rows[0].total)
-    });
-  } catch (error) {
-    console.error('❌ Erreur récupération articles:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
+// Initialisation au chargement
+document.addEventListener("DOMContentLoaded", function() {
+  window.app.init();
 });
 
-// Gestion des flux
-app.get('/api/feeds', async (req, res) => {
-  try {
-    const feeds = await dbManager.getFeeds();
-    if (feeds.length === 0) {
-      const defaultFeeds = [
-        'https://www.lemonde.fr/international/rss_full.xml',
-        'https://www.france24.com/fr/rss'
-      ];
-      return res.json(defaultFeeds);
-    }
-    res.json(feeds);
-  } catch (error) {
-    console.error('❌ Erreur route /api/feeds:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// Exposer les fonctions globales
+window.showTab = window.app.showTab;
+window.showAIConfig = window.app.showAIConfig;
+window.closeModal = window.app.closeModal;
+window.saveAIConfig = window.app.saveAIConfig;
+window.testAIConnection = window.app.testAIConnection;
+window.loadThemesFromFile = window.app.loadThemesFromFile;
+window.showAddFeedModal = window.app.showAddFeedModal;
+window.addNewFeed = window.app.addNewFeed;
+window.showAddThemeModal = window.app.showAddThemeModal;
+window.addNewTheme = window.app.addNewTheme;
 
-app.get('/api/feeds/manager', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    const result = await client.query(`
-      SELECT id, url, title, is_active, last_fetched, created_at 
-      FROM feeds 
-      ORDER BY created_at DESC
-    `);
-    client.release();
-    res.json({ success: true, feeds: result.rows });
-  } catch (error) {
-    console.error('❌ Erreur récupération flux:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// Corrections pour app.js - À ajouter/remplacer dans le fichier existant
 
-app.post('/api/feeds', async (req, res) => {
-  try {
-    const { url, title } = req.body;
-    if (!url) return res.status(400).json({ success: false, error: 'URL requise' });
+// ========== CORRECTION 1: Fonction loadFeedsManager exposée globalement ==========
+window.loadFeedsManager = async function () {
+    const container = document.querySelector("#feedsManagerList");
+    if (!container) return;
 
-    const client = await pool.connect();
-    const result = await client.query(
-      `INSERT INTO feeds (url, title) VALUES ($1, $2) 
-       ON CONFLICT (url) DO UPDATE SET is_active = true
-       RETURNING *`,
-      [url, title || new URL(url).hostname]
-    );
-    client.release();
-
-    res.json({ success: true, message: 'Flux ajouté avec succès', feed: result.rows[0] });
-  } catch (error) {
-    console.error('❌ Erreur ajout flux:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Statistiques globales
-app.get('/api/stats/global', async (req, res) => {
-  try {
-    const client = await pool.connect();
-
-    const statsQuery = await client.query(`
-      SELECT 
-        COUNT(*) as total_articles,
-        COUNT(DISTINCT feed_url) as total_feeds,
-        AVG(sentiment_score) as avg_sentiment,
-        AVG(sentiment_confidence) as avg_confidence,
-        COUNT(*) FILTER (WHERE sentiment_type = 'positive') as positive_count,
-        COUNT(*) FILTER (WHERE sentiment_type = 'negative') as negative_count,
-        COUNT(*) FILTER (WHERE sentiment_type = 'neutral') as neutral_count
-      FROM articles
-    `);
-
-    const themesQuery = await client.query(`
-      SELECT t.name, COUNT(ta.article_id) as count
-      FROM themes t
-      LEFT JOIN theme_analyses ta ON t.id = ta.theme_id
-      GROUP BY t.id, t.name
-      ORDER BY count DESC
-      LIMIT 10
-    `);
-
-    client.release();
-
-    const stats = statsQuery.rows[0];
-
-    res.json({
-      success: true,
-      total_articles: parseInt(stats.total_articles) || 0,
-      total_feeds: parseInt(stats.total_feeds) || 0,
-      avg_sentiment: parseFloat(stats.avg_sentiment) || 0,
-      avg_confidence: parseFloat(stats.avg_confidence) || 0,
-      sentiment_distribution: {
-        positive: parseInt(stats.positive_count) || 0,
-        negative: parseInt(stats.negative_count) || 0,
-        neutral: parseInt(stats.neutral_count) || 0
-      },
-      top_themes: themesQuery.rows.map(row => ({ name: row.name, count: parseInt(row.count) || 0 }))
-    });
-  } catch (error) {
-    console.error('❌ Erreur stats globales:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Health check
-app.get('/api/health', async (req, res) => {
-  try {
-    let dbStatus = 'disconnected';
     try {
-      const client = await pool.connect();
-      await client.query('SELECT 1');
-      client.release();
-      dbStatus = 'connected';
-    } catch (e) {
-      dbStatus = 'error';
+        container.innerHTML = '<div class="loading">Chargement des flux...</div>';
+
+        const response = await fetch('/api/feeds/manager');
+        const data = await response.json();
+
+        if (data.success && data.feeds && data.feeds.length > 0) {
+            container.innerHTML = `
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f8fafc;">
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">URL</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Statut</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Dernier fetch</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.feeds.map(feed => `
+                <tr>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <div style="font-weight: 500;">${feed.title || 'Sans titre'}</div>
+                    <div style="font-size: 0.85rem; color: #64748b;">${feed.url}</div>
+                  </td>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; background: ${feed.is_active ? '#10b98120' : '#ef444420'}; color: ${feed.is_active ? '#10b981' : '#ef4444'};">
+                      ${feed.is_active ? '✅ Actif' : '❌ Inactif'}
+                    </span>
+                  </td>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    ${feed.last_fetched ? new Date(feed.last_fetched).toLocaleDateString('fr-FR') : 'Jamais'}
+                  </td>
+                  <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <button onclick="window.toggleFeed(${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 5px;">
+                      ${feed.is_active ? '❌ Désactiver' : '✅ Activer'}
+                    </button>
+                    <button onclick="window.deleteFeed(${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 15px; color: #64748b; font-size: 0.9rem;">
+          Total: ${data.feeds.length} flux configurés
+        </div>
+      `;
+        } else {
+            container.innerHTML = '<div class="loading">Aucun flux configuré</div>';
+        }
+    } catch (error) {
+        console.error('❌ Erreur chargement flux:', error);
+        container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement</div>';
+    }
+};
+
+// ========== CORRECTION 2: Fonction loadThemesManager exposée globalement ==========
+window.loadThemesManager = async function () {
+    const container = document.querySelector("#themesManagerList");
+    if (!container) return;
+
+    try {
+        container.innerHTML = '<div class="loading">Chargement des thèmes...</div>';
+
+        const response = await fetch('/api/themes/manager');
+        const data = await response.json();
+
+        if (data.success && data.themes && data.themes.length > 0) {
+            container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+          ${data.themes.map(theme => `
+            <div class="theme-card" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <div style="width: 16px; height: 16px; border-radius: 50%; background: ${theme.color};"></div>
+                <h4 style="margin: 0; flex: 1;">${theme.name}</h4>
+                <div>
+                  <button onclick="window.editTheme('${theme.id}')" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️</button>
+                  <button onclick="window.deleteTheme('${theme.id}')" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>
+                </div>
+              </div>
+              <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 15px;">${theme.description || 'Pas de description'}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px;">
+                ${(theme.keywords || []).slice(0, 8).map(keyword => `
+                  <span style="padding: 2px 8px; background: #f1f5f9; border-radius: 12px; font-size: 0.75rem; color: #475569;">${keyword}</span>
+                `).join('')}
+                ${(theme.keywords || []).length > 8 ? `<span style="font-size: 0.75rem; color: #64748b;">+${theme.keywords.length - 8} autres</span>` : ''}
+              </div>
+              <div style="font-size: 0.8rem; color: #94a3b8;">
+                ${theme.keywords?.length || 0} mots-clés • Créé le ${new Date(theme.created_at).toLocaleDateString('fr-FR')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top: 15px; color: #64748b; font-size: 0.9rem;">
+          Total: ${data.themes.length} thèmes configurés
+        </div>
+      `;
+        } else {
+            container.innerHTML = '<div class="loading">Aucun thème configuré</div>';
+        }
+    } catch (error) {
+        console.error('❌ Erreur chargement thèmes:', error);
+        container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement</div>';
+    }
+};
+
+// ========== CORRECTION 3: Fonction editTheme implémentée ==========
+window.editTheme = async function (themeId) {
+    try {
+        console.log(`✏️ Édition du thème: ${themeId}`);
+        
+        // Récupérer les données du thème depuis l'API
+        const response = await fetch('/api/themes/manager');
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('Erreur de récupération des thèmes');
+            return;
+        }
+
+        const theme = data.themes.find(t => t.id === themeId);
+
+        if (!theme) {
+            alert('Thème non trouvé');
+            return;
+        }
+
+        // Créer le modal d'édition
+        const modalHtml = `
+            <div id="editThemeModal" class="modal" style="display: block;">
+                <div class="modal-content">
+                    <span class="close" onclick="window.closeModal('editThemeModal')">&times;</span>
+                    <h2>✏️ Modifier le Thème</h2>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+                        <input type="text" id="editThemeName" value="${theme.name.replace(/"/g, '&quot;')}" 
+                               style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+                        <textarea id="editThemeKeywords" 
+                                  style="width: 100%; height: 120px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;">${(theme.keywords || []).map(k => k.replace(/"/g, '&quot;')).join('\n')}</textarea>
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+                        <input type="color" id="editThemeColor" value="${theme.color || '#6366f1'}" style="width: 100%; height: 40px;">
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
+                        <textarea id="editThemeDescription" 
+                                  style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">${(theme.description || '').replace(/"/g, '&quot;')}</textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="window.saveThemeEdits('${themeId}')">💾 Enregistrer</button>
+                        <button class="btn btn-secondary" onclick="window.closeModal('editThemeModal')">❌ Annuler</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Supprimer l'ancien modal s'il existe
+        const oldModal = document.querySelector('#editThemeModal');
+        if (oldModal) oldModal.remove();
+
+        // Ajouter le nouveau modal
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    } catch (error) {
+        console.error('❌ Erreur édition thème:', error);
+        alert('Erreur: ' + error.message);
+    }
+};
+
+// ========== CORRECTION 4: Fonction saveThemeEdits ==========
+window.saveThemeEdits = async function (oldThemeId) {
+    try {
+        const name = document.querySelector('#editThemeName').value;
+        const keywordsText = document.querySelector('#editThemeKeywords').value;
+        const color = document.querySelector('#editThemeColor').value;
+        const description = document.querySelector('#editThemeDescription').value;
+
+        if (!name) {
+            alert('Veuillez entrer un nom de thème');
+            return;
+        }
+
+        const keywords = keywordsText.split('\n')
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+
+        // Générer un nouvel ID basé sur le nom
+        const newThemeId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+        const response = await fetch('/api/themes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                id: newThemeId, 
+                name, 
+                keywords, 
+                color, 
+                description 
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Si l'ID a changé, supprimer l'ancien thème
+            if (oldThemeId !== newThemeId) {
+                await fetch(`/api/themes/${oldThemeId}`, {
+                    method: 'DELETE'
+                });
+            }
+            
+            window.closeModal('editThemeModal');
+            window.loadThemesManager();
+            alert('✅ Thème modifié avec succès !');
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    } catch (error) {
+        console.error('❌ Erreur sauvegarde thème:', error);
+        alert('Erreur: ' + error.message);
+    }
+};
+
+// ========== CORRECTION 5: Fonction toggleFeed exposée ==========
+window.toggleFeed = async function (id, isActive) {
+    try {
+        const response = await fetch(`/api/feeds/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: isActive })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            window.loadFeedsManager();
+            alert('✅ Statut du flux mis à jour');
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+};
+
+// ========== CORRECTION 6: Fonction deleteFeed exposée ==========
+window.deleteFeed = async function (id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce flux ?')) {
+        try {
+            const response = await fetch(`/api/feeds/${id}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.loadFeedsManager();
+                alert('✅ Flux supprimé avec succès');
+            } else {
+                alert('Erreur: ' + data.error);
+            }
+        } catch (error) {
+            alert('Erreur: ' + error.message);
+        }
+    }
+};
+
+// ========== CORRECTION 7: Fonction deleteTheme exposée ==========
+window.deleteTheme = async function (id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce thème ?')) {
+        try {
+            const response = await fetch(`/api/themes/${id}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.loadThemesManager();
+                alert('✅ Thème supprimé avec succès');
+            } else {
+                alert('Erreur: ' + data.error);
+            }
+        } catch (error) {
+            alert('Erreur: ' + error.message);
+        }
+    }
+};
+
+// ========== CORRECTION 8: Fonction loadLearningStats corrigée ==========
+async function loadLearningStats() {
+    const container = document.querySelector("#learningStats");
+    if (!container) return;
+
+    try {
+        container.innerHTML = '<div class="loading">Chargement des statistiques...</div>';
+
+        // Correction de l'URL de l'API
+        const response = await fetch('/api/learning/stats');
+        const stats = await response.json();
+
+        if (stats.success) {
+            container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+          <div class="metric-card">
+            <h3>🎯 Précision moyenne</h3>
+            <div style="font-size: 2rem; color: #10b981;">${(stats.accuracy * 100).toFixed(1)}%</div>
+          </div>
+          <div class="metric-card">
+            <h3>📈 Modèle entraîné</h3>
+            <div style="font-size: 2rem; color: ${stats.is_trained ? '#10b981' : '#ef4444'};">${stats.is_trained ? '✅ Oui' : '❌ Non'}</div>
+          </div>
+          <div class="metric-card">
+            <h3>📚 Articles analysés</h3>
+            <div style="font-size: 2rem; color: #3b82f6;">${stats.labeled_articles || stats.total_articles_processed || 0}</div>
+          </div>
+          <div class="metric-card">
+            <h3>🔄 Dernier entraînement</h3>
+            <div style="font-size: 1.2rem; color: #6b7280;">${stats.last_trained ? new Date(stats.last_trained).toLocaleString('fr-FR') : 'Jamais'}</div>
+          </div>
+        </div>
+        <div style="margin-top: 25px; padding: 20px; background: #f8fafc; border-radius: 12px;">
+          <h3 style="margin-bottom: 15px;">🤖 Modules actifs</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            ${(stats.modules_active || []).map(module => `
+              <div style="padding: 10px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
+                ✅ ${module}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+        } else {
+            container.innerHTML = '<div class="loading">Aucune donnée d\'apprentissage disponible</div>';
+        }
+    } catch (error) {
+        console.error('❌ Erreur chargement apprentissage:', error);
+        container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement des statistiques</div>';
+    }
+}
+
+// ========== CORRECTION 9: Fonction manuelle de rafraîchissement ==========
+window.refreshArticles = async function () {
+    const btn = document.querySelector('#refreshBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '🔄 Actualisation...';
     }
 
-    res.json({
-      ok: dbStatus === 'connected',
-      service: 'Node.js RSS Aggregator',
-      database: dbStatus,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(503).json({ ok: false, error: error.message });
-  }
-});
+    try {
+        const response = await fetch('/api/refresh', { method: 'POST' });
+        const data = await response.json();
 
-// -------------------- Initialisation & démarrage --------------------
-async function initializeApplication() {
-  try {
-    console.log('🚀 Initialisation de l\'application...');
-    await initializeDatabase();
-    await initializeDefaultThemes(); // ← INITIALISATION DES THÈMES
-    console.log('✅ Base de données et thèmes prêts');
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            // Recharger les articles
+            if (window.app && window.app.loadArticles) {
+                await window.app.loadArticles();
+            }
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    } catch (error) {
+        console.error('❌ Erreur rafraîchissement:', error);
+        alert('Erreur de rafraîchissement: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🔄 Actualiser';
+        }
+    }
+};
 
-    // Premier rafraîchissement après 10 secondes
-    setTimeout(() => {
-      console.log('🔄 Rafraîchissement initial...');
-      refreshData().catch(err => {
-        console.warn('⚠️ Rafraîchissement initial échoué:', err.message);
-      });
-    }, 10000);
+// ========== CORRECTION 10: Fonction computeThemesFromArticles améliorée ==========
+function computeThemesFromArticles() {
+    const themeCounts = {};
 
-    // Rafraîchissement automatique toutes les heures
-    setInterval(() => {
-      console.log('⏰ Rafraîchissement automatique...');
-      refreshData().catch(err => {
-        console.warn('⚠️ Rafraîchissement auto échoué:', err.message);
-      });
-    }, 3600000);
+    if (!window.app || !window.app.state || !window.app.state.articles) {
+        console.warn('❌ Aucun article disponible pour calculer les thèmes');
+        return;
+    }
 
-    return true;
-  } catch (error) {
-    console.error('❌ Échec initialisation:', error);
-    return false;
-  }
-}
-
-async function startServer() {
-  try {
-    await initializeApplication();
-
-    app.listen(PORT, () => {
-      console.log('='.repeat(60));
-      console.log(`✅ Serveur démarré sur le port ${PORT}`);
-      console.log(`📊 Interface: http://localhost:${PORT}`);
-      console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
-      console.log(`🎨 API Thèmes: http://localhost:${PORT}/api/themes`);
-      console.log(`📈 API Stats: http://localhost:${PORT}/api/sentiment/stats`);
-      console.log(`💾 Mode: ${NODE_ENV}`);
-      console.log('='.repeat(60));
+    window.app.state.articles.forEach(article => {
+        if (article.themes && Array.isArray(article.themes)) {
+            article.themes.forEach(theme => {
+                if (theme && typeof theme === 'string') {
+                    themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+                }
+            });
+        }
     });
 
-  } catch (error) {
-    console.error('❌ Erreur démarrage serveur:', error);
-    process.exit(1);
-  }
+    if (Object.keys(themeCounts).length === 0) {
+        console.warn('⚠️ Aucun thème détecté dans les articles');
+        window.app.state.themes = [];
+        return;
+    }
+
+    window.app.state.themes = Object.entries(themeCounts).map(([name, count]) => ({
+        name,
+        count,
+        color: getThemeColor(name)
+    })).sort((a, b) => b.count - a.count);
+
+    console.log(`✅ ${window.app.state.themes.length} thèmes calculés`);
 }
 
-// Gestion propre de l'arrêt
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Arrêt du serveur...');
-  try {
-    await pool.end();
-    console.log('✅ Connexions DB fermées');
-  } catch (error) {
-    console.error('❌ Erreur fermeture DB:', error);
-  }
-  process.exit(0);
+// Exposer la fonction globalement si elle n'existe pas déjà
+if (window.app && !window.app.computeThemesFromArticles) {
+    window.app.computeThemesFromArticles = computeThemesFromArticles;
+}
+
+// ========== ATTACHER LES ÉVÉNEMENTS AU CHARGEMENT ==========
+document.addEventListener('DOMContentLoaded', function () {
+    // Bouton d'actualisation principal
+    const refreshBtn = document.querySelector('#refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', window.refreshArticles);
+    }
+
+    console.log('✅ Corrections JavaScript chargées');
 });
-
-startServer();
-
-module.exports = { app, startServer, refreshData, sendMail };

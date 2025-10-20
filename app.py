@@ -106,7 +106,7 @@ def root():
             "/api/geopolitical/report",
             "/api/geopolitical/crisis-zones",
             "/api/geopolitical/relations",
-            "/api/learning-stats"
+            "/api/learning/stats"
         ]
     })
 
@@ -409,11 +409,11 @@ def api_geopolitical_relations():
         logger.exception("Erreur api_geopolitical_relations")
         return json_error("relations error: " + str(e))
 
-    # ======= ROUTES MANQUANTES ========
+# ========== ROUTES APPRENTISSAGE ==========
 
 @app.route("/api/learning/stats", methods=["GET"])
-def api_learning_stats_v2():
-    """Statistiques d'apprentissage IA (route corrigée)"""
+def api_learning_stats():
+    """Statistiques d'apprentissage de l'IA"""
     try:
         conn = None
         stats = {
@@ -443,192 +443,11 @@ def api_learning_stats_v2():
             cur = conn.cursor()
             
             # Total d'articles analysés
-            cur.execute("SELECT COUNT(*) as total FROM articles")
-            row = cur.fetchone()
-            if row:
-                stats["total_articles_processed"] = row["total"]
-                stats["labeled_articles"] = row["total"]
-            
-            # Moyenne de corroboration
-            cur.execute("SELECT AVG(sentiment_confidence) as avg_conf FROM articles WHERE sentiment_confidence > 0")
-            row = cur.fetchone()
-            if row and row["avg_conf"]:
-                stats["corroboration_avg"] = round(float(row["avg_conf"]), 3)
-            
-            # Dernière analyse
-            cur.execute("SELECT MAX(created_at) as last_date FROM articles")
-            row = cur.fetchone()
-            if row and row["last_date"]:
-                stats["last_trained"] = row["last_date"].isoformat()
-            
-            cur.close()
-        except Exception as e:
-            logger.warning(f"Impossible de récupérer stats apprentissage détaillées: {e}")
-        finally:
-            if conn:
-                put_connection(conn)
-        
-        logger.info(f"🧠 Stats apprentissage: {stats['total_articles_processed']} articles")
-        
-        return json_ok(stats)
-    except Exception as e:
-        logger.exception("Erreur api_learning_stats_v2")
-        return json_error("learning stats error: " + str(e))
-
-
-@app.route("/api/feeds/refresh", methods=["POST"])
-def api_feeds_refresh():
-    """Rafraîchir les flux RSS (déclenche Node.js)"""
-    try:
-        # Cette route déclenche un refresh côté Node.js
-        logger.info("📡 Demande de rafraîchissement des flux")
-        
-        return json_ok({
-            "success": True,
-            "message": "Rafraîchissement en cours...",
-            "note": "Les flux sont gérés par Node.js"
-        })
-    except Exception as e:
-        logger.exception("Erreur api_feeds_refresh")
-        return json_error("refresh error: " + str(e))
-
-
-@app.route("/api/themes/refresh", methods=["POST"])
-def api_themes_refresh():
-    """Rafraîchir l'analyse des thèmes"""
-    try:
-        logger.info("🎨 Rafraîchissement de l'analyse thématique")
-        
-        conn = get_connection()
-        cur = conn.cursor()
-        
-        # Récupérer tous les thèmes
-        cur.execute("SELECT id, name, keywords FROM themes")
-        themes = cur.fetchall()
-        
-        # Récupérer les articles récents
-        cur.execute("SELECT id, title, content FROM articles ORDER BY pub_date DESC LIMIT 500")
-        articles = cur.fetchall()
-        
-        updated_count = 0
-        
-        for article in articles:
-            text = (article["title"] + " " + (article["content"] or "")).lower()
-            
-            for theme in themes:
-                keywords = theme["keywords"] or []
-                if any(keyword.lower() in text for keyword in keywords):
-                    try:
-                        cur.execute("""
-                            INSERT INTO theme_analyses (article_id, theme_id, confidence)
-                            VALUES (%s, %s, 0.8)
-                            ON CONFLICT (article_id, theme_id) DO NOTHING
-                        """, [article["id"], theme["id"]])
-                        updated_count += 1
-                    except Exception as e:
-                        logger.debug(f"Relation thème déjà existante: {e}")
-        
-        conn.commit()
-        cur.close()
-        put_connection(conn)
-        
-        logger.info(f"✅ {updated_count} relations thème-article créées")
-        
-        return json_ok({
-            "success": True,
-            "message": f"Analyse thématique mise à jour",
-            "updated": updated_count
-        })
-        
-    except Exception as e:
-        logger.exception("Erreur api_themes_refresh")
-        return json_error("theme refresh error: " + str(e))
-
-
-@app.route("/api/stats/summary", methods=["GET"])
-def api_stats_summary():
-    """Résumé des statistiques globales"""
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        
-        # Statistiques globales
-        cur.execute("""
-            SELECT 
-                COUNT(*) as total_articles,
-                AVG(sentiment_score) as avg_sentiment,
-                AVG(sentiment_confidence) as avg_confidence,
-                COUNT(DISTINCT feed_url) as total_feeds
-            FROM articles
-        """)
-        
-        row = cur.fetchone()
-        
-        stats = {
-            "success": True,
-            "total_articles": row["total_articles"] or 0,
-            "avg_sentiment": round(float(row["avg_sentiment"] or 0), 3),
-            "avg_confidence": round(float(row["avg_confidence"] or 0), 3),
-            "total_feeds": row["total_feeds"] or 0
-        }
-        
-        # Top thèmes
-        cur.execute("""
-            SELECT t.name, COUNT(ta.article_id) as count
-            FROM themes t
-            LEFT JOIN theme_analyses ta ON t.id = ta.theme_id
-            GROUP BY t.id, t.name
-            ORDER BY count DESC
-            LIMIT 10
-        """)
-        
-        stats["top_themes"] = [
-            {"name": row["name"], "count": row["count"]}
-            for row in cur.fetchall()
-        ]
-        
-        cur.close()
-        put_connection(conn)
-        
-        return json_ok(stats)
-        
-    except Exception as e:
-        logger.exception("Erreur api_stats_summary")
-        return json_error("stats summary error: " + str(e))
-
-# ========== ROUTES APPRENTISSAGE ==========
-
-@app.route("/api/learning-stats", methods=["GET"])
-def api_learning_stats():
-    """Statistiques d'apprentissage de l'IA"""
-    try:
-        conn = None
-        stats = {
-            "success": True,
-            "total_articles_processed": 0,
-            "sentiment_accuracy": 0.87,
-            "theme_detection_accuracy": 0.79,
-            "bayesian_fusion_used": 0,
-            "corroboration_avg": 0.0,
-            "avg_processing_time": 2.1,
-            "model_version": "2.3",
-            "modules_active": [
-                "analysis_utils",
-                "corroboration",
-                "metrics",
-                "bayesian_fusion"
-            ]
-        }
-        
-        try:
-            conn = get_connection()
-            cur = conn.cursor()
-            
-            # Total d'articles analysés
             cur.execute("SELECT COUNT(*) as total FROM analyses")
             row = cur.fetchone()
             if row:
                 stats["total_articles_processed"] = row["total"]
+                stats["labeled_articles"] = row["total"]
             
             # Moyenne de corroboration
             cur.execute("SELECT AVG(corroboration_strength) as avg_corr FROM analyses WHERE corroboration_strength > 0")
@@ -641,6 +460,12 @@ def api_learning_stats():
             row = cur.fetchone()
             if row:
                 stats["bayesian_fusion_used"] = row["bayes_count"]
+            
+            # Dernière analyse
+            cur.execute("SELECT MAX(date) as last_date FROM analyses")
+            row = cur.fetchone()
+            if row and row["last_date"]:
+                stats["last_trained"] = row["last_date"].isoformat() if hasattr(row["last_date"], "isoformat") else str(row["last_date"])
             
             cur.close()
         except Exception as e:
@@ -667,7 +492,6 @@ def internal_error(error):
     logger.exception("Erreur serveur IA 500")
     return json_error("Erreur serveur IA interne", 500)
 
-
 # ========== DÉMARRAGE ==========
 
 if __name__ == "__main__":
@@ -678,7 +502,7 @@ if __name__ == "__main__":
     logger.info("🧠 Flask IA Analysis Service v2.3 - DÉMARRAGE")
     logger.info(f"📡 Port: {port}")
     logger.info(f"🔧 Debug: {debug}")
-    logger.info(f"🗄️  Database: {'Configured' if DB_CONFIGURED else 'Not configured'}")
+    logger.info(f"🗄️ Database: {'Configured' if DB_CONFIGURED else 'Not configured'}")
     logger.info(f"🤖 Modules: analysis_utils, corroboration, metrics, bayesian")
     logger.info("=" * 70)
     
