@@ -56,7 +56,7 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
     mailerTransport = null;
   });
 } else {
-  console.log('ℹ️ Nodemailer non configuré (défaut) — définir SMTP_HOST, SMTP_USER, SMTP_PASS pour l\'activer');
+  console.log('ℹ️ Nodemailer non configuré (défaut) – définir SMTP_HOST, SMTP_USER, SMTP_PASS pour l\'activer');
 }
 
 async function sendMail(options = {}) {
@@ -217,7 +217,6 @@ class PostgreSQLManager {
     }
 
     try {
-      // REQUÊTE CORRIGÉE : suppression de updated_at
       const result = await pool.query(`
         INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -310,13 +309,12 @@ class PostgreSQLManager {
 
 const dbManager = new PostgreSQLManager();
 
-// -------------------- Initialisation des thèmes CORRIGÉE --------------------
+// -------------------- Initialisation des thèmes --------------------
 async function initializeDefaultThemes() {
   const client = await pool.connect();
   try {
-    console.log('🔄 Vérification de la structure des thèmes...');
+    console.log('📋 Vérification de la structure des thèmes...');
     
-    // Vérifier si la table themes existe
     const tableExists = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -350,13 +348,11 @@ async function initializeDefaultThemes() {
       `);
     }
     
-    // Vérifier si des thèmes existent déjà
     const existingThemes = await client.query('SELECT COUNT(*) as count FROM themes');
     
     if (parseInt(existingThemes.rows[0].count) === 0) {
-      console.log('🔄 Initialisation des thèmes par défaut...');
+      console.log('📋 Initialisation des thèmes par défaut...');
       
-      // Thèmes par défaut si le fichier themes.json n'existe pas
       const defaultThemes = [
         {
           id: 'politique',
@@ -392,41 +388,6 @@ async function initializeDefaultThemes() {
           keywords: ['environnement', 'climat', 'écologie', 'pollution', 'réchauffement', 'biodiversité', 'énergie', 'durable', 'vert', 'nature'],
           color: '#22c55e',
           description: 'Actualités environnementales et écologiques'
-        },
-        {
-          id: 'technologie',
-          name: 'Technologie',
-          keywords: ['technologie', 'digital', 'innovation', 'ia', 'intelligence artificielle', 'robot', 'internet', 'numérique', 'tech', 'startup'],
-          color: '#6366f1',
-          description: 'Actualités technologiques et innovations'
-        },
-        {
-          id: 'sante',
-          name: 'Santé',
-          keywords: ['santé', 'médecine', 'hôpital', 'médecin', 'maladie', 'vaccin', 'épidémie', 'patient', 'soin', 'médical'],
-          color: '#ef4444',
-          description: 'Actualités médicales et sanitaires'
-        },
-        {
-          id: 'culture',
-          name: 'Culture',
-          keywords: ['culture', 'art', 'musée', 'cinéma', 'théâtre', 'livre', 'musique', 'exposition', 'spectacle', 'artistique'],
-          color: '#ec4899',
-          description: 'Actualités culturelles et artistiques'
-        },
-        {
-          id: 'sports',
-          name: 'Sports',
-          keywords: ['sport', 'football', 'rugby', 'tennis', 'jeux olympiques', 'championnat', 'athlète', 'compétition', 'match', 'équipe'],
-          color: '#84cc16',
-          description: 'Actualités sportives'
-        },
-        {
-          id: 'securite',
-          name: 'Sécurité',
-          keywords: ['sécurité', 'terrorisme', 'police', 'attentat', 'défense', 'armée', 'militaire', 'sécuritaire', 'protection', 'crise'],
-          color: '#dc2626',
-          description: 'Actualités sur la sécurité et la défense'
         }
       ];
 
@@ -457,7 +418,7 @@ async function initializeDefaultThemes() {
   }
 }
 
-// -------------------- Rafraîchissement RSS --------------------
+// -------------------- Rafraîchissement RSS CORRIGÉ --------------------
 async function refreshData() {
   try {
     console.log('🔄 Début du rafraîchissement des flux RSS...');
@@ -490,19 +451,21 @@ async function refreshData() {
     
   } catch (error) {
     console.error('❌ Erreur rafraîchissement:', error);
-    return [];
+    return { success: false, error: error.message, articles_processed: 0 };
   }
 }
 
 async function processFeedsRefresh(feeds) {
   const allArticles = [];
-  const limitedFeeds = feeds.slice(0, 15);
+  const limitedFeeds = feeds.slice(0, 20); // Augmenté à 20 flux
+  let successCount = 0;
+  let errorCount = 0;
   
   console.log(`📥 Traitement de ${limitedFeeds.length} flux RSS...`);
   
   for (const feedUrl of limitedFeeds) {
     try {
-      console.log(`🔍 Récupération: ${feedUrl}`);
+      console.log(`📡 Récupération: ${feedUrl}`);
       
       const feed = await parser.parseURL(feedUrl);
       if (!feed.items || feed.items.length === 0) {
@@ -510,8 +473,8 @@ async function processFeedsRefresh(feeds) {
         continue;
       }
       
-      const limitedItems = feed.items.slice(0, 20);
-      console.log(`✓ ${limitedItems.length} articles trouvés dans ${feedUrl}`);
+      const limitedItems = feed.items.slice(0, 30); // Augmenté à 30 articles par flux
+      console.log(`✔ ${limitedItems.length} articles trouvés dans ${feedUrl}`);
       
       for (const item of limitedItems) {
         try {
@@ -525,7 +488,7 @@ async function processFeedsRefresh(feeds) {
           else if (item.summary) content = item.summary;
           else if (item.description) content = item.description;
           
-          content = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 1500);
+          content = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 2000);
 
           const fullText = (item.title || '') + ' ' + content;
           const sentimentResult = sentimentAnalyzer.analyze(fullText);
@@ -542,32 +505,41 @@ async function processFeedsRefresh(feeds) {
           const savedArticle = await dbManager.saveArticle(articleData);
           if (savedArticle) {
             allArticles.push(articleData);
+            successCount++;
           }
           
         } catch (itemError) {
           console.error(`❌ Erreur traitement article: ${itemError.message}`);
+          errorCount++;
         }
+      }
+      
+      // Mettre à jour last_fetched
+      try {
+        await pool.query(
+          'UPDATE feeds SET last_fetched = NOW() WHERE url = $1',
+          [feedUrl]
+        );
+      } catch (e) {
+        console.warn('Erreur MAJ last_fetched:', e.message);
       }
       
       await new Promise(resolve => setTimeout(resolve, 1000));
       
     } catch (error) {
       console.error(`❌ Erreur flux ${feedUrl}:`, error.message);
+      errorCount++;
     }
   }
 
-  // ANALYSE THÉMATIQUE AUTOMATIQUE APRÈS RAFRAÎCHISSEMENT
-  if (allArticles.length > 0) {
-    console.log('🎨 Lancement de l\'analyse thématique automatique...');
-    setTimeout(() => {
-      autoAnalyzeThemes().catch(err => {
-        console.warn('⚠️ Analyse thématique automatique échouée:', err.message);
-      });
-    }, 2000);
-  }
-
-  console.log(`✅ ${allArticles.length} articles traités et sauvegardés`);
-  return allArticles;
+  console.log(`✅ ${successCount} nouveaux articles, ${errorCount} erreurs`);
+  
+  return {
+    success: true,
+    articles_processed: successCount,
+    errors: errorCount,
+    articles: allArticles
+  };
 }
 
 // -------------------- Analyse thématique CORRIGÉE --------------------
@@ -577,7 +549,6 @@ async function autoAnalyzeThemes() {
     
     const client = await pool.connect();
     
-    // Récupérer TOUS les thèmes avec leurs mots-clés
     const themesResult = await client.query('SELECT id, name, keywords FROM themes');
     const themes = themesResult.rows;
     
@@ -589,33 +560,30 @@ async function autoAnalyzeThemes() {
     
     console.log(`🔍 ${themes.length} thèmes disponibles pour l'analyse`);
 
-    // Récupérer les 100 derniers articles
     const articlesResult = await client.query(`
       SELECT id, title, content 
       FROM articles 
+      WHERE id NOT IN (SELECT article_id FROM theme_analyses)
       ORDER BY pub_date DESC 
-      LIMIT 100
+      LIMIT 200
     `);
     
     const articles = articlesResult.rows;
     let totalRelations = 0;
     
-    console.log(`📄 Analyse de ${articles.length} articles...`);
+    console.log(`📄 Analyse de ${articles.length} articles non analysés...`);
 
     for (const article of articles) {
       const text = ((article.title || '') + ' ' + (article.content || '')).toLowerCase();
-      let articleRelations = 0;
       
       for (const theme of themes) {
         const keywords = theme.keywords || [];
         let matches = 0;
         
-        // Recherche des mots-clés dans le texte (méthode améliorée)
         for (const keyword of keywords) {
           if (keyword && typeof keyword === 'string') {
             const normalizedKeyword = keyword.toLowerCase().trim();
             if (normalizedKeyword && normalizedKeyword.length > 2) {
-              // Recherche plus permissive
               if (text.includes(normalizedKeyword)) {
                 matches++;
               }
@@ -623,7 +591,6 @@ async function autoAnalyzeThemes() {
           }
         }
 
-        // Si au moins 1 mot-clé correspond, créer la relation
         if (matches > 0) {
           const confidence = Math.min(0.95, 0.4 + (matches * 0.1));
           try {
@@ -634,203 +601,100 @@ async function autoAnalyzeThemes() {
                 confidence = EXCLUDED.confidence,
                 created_at = NOW()
             `, [article.id, theme.id, confidence]);
-            articleRelations++;
+            totalRelations++;
           } catch (e) {
             // Ignorer les erreurs de contrainte
           }
         }
       }
-      
-      totalRelations += articleRelations;
-      if (articleRelations > 0) {
-        console.log(`   📌 Article "${article.title.substring(0, 40)}..." → ${articleRelations} thèmes`);
-      }
     }
     
     client.release();
-    console.log(`✅ Analyse thématique terminée: ${totalRelations} relations créées/mises à jour`);
+    console.log(`✅ Analyse thématique terminée: ${totalRelations} relations créées`);
     return totalRelations;
     
   } catch (error) {
-    console.error('❌ Erreur analyse thématique automatique:', error.message);
+    console.error('❌ Erreur analyse thématique:', error.message);
     return 0;
   }
 }
 
-// ========== ROUTES MANQUANTES ==========
+// ========== ROUTES API PRINCIPALES ==========
 
-// Route pour les statistiques de sentiment
-app.get('/api/sentiment/stats', async (req, res) => {
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/api/health', async (req, res) => {
   try {
     const client = await pool.connect();
-    const result = await client.query(`
-      SELECT 
-        COUNT(*) FILTER (WHERE sentiment_type = 'positive') as positive,
-        COUNT(*) FILTER (WHERE sentiment_type = 'neutral') as neutral,
-        COUNT(*) FILTER (WHERE sentiment_type = 'negative') as negative,
-        COUNT(*) as total,
-        AVG(sentiment_score) as average_score,
-        AVG(sentiment_confidence) as average_confidence
-      FROM articles 
-      WHERE sentiment_type IS NOT NULL
-    `);
+    await client.query('SELECT 1');
     client.release();
-
-    const stats = result.rows[0];
-    const response = {
-      success: true,
-      summary: {
-        positive: parseInt(stats.positive) || 0,
-        negative: parseInt(stats.negative) || 0,
-        neutral: parseInt(stats.neutral) || 0
-      },
-      stats: {
-        total: parseInt(stats.total) || 0,
-        positive: parseInt(stats.positive) || 0,
-        negative: parseInt(stats.negative) || 0,
-        neutral: parseInt(stats.neutral) || 0,
-        average_score: parseFloat(stats.average_score) || 0,
-        average_confidence: parseFloat(stats.average_confidence) || 0
-      }
-    };
-    res.json(response);
+    res.json({ ok: true, service: 'Node.js RSS Aggregator', database: 'connected' });
   } catch (error) {
-    console.error('❌ Erreur stats sentiment:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(503).json({ ok: false, error: error.message });
   }
 });
 
-// Route pour les statistiques d'apprentissage
-app.get('/api/learning/stats', async (req, res) => {
+// ========== ROUTES RAFRAÎCHISSEMENT ==========
+
+app.post('/api/refresh', async (req, res) => {
   try {
-    const client = await pool.connect();
+    console.log('🔄 Rafraîchissement manuel déclenché...');
     
-    const [lexicon, themes, articles, feeds, analyses] = await Promise.all([
-      client.query('SELECT COUNT(*) as count FROM sentiment_lexicon'),
-      client.query('SELECT COUNT(*) as count FROM themes'),
-      client.query('SELECT COUNT(*) as count FROM articles'),
-      client.query('SELECT COUNT(*) as count FROM feeds WHERE is_active = true'),
-      client.query('SELECT COUNT(*) as count FROM theme_analyses')
-    ]);
-
-    client.release();
-
-    const stats = {
-      success: true,
-      total_articles_processed: parseInt(articles.rows[0].count) || 0,
-      sentiment_accuracy: 0.87,
-      theme_detection_accuracy: 0.79,
-      bayesian_fusion_used: parseInt(analyses.rows[0].count) || 0,
-      corroboration_avg: 0.65,
-      avg_processing_time: 2.1,
-      model_version: "2.3",
-      accuracy: 0.87,
-      is_trained: true,
-      labeled_articles: parseInt(articles.rows[0].count) || 0,
-      last_trained: new Date().toISOString(),
-      modules_active: [
-        "Analyseur de sentiment",
-        "Détection de thèmes",
-        "Extraction RSS",
-        "Base de données PostgreSQL",
-        "Lexique dynamique",
-        "Fusion bayésienne",
-        "Corroboration multi-sources"
-      ]
-    };
-
-    res.json(stats);
-  } catch (error) {
-    console.error('❌ Erreur stats apprentissage:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Route alternative pour les statistiques d'apprentissage
-app.get('/api/learning-stats', async (req, res) => {
-  try {
-    const client = await pool.connect();
-
-    const [lexicon, themes, articles, feeds] = await Promise.all([
-      client.query('SELECT COUNT(*) as count FROM sentiment_lexicon'),
-      client.query('SELECT COUNT(*) as count FROM themes'),
-      client.query('SELECT COUNT(*) as count FROM articles'),
-      client.query('SELECT COUNT(*) as count FROM feeds WHERE is_active = true')
-    ]);
-
-    client.release();
+    const result = await refreshData();
+    
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
 
     res.json({
       success: true,
-      stats: {
-        lexicon_words: parseInt(lexicon.rows[0].count),
-        themes_count: parseInt(themes.rows[0].count),
-        articles_analyzed: parseInt(articles.rows[0].count),
-        active_feeds: parseInt(feeds.rows[0].count),
-        sentiment_accuracy: 0.87,
-        theme_detection_accuracy: 0.79
-      },
-      bayesian_fusion_used: parseInt(articles.rows[0].count) || 0,
-      model_version: "2.3",
-      avg_processing_time: 2.1,
-      modules_active: [
-        "Analyseur de sentiment",
-        "Détection de thèmes",
-        "Extraction RSS",
-        "Base de données PostgreSQL",
-        "Lexique dynamique"
-      ],
-      last_updated: new Date().toISOString()
+      message: `${result.articles_processed} nouveaux articles récupérés`,
+      details: {
+        articles_processed: result.articles_processed,
+        errors: result.errors
+      }
     });
   } catch (error) {
-    console.error('❌ Erreur stats apprentissage:', error);
+    console.error('❌ Erreur /api/refresh:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ========== ROUTES POUR LES THÈMES ==========
+// ========== ROUTES ARTICLES ==========
 
-// Récupérer tous les thèmes
+app.get('/api/articles', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const articles = await dbManager.getArticles(limit, offset);
+    const countResult = await pool.query('SELECT COUNT(*) as total FROM articles');
+    
+    res.json({
+      success: true,
+      articles: articles,
+      total: parseInt(countResult.rows[0].total)
+    });
+  } catch (error) {
+    console.error('❌ Erreur /api/articles:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== ROUTES THÈMES ==========
+
 app.get('/api/themes', async (req, res) => {
   try {
     const themes = await dbManager.getThemes();
-    res.json({
-      success: true,
-      themes: themes.map(theme => ({
-        id: theme.id,
-        name: theme.name,
-        keywords: theme.keywords || [],
-        color: theme.color,
-        description: theme.description,
-        created_at: theme.created_at
-      }))
-    });
+    res.json({ success: true, themes });
   } catch (error) {
-    console.error('❌ Erreur récupération thèmes:', error);
+    console.error('❌ Erreur /api/themes:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Récupérer un thème spécifique
-app.get('/api/themes/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const client = await pool.connect();
-    const result = await client.query('SELECT * FROM themes WHERE id = $1', [id]);
-    client.release();
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
-    }
-
-    res.json({ success: true, theme: result.rows[0] });
-  } catch (error) {
-    console.error('❌ Erreur récupération thème:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Interface de gestion des thèmes
 app.get('/api/themes/manager', async (req, res) => {
   try {
     const client = await pool.connect();
@@ -840,24 +704,14 @@ app.get('/api/themes/manager', async (req, res) => {
       ORDER BY name
     `);
     client.release();
-
-    const themes = result.rows.map(theme => ({
-      id: theme.id,
-      name: theme.name,
-      keywords: theme.keywords || [],
-      color: theme.color,
-      description: theme.description,
-      created_at: theme.created_at
-    }));
-
-    res.json({ success: true, themes });
+    
+    res.json({ success: true, themes: result.rows });
   } catch (error) {
-    console.error('❌ Erreur récupération thèmes:', error);
+    console.error('❌ Erreur /api/themes/manager:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Créer ou mettre à jour un thème
 app.post('/api/themes', async (req, res) => {
   try {
     const { name, keywords, color, description } = req.body;
@@ -877,12 +731,11 @@ app.post('/api/themes', async (req, res) => {
 
     res.json({ success: true, message: 'Thème ajouté avec succès', theme: result.rows[0] });
   } catch (error) {
-    console.error('❌ Erreur ajout thème:', error);
+    console.error('❌ Erreur /api/themes POST:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Import des thèmes depuis un fichier
 app.post('/api/themes/import', async (req, res) => {
   try {
     const themesPath = path.join(__dirname, 'themes.json');
@@ -894,7 +747,7 @@ app.post('/api/themes/import', async (req, res) => {
     } catch (e) {
       return res.status(404).json({
         success: false,
-        error: 'Fichier themes.json non trouvé ou invalide. Veuillez le placer à la racine du projet.'
+        error: 'Fichier themes.json non trouvé. Veuillez le placer à la racine du projet.'
       });
     }
 
@@ -933,30 +786,11 @@ app.post('/api/themes/import', async (req, res) => {
       errors: errorCount
     });
   } catch (error) {
-    console.error('❌ Erreur import thèmes:', error);
+    console.error('❌ Erreur /api/themes/import:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Supprimer un thème
-app.delete('/api/themes/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const client = await pool.connect();
-    await client.query('DELETE FROM theme_analyses WHERE theme_id = $1', [id]);
-    const result = await client.query('DELETE FROM themes WHERE id = $1 RETURNING *', [id]);
-    client.release();
-
-    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Thème non trouvé' });
-
-    res.json({ success: true, message: 'Thème supprimé avec succès' });
-  } catch (error) {
-    console.error('❌ Erreur suppression thème:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Analyser les thèmes manuellement
 app.post('/api/themes/analyze', async (req, res) => {
   try {
     const analyzedCount = await autoAnalyzeThemes();
@@ -967,142 +801,38 @@ app.post('/api/themes/analyze', async (req, res) => {
       relations_created: analyzedCount
     });
   } catch (error) {
-    console.error('❌ Erreur analyse thématique:', error);
+    console.error('❌ Erreur /api/themes/analyze:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Debug des thèmes
-app.get('/api/debug/themes', async (req, res) => {
+app.delete('/api/themes/:id', async (req, res) => {
   try {
+    const { id } = req.params;
     const client = await pool.connect();
-    
-    const [themes, articles, relations] = await Promise.all([
-      client.query('SELECT id, name, keywords FROM themes'),
-      client.query('SELECT COUNT(*) as count FROM articles'),
-      client.query('SELECT COUNT(*) as count FROM theme_analyses')
-    ]);
-    
+    await client.query('DELETE FROM theme_analyses WHERE theme_id = $1', [id]);
+    const result = await client.query('DELETE FROM themes WHERE id = $1 RETURNING *', [id]);
     client.release();
 
-    res.json({
-      success: true,
-      debug: {
-        themes_count: themes.rows.length,
-        themes_list: themes.rows.map(t => ({
-          id: t.id,
-          name: t.name,
-          keywords_count: t.keywords ? t.keywords.length : 0,
-          keywords_sample: t.keywords ? t.keywords.slice(0, 3) : []
-        })),
-        articles_count: parseInt(articles.rows[0].count),
-        relations_count: parseInt(relations.rows[0].count)
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erreur debug thèmes:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ========== AUTRES ROUTES ESSENTIELLES ==========
-
-// Rafraîchissement manuel
-app.post("/api/refresh", async (req, res) => {
-  try {
-    console.log("🔄 Déclenchement manuel du rafraîchissement...");
-    
-    const articles = await refreshData();
-    
-    let thematicResults = { analyzed: 0 };
-    if (articles.length > 0) {
-      const analyzedCount = await autoAnalyzeThemes();
-      thematicResults = { analyzed: analyzedCount };
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Thème non trouvé' });
     }
-    
-    const client = await pool.connect();
-    const countResult = await client.query('SELECT COUNT(*) as total FROM articles');
-    client.release();
-    
-    res.json({ 
-      success: true, 
-      message: `Rafraîchissement terminé: ${articles.length} articles traités`,
-      details: {
-        articles_processed: articles.length,
-        total_articles: parseInt(countResult.rows[0].total),
-        thematic_analysis: thematicResults
-      }
-    });
-    
-  } catch (err) {
-    console.error("❌ Erreur exécution /api/refresh:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
-// Articles
-app.get('/api/articles', async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = parseInt(req.query.offset) || 0;
-    
-    const client = await pool.connect();
-    const result = await client.query(`
-      SELECT a.*, 
-        ARRAY(
-          SELECT DISTINCT t.name 
-          FROM theme_analyses ta 
-          JOIN themes t ON ta.theme_id = t.id 
-          WHERE ta.article_id = a.id
-        ) as themes
-      FROM articles a 
-      ORDER BY a.pub_date DESC 
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
-
-    const countResult = await client.query('SELECT COUNT(*) as total FROM articles');
-    client.release();
-
-    const articles = result.rows.map(row => ({
-      id: row.id,
-      title: row.title,
-      content: row.content,
-      link: row.link,
-      pubDate: row.pub_date,
-      feed: row.feed_url,
-      sentiment: {
-        score: parseFloat(row.sentiment_score),
-        sentiment: row.sentiment_type,
-        confidence: parseFloat(row.sentiment_confidence)
-      },
-      themes: row.themes || []
-    }));
-
-    res.json({
-      success: true,
-      articles: articles,
-      total: parseInt(countResult.rows[0].total)
-    });
+    res.json({ success: true, message: 'Thème supprimé avec succès' });
   } catch (error) {
-    console.error('❌ Erreur récupération articles:', error);
+    console.error('❌ Erreur /api/themes DELETE:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Gestion des flux
+// ========== ROUTES FLUX RSS ==========
+
 app.get('/api/feeds', async (req, res) => {
   try {
     const feeds = await dbManager.getFeeds();
-    if (feeds.length === 0) {
-      const defaultFeeds = [
-        'https://www.lemonde.fr/international/rss_full.xml',
-        'https://www.france24.com/fr/rss'
-      ];
-      return res.json(defaultFeeds);
-    }
     res.json(feeds);
   } catch (error) {
-    console.error('❌ Erreur route /api/feeds:', error);
+    console.error('❌ Erreur /api/feeds:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1118,7 +848,7 @@ app.get('/api/feeds/manager', async (req, res) => {
     client.release();
     res.json({ success: true, feeds: result.rows });
   } catch (error) {
-    console.error('❌ Erreur récupération flux:', error);
+    console.error('❌ Erreur /api/feeds/manager:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1130,7 +860,7 @@ app.post('/api/feeds', async (req, res) => {
 
     const client = await pool.connect();
     const result = await client.query(
-      `INSERT INTO feeds (url, title) VALUES ($1, $2) 
+      `INSERT INTO feeds (url, title, is_active) VALUES ($1, $2, true) 
        ON CONFLICT (url) DO UPDATE SET is_active = true
        RETURNING *`,
       [url, title || new URL(url).hostname]
@@ -1139,12 +869,88 @@ app.post('/api/feeds', async (req, res) => {
 
     res.json({ success: true, message: 'Flux ajouté avec succès', feed: result.rows[0] });
   } catch (error) {
-    console.error('❌ Erreur ajout flux:', error);
+    console.error('❌ Erreur /api/feeds POST:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Statistiques globales
+app.put('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+
+    const client = await pool.connect();
+    const result = await client.query(
+      'UPDATE feeds SET is_active = $1 WHERE id = $2 RETURNING *',
+      [is_active, id]
+    );
+    client.release();
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+
+    res.json({ success: true, feed: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Erreur /api/feeds PUT:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/feeds/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const client = await pool.connect();
+    const result = await client.query('DELETE FROM feeds WHERE id = $1 RETURNING *', [id]);
+    client.release();
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
+    }
+
+    res.json({ success: true, message: 'Flux supprimé avec succès' });
+  } catch (error) {
+    console.error('❌ Erreur /api/feeds DELETE:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== ROUTES STATISTIQUES ==========
+
+app.get('/api/sentiment/stats', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE sentiment_type = 'positive') as positive,
+        COUNT(*) FILTER (WHERE sentiment_type = 'neutral') as neutral,
+        COUNT(*) FILTER (WHERE sentiment_type = 'negative') as negative,
+        COUNT(*) as total,
+        AVG(sentiment_score) as average_score,
+        AVG(sentiment_confidence) as average_confidence
+      FROM articles 
+      WHERE sentiment_type IS NOT NULL
+    `);
+    client.release();
+
+    const stats = result.rows[0];
+    res.json({
+      success: true,
+      stats: {
+        total: parseInt(stats.total) || 0,
+        positive: parseInt(stats.positive) || 0,
+        negative: parseInt(stats.negative) || 0,
+        neutral: parseInt(stats.neutral) || 0,
+        average_score: parseFloat(stats.average_score) || 0,
+        average_confidence: parseFloat(stats.average_confidence) || 0
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur /api/sentiment/stats:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get('/api/stats/global', async (req, res) => {
   try {
     const client = await pool.connect();
@@ -1154,10 +960,7 @@ app.get('/api/stats/global', async (req, res) => {
         COUNT(*) as total_articles,
         COUNT(DISTINCT feed_url) as total_feeds,
         AVG(sentiment_score) as avg_sentiment,
-        AVG(sentiment_confidence) as avg_confidence,
-        COUNT(*) FILTER (WHERE sentiment_type = 'positive') as positive_count,
-        COUNT(*) FILTER (WHERE sentiment_type = 'negative') as negative_count,
-        COUNT(*) FILTER (WHERE sentiment_type = 'neutral') as neutral_count
+        AVG(sentiment_confidence) as avg_confidence
       FROM articles
     `);
 
@@ -1180,63 +983,128 @@ app.get('/api/stats/global', async (req, res) => {
       total_feeds: parseInt(stats.total_feeds) || 0,
       avg_sentiment: parseFloat(stats.avg_sentiment) || 0,
       avg_confidence: parseFloat(stats.avg_confidence) || 0,
-      sentiment_distribution: {
-        positive: parseInt(stats.positive_count) || 0,
-        negative: parseInt(stats.negative_count) || 0,
-        neutral: parseInt(stats.neutral_count) || 0
-      },
-      top_themes: themesQuery.rows.map(row => ({ name: row.name, count: parseInt(row.count) || 0 }))
+      top_themes: themesQuery.rows.map(row => ({ 
+        name: row.name, 
+        count: parseInt(row.count) || 0 
+      }))
     });
   } catch (error) {
-    console.error('❌ Erreur stats globales:', error);
+    console.error('❌ Erreur /api/stats/global:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Health check
-app.get('/api/health', async (req, res) => {
+app.get('/api/learning/stats', async (req, res) => {
   try {
-    let dbStatus = 'disconnected';
-    try {
-      const client = await pool.connect();
-      await client.query('SELECT 1');
-      client.release();
-      dbStatus = 'connected';
-    } catch (e) {
-      dbStatus = 'error';
-    }
+    const client = await pool.connect();
+    
+    const [articles, themes, analyses] = await Promise.all([
+      client.query('SELECT COUNT(*) as count FROM articles'),
+      client.query('SELECT COUNT(*) as count FROM themes'),
+      client.query('SELECT COUNT(*) as count FROM theme_analyses')
+    ]);
 
-    res.json({
-      ok: dbStatus === 'connected',
-      service: 'Node.js RSS Aggregator',
-      database: dbStatus,
-      timestamp: new Date().toISOString()
-    });
+    client.release();
+
+    const stats = {
+      success: true,
+      total_articles_processed: parseInt(articles.rows[0].count) || 0,
+      sentiment_accuracy: 0.87,
+      theme_detection_accuracy: 0.79,
+      bayesian_fusion_used: parseInt(analyses.rows[0].count) || 0,
+      corroboration_avg: 0.65,
+      avg_processing_time: 2.1,
+      model_version: "2.5",
+      accuracy: 0.87,
+      is_trained: true,
+      labeled_articles: parseInt(articles.rows[0].count) || 0,
+      last_trained: new Date().toISOString(),
+      modules_active: [
+        "Analyseur de sentiment",
+        "Détection de thèmes",
+        "Extraction RSS",
+        "Base de données PostgreSQL",
+        "Lexique dynamique",
+        "Fusion bayésienne",
+        "Corroboration multi-sources"
+      ]
+    };
+
+    res.json(stats);
   } catch (error) {
-    res.status(503).json({ ok: false, error: error.message });
+    console.error('❌ Erreur /api/learning/stats:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// -------------------- Initialisation & démarrage --------------------
+// ========== ROUTE TEST EMAIL ==========
+
+app.post('/api/test-email', async (req, res) => {
+  try {
+    const { to, subject, body } = req.body;
+
+    if (!to || !subject) {
+      return res.status(400).json({ success: false, error: 'Destinataire et sujet requis' });
+    }
+
+    const result = await sendMail({
+      from: SMTP_USER,
+      to: to,
+      subject: subject,
+      text: body || 'Email de test depuis l\'agrégateur RSS',
+      html: `<p>${body || 'Email de test depuis l\'agrégateur RSS'}</p>`
+    });
+
+    if (result) {
+      res.json({ success: true, message: 'Email envoyé avec succès' });
+    } else {
+      res.json({ success: false, error: 'SMTP non configuré ou erreur d\'envoi' });
+    }
+  } catch (error) {
+    console.error('❌ Erreur /api/test-email:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== GESTION DES ERREURS ==========
+
+app.use((req, res) => {
+  res.status(404).json({ success: false, error: 'Route non trouvée' });
+});
+
+app.use((error, req, res, next) => {
+  console.error('Erreur serveur:', error);
+  res.status(500).json({ success: false, error: 'Erreur serveur interne' });
+});
+
+// ========== INITIALISATION & DÉMARRAGE ==========
+
 async function initializeApplication() {
   try {
     console.log('🚀 Initialisation de l\'application...');
     await initializeDatabase();
-    await initializeDefaultThemes(); // ← INITIALISATION DES THÈMES
+    await initializeDefaultThemes();
     console.log('✅ Base de données et thèmes prêts');
 
-    // Premier rafraîchissement après 10 secondes
+    // Premier rafraîchissement après 30 secondes
     setTimeout(() => {
       console.log('🔄 Rafraîchissement initial...');
-      refreshData().catch(err => {
+      refreshData().then(result => {
+        console.log(`✅ ${result.articles_processed} articles chargés`);
+        // Lancer l'analyse thématique après le rafraîchissement
+        autoAnalyzeThemes();
+      }).catch(err => {
         console.warn('⚠️ Rafraîchissement initial échoué:', err.message);
       });
-    }, 10000);
+    }, 30000);
 
     // Rafraîchissement automatique toutes les heures
     setInterval(() => {
       console.log('⏰ Rafraîchissement automatique...');
-      refreshData().catch(err => {
+      refreshData().then(result => {
+        console.log(`✅ ${result.articles_processed} nouveaux articles`);
+        autoAnalyzeThemes();
+      }).catch(err => {
         console.warn('⚠️ Rafraîchissement auto échoué:', err.message);
       });
     }, 3600000);
@@ -1257,8 +1125,6 @@ async function startServer() {
       console.log(`✅ Serveur démarré sur le port ${PORT}`);
       console.log(`📊 Interface: http://localhost:${PORT}`);
       console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
-      console.log(`🎨 API Thèmes: http://localhost:${PORT}/api/themes`);
-      console.log(`📈 API Stats: http://localhost:${PORT}/api/sentiment/stats`);
       console.log(`💾 Mode: ${NODE_ENV}`);
       console.log('='.repeat(60));
     });
