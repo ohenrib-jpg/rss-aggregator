@@ -30,31 +30,31 @@
         <div class="last-update" id="lastUpdate">Prêt</div>
         <div class="refresh-controls">
             <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation active</div>
-            <button id="refreshBtn" onclick="window.app.refreshArticles()">🔄 Actualiser</button>
+            <button id="refreshBtn">🔄 Actualiser</button>
         </div>
     </div>
 
     <!-- Barre d'actions -->
     <div class="export-bar">
         <div class="export-controls">
-            <button class="btn btn-success" onclick="window.app.exportToJSON()">📥 Exporter JSON</button>
-            <button class="btn btn-success" onclick="window.app.exportArticlesToCSV()">📥 Exporter CSV</button>
-            <button class="btn btn-secondary" onclick="window.app.showTab('learning')">📊 Stats IA</button>
-            <button class="btn btn-secondary" onclick="window.app.showTab('settings')">⚙️ Paramètres</button>
+            <button class="btn btn-success" id="exportJsonBtn">📥 Exporter JSON</button>
+            <button class="btn btn-success" id="exportCsvBtn">📥 Exporter CSV</button>
+            <button class="btn btn-secondary" id="learningTabBtn">📊 Stats IA</button>
+            <button class="btn btn-secondary" id="settingsTabBtn">⚙️ Paramètres</button>
         </div>
     </div>
 
     <!-- Onglets -->
     <div class="tab-container">
         <div class="tabs">
-            <div class="tab active" onclick="window.app.showTab('articles')">📄 Articles</div>
-            <div class="tab" onclick="window.app.showTab('analysis')">📈 Analyse</div>
-            <div class="tab" onclick="window.app.showTab('metrics')">🎯 Métriques</div>
-            <div class="tab" onclick="window.app.showTab('sentiment')">😊 Sentiment</div>
-            <div class="tab" onclick="window.app.showTab('learning')">🧠 Apprentissage</div>
-            <div class="tab" onclick="window.app.showTab('feeds')">📰 Flux RSS</div>
-            <div class="tab" onclick="window.app.showTab('themes')">🎨 Thèmes</div>
-            <div class="tab" onclick="window.app.showTab('settings')">⚙️ Paramètres</div>
+            <div class="tab active" data-tab="articles">📄 Articles</div>
+            <div class="tab" data-tab="analysis">📈 Analyse</div>
+            <div class="tab" data-tab="metrics">🎯 Métriques</div>
+            <div class="tab" data-tab="sentiment">😊 Sentiment</div>
+            <div class="tab" data-tab="learning">🧠 Apprentissage</div>
+            <div class="tab" data-tab="feeds">📰 Flux RSS</div>
+            <div class="tab" data-tab="themes">🎨 Thèmes</div>
+            <div class="tab" data-tab="settings">⚙️ Paramètres</div>
         </div>
 
         <!-- Articles -->
@@ -97,4 +97,215 @@
                 <div class="metric-card">
                     <strong>Bayésien :</strong>
                     <span id="m_posterior" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #8b5cf6;">—</span>
-                
+                </div>
+                <div class="metric-card">
+                    <strong>Corroboration :</strong>
+                    <span id="m_corro" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #f59e0b;">—</span>
+                </div>
+            </div>
+            <div class="card full-width" style="margin-top: 20px;">
+                <h3>🏆 Thèmes les plus populaires</h3>
+                <ul id="topThemes" class="top-themes">
+                    <li class="loading">Chargement...</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Sentiment -->
+        <div id="sentimentTab" class="tab-content">
+            <div id="sentimentOverview" class="loading">Chargement de l'analyse de sentiment...</div>
+        </div>
+
+        <!-- Apprentissage -->
+        <div id="learningTab" class="tab-content">
+            <div id="learningStats" class="loading">Chargement des statistiques d'apprentissage...</div>
+        </div>
+
+        <!-- Flux RSS -->
+        <div id="feedsTab" class="tab-content">
+            <div class="card full-width">
+                <h3>📰 Gestion des Flux RSS</h3>
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-success" id="addFeedBtn">➕ Ajouter un flux</button>
+                </div>
+                <div id="feedsManagerList" class="loading">Chargement des flux...</div>
+            </div>
+        </div>
+
+        <!-- Thèmes -->
+        <div id="themesTab" class="tab-content">
+            <div class="card full-width">
+                <h3>🎨 Gestion des Thèmes</h3>
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-success" id="addThemeBtn">➕ Ajouter un thème</button>
+                    <button class="btn btn-secondary" id="importThemesBtn">📥 Importer thèmes</button>
+                    <button class="btn btn-secondary" id="analyzeThemesBtn">🔍 Analyser articles</button>
+                </div>
+                <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
+            </div>
+        </div>
+
+        <!-- Paramètres -->
+        <div id="settingsTab" class="tab-content">
+            <div class="loading">Chargement des paramètres...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="addFeedModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>➕ Ajouter un Flux RSS</h2>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">URL du flux:</label>
+            <input type="url" id="feedUrl" placeholder="https://example.com/rss.xml" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        </div>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Titre (optionnel):</label>
+            <input type="text" id="feedTitle" placeholder="Nom du flux" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn btn-success" id="saveFeedBtn">💾 Sauvegarder</button>
+            <button class="btn btn-secondary" id="cancelFeedBtn">❌ Annuler</button>
+        </div>
+    </div>
+</div>
+
+<div id="addThemeModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>🎨 Ajouter un Thème</h2>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+            <input type="text" id="themeName" placeholder="Politique internationale" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        </div>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+            <textarea id="themeKeywords" placeholder="diplomatie&#10;relations internationales&#10;conflit" style="width: 100%; height: 150px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
+        </div>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+            <input type="color" id="themeColor" value="#6366f1" style="width: 100%; height: 40px;">
+        </div>
+        <div style="margin: 20px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
+            <textarea id="themeDescription" placeholder="Description du thème..." style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn btn-success" id="saveThemeBtn">💾 Sauvegarder</button>
+            <button class="btn btn-secondary" id="cancelThemeBtn">❌ Annuler</button>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="app.js"></script>
+<script>
+// Gestion des événements une fois que l'application est chargée
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialiser l'application
+    window.app.init();
+    
+    // Configuration des écouteurs d'événements pour les onglets
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            const tabName = this.getAttribute('data-tab');
+            if (window.app && window.app.showTab) {
+                window.app.showTab(tabName);
+            }
+        });
+    });
+    
+    // Configuration des autres boutons
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        if (window.app && window.app.refreshArticles) {
+            window.app.refreshArticles();
+        }
+    });
+    
+    document.getElementById('exportJsonBtn').addEventListener('click', function() {
+        if (window.app && window.app.exportToJSON) {
+            window.app.exportToJSON();
+        }
+    });
+    
+    document.getElementById('exportCsvBtn').addEventListener('click', function() {
+        if (window.app && window.app.exportArticlesToCSV) {
+            window.app.exportArticlesToCSV();
+        }
+    });
+    
+    document.getElementById('learningTabBtn').addEventListener('click', function() {
+        if (window.app && window.app.showTab) {
+            window.app.showTab('learning');
+        }
+    });
+    
+    document.getElementById('settingsTabBtn').addEventListener('click', function() {
+        if (window.app && window.app.showTab) {
+            window.app.showTab('settings');
+        }
+    });
+    
+    document.getElementById('addFeedBtn').addEventListener('click', function() {
+        if (window.app && window.app.showAddFeedModal) {
+            window.app.showAddFeedModal();
+        }
+    });
+    
+    document.getElementById('addThemeBtn').addEventListener('click', function() {
+        if (window.app && window.app.showAddThemeModal) {
+            window.app.showAddThemeModal();
+        }
+    });
+    
+    document.getElementById('importThemesBtn').addEventListener('click', function() {
+        if (window.app && window.app.importThemesFromFile) {
+            window.app.importThemesFromFile();
+        }
+    });
+    
+    document.getElementById('analyzeThemesBtn').addEventListener('click', function() {
+        // Cette fonctionnalité sera implémentée plus tard
+        alert('Analyse thématique déclenchée');
+    });
+    
+    // Gestion des modals
+    document.querySelectorAll('.modal .close').forEach(closeBtn => {
+        closeBtn.addEventListener('click', function() {
+            this.closest('.modal').style.display = 'none';
+        });
+    });
+    
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.style.display = 'none';
+            }
+        });
+    });
+    
+    // Gestion de la sauvegarde des flux
+    document.getElementById('saveFeedBtn').addEventListener('click', function() {
+        // Implémentation à venir
+        alert('Fonctionnalité de sauvegarde de flux à implémenter');
+    });
+    
+    document.getElementById('cancelFeedBtn').addEventListener('click', function() {
+        document.getElementById('addFeedModal').style.display = 'none';
+    });
+    
+    // Gestion de la sauvegarde des thèmes
+    document.getElementById('saveThemeBtn').addEventListener('click', function() {
+        // Implémentation à venir
+        alert('Fonctionnalité de sauvegarde de thème à implémenter');
+    });
+    
+    document.getElementById('cancelThemeBtn').addEventListener('click', function() {
+        document.getElementById('addThemeModal').style.display = 'none';
+    });
+});
+</script>
+</body>
+</html>
