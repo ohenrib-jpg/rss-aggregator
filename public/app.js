@@ -1,4 +1,220 @@
 // public/app.js - VERSION COMPLÈTEMENT CORRIGÉE
+
+// --- INSERTED GLOBAL HELPERS & THEME/IA HANDLERS ---
+(function(){
+window.qs = function(sel, root=document){ return (root||document).querySelector(sel); };
+window.qsa = function(sel, root=document){ return Array.from((root||document).querySelectorAll(sel)); };
+window.setMessage = function(msg, type='info', timeout=4000){
+  var cont = qs('#messageContainer') || (function(){ var d=document.createElement('div'); d.id='messageContainer'; d.style.position='fixed'; d.style.top='10px'; d.style.right='10px'; d.style.zIndex=9999; document.body.appendChild(d); return d; })();
+  cont.textContent = msg;
+  cont.className = 'message '+type;
+  if(timeout>0) setTimeout(()=>{ if(cont) cont.textContent=''; }, timeout);
+};
+if(!qs('#aiStatus')){
+  var sbar = document.createElement('div');
+  sbar.id = 'aiStatus';
+  sbar.style.position='fixed';
+  sbar.style.bottom='10px';
+  sbar.style.right='10px';
+  sbar.style.padding='6px 10px';
+  sbar.style.background='rgba(0,0,0,0.6)';
+  sbar.style.color='white';
+  sbar.style.borderRadius='6px';
+  sbar.style.zIndex = 9999;
+  document.body.appendChild(sbar);
+}
+
+window.showTab = function(tab){
+  try{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    var tabEl = document.querySelector('.tab[data-tab="'+tab+'"]') || Array.from(document.querySelectorAll('.tab')).find(e=>e.textContent.toLowerCase().includes(tab.toLowerCase()));
+    if(tabEl) tabEl.classList.add('active');
+    var content = document.getElementById(tab+'Tab') || document.getElementById(tab);
+    if(content) content.classList.add('active');
+  }catch(e){ console.error('showTab error', e); }
+};
+
+window.showAIConfig = function(){
+  var modal = qs('#aiConfigModal');
+  if(modal){ modal.style.display='block'; }
+  try{
+    var cfg = JSON.parse(localStorage.getItem('aiConfig')||'{}');
+    if(qs('#openaiKey')) qs('#openaiKey').value = cfg.openaiKey||'';
+    if(qs('#openaiModel')) qs('#openaiModel').value = cfg.openaiModel||'';
+    if(qs('#enableLocal')) qs('#enableLocal').checked = !!cfg.enableLocal;
+    if(qs('#llamaUrl')) qs('#llamaUrl').value = cfg.llamaUrl||'';
+  }catch(e){}
+};
+
+window.saveAIConfig = function(){
+  try{
+    var cfg = {
+      openaiKey: qs('#openaiKey') ? qs('#openaiKey').value.trim() : '',
+      openaiModel: qs('#openaiModel') ? qs('#openaiModel').value.trim() : '',
+      enableLocal: qs('#enableLocal') ? qs('#enableLocal').checked : false,
+      llamaUrl: qs('#llamaUrl') ? qs('#llamaUrl').value.trim() : ''
+    };
+    localStorage.setItem('aiConfig', JSON.stringify(cfg));
+    setMessage('Configuration IA sauvegardée', 'success');
+    updateAIStatus();
+  }catch(e){ setMessage('Erreur sauvegarde config', 'error'); console.error(e); }
+};
+
+window.testAIConnection = async function(){
+  try{
+    var cfg = JSON.parse(localStorage.getItem('aiConfig')||'{}');
+    if(!cfg || (!cfg.openaiKey && !cfg.enableLocal)){
+      setMessage('Aucune configuration IA detectee', 'warning');
+      updateAIStatus(false);
+      return false;
+    }
+    if(cfg.enableLocal && cfg.llamaUrl){
+      try{
+        var url = cfg.llamaUrl.replace(/\/+$/,'') + '/health';
+        var res = await fetch(url, { method:'GET', mode:'cors' });
+        if(res.ok){ setMessage('Connexion modele local OK','success'); updateAIStatus(true); return true; }
+        else{ setMessage('Modele local non joignable ('+res.status+')','error'); updateAIStatus(false); return false; }
+      }catch(err){ setMessage('Erreur connexion local: '+err.message,'error'); updateAIStatus(false); return false; }
+    }
+    if(cfg.openaiKey){
+      setMessage('Cle OpenAI configuree (test cote serveur requis)','info'); updateAIStatus(true); return true;
+    }
+    updateAIStatus(false);
+    return false;
+  }catch(e){ console.error(e); updateAIStatus(false); return false; }
+};
+
+window.updateAIStatus = function(ok){
+  var el = qs('#aiStatus');
+  try{ var cfg = JSON.parse(localStorage.getItem('aiConfig')||'{}'); }catch(e){ cfg={}; }
+  if(ok===undefined){ ok = !!(cfg.openaiKey || cfg.enableLocal); }
+  el.textContent = ok ? 'IA: configurée' : 'IA: non configurée';
+  el.style.background = ok ? 'rgba(16,185,129,0.9)' : 'rgba(239,68,68,0.9)';
+};
+
+window.loadThemesManager = async function(){
+  try{
+    setMessage('Chargement themes...', 'info');
+    var res = await fetch('/api/themes/manager');
+    var data = res.ok ? await res.json() : null;
+    var list = qs('#themesManagerList') || null;
+    if(!list){
+      var container = qs('#themesTab') || document.body;
+      var html = '<table id="themesManagerTable" class="themes-table"><thead><tr><th>Nom</th><th>Mots-cles</th><th>Actions</th></tr></thead><tbody id="themesManagerList"></tbody></table>';
+      container.insertAdjacentHTML('afterbegin', html);
+      list = qs('#themesManagerList');
+    }
+    var themes = [];
+    if(data && data.themes) themes = data.themes;
+    else if(Array.isArray(data)) themes = data;
+    else themes = [];
+    if(themes.length===0){
+      try{ var r2 = await fetch('/api/themes'); if(r2.ok) themes = await r2.json(); }catch(e){}
+    }
+    list.innerHTML = themes.map(t=>{
+      var id = t.id || t.theme_id || t.name || Math.random().toString(36).slice(2,8);
+      var keys = (t.keywords || t.words || t.terms || t.mots) || [];
+      if(Array.isArray(keys)) keys = keys.join(', ');
+      return `<tr data-id="${id}"><td class="tname">${t.name||t.title||id}</td><td class="tkeys">${keys||''}</td><td><button class="btn" onclick="window.editTheme('${id}')">✏️</button> <button class="btn" onclick="window.deleteTheme('${id}')">🗑️</button></td></tr>`;
+    }).join('');
+    setMessage('Themes charges', 'success');
+  }catch(e){ console.error(e); setMessage('Erreur chargement themes','error'); }
+};
+
+window.editTheme = function(id){
+  (async ()=>{
+    try{
+      var res = await fetch('/api/themes/' + id);
+      var data = res.ok ? await res.json() : null;
+      var name = (data && data.name) || id;
+      var keywords = (data && (data.keywords || data.words || data.terms)) || '';
+      if(Array.isArray(keywords)) keywords = keywords.join('
+');
+      var html = `<div id="editThemeModal" class="modal" style="display:block;"><div class="modal-content"><span class="close" onclick="window.closeModal('editThemeModal')">&times;</span><h3>Éditer thème ${name}</h3><input id="editThemeName" value="${name}" style="width:100%;padding:6px;margin-bottom:6px;"><textarea id="editThemeKeywords" style="width:100%;height:160px;">${keywords}</textarea><div style="margin-top:8px;"><button class="btn btn-success" onclick="window.saveTheme('${id}')">💾 Enregistrer</button> <button class="btn btn-secondary" onclick="window.closeModal('editThemeModal')">Annuler</button></div></div></div>`;
+      document.body.insertAdjacentHTML('beforeend', html);
+    }catch(e){ console.error(e); setMessage('Erreur ouverture edition','error'); }
+  })();
+};
+
+window.saveTheme = async function(id){
+  try{
+    var name = qs('#editThemeName') ? qs('#editThemeName').value.trim() : '';
+    var keys = qs('#editThemeKeywords') ? qs('#editThemeKeywords').value.split(/
++/).map(s=>s.trim()).filter(Boolean) : [];
+    var payload = { name: name, keywords: keys };
+    var res = await fetch('/api/themes/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if(res.ok){ setMessage('Theme enregistre','success'); closeModal('editThemeModal'); loadThemesManager(); }
+    else{ var txt = await res.text(); setMessage('Erreur enregistrement: '+txt,'error'); }
+  }catch(e){ console.error(e); setMessage('Erreur saveTheme','error'); }
+};
+
+window.deleteTheme = async function(id){
+  try{
+    if(!confirm('Supprimer le theme ?')) return;
+    var res = await fetch('/api/themes/' + id, { method:'DELETE' });
+    if(res.ok){ setMessage('Theme supprime','success'); loadThemesManager(); }
+    else{ setMessage('Erreur suppression','error'); }
+  }catch(e){ console.error(e); setMessage('Erreur deleteTheme','error'); }
+};
+
+window.addNewTheme = async function(){
+  try{
+    var name = qs('#newThemeName') ? qs('#newThemeName').value.trim() : '';
+    var keys = qs('#newThemeKeywords') ? qs('#newThemeKeywords').value.split(/
++/).map(s=>s.trim()).filter(Boolean) : [];
+    if(!name) { alert('Nom requis'); return; }
+    var res = await fetch('/api/themes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: name, keywords: keys }) });
+    if(res.ok){ setMessage('Theme ajoute','success'); closeModal('addThemeModal'); loadThemesManager(); }
+    else{ setMessage('Erreur ajout theme','error'); }
+  }catch(e){ console.error(e); setMessage('Erreur addNewTheme','error'); }
+};
+
+window.exportJSON = async function(){
+  try{
+    var res = await fetch('/api/articles?limit=1000');
+    if(!res.ok) throw new Error('API error');
+    var data = await res.json();
+    var blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = 'export_articles.json'; a.click(); URL.revokeObjectURL(url);
+    setMessage('Export JSON pret','success');
+  }catch(e){ console.error(e); setMessage('Erreur export JSON','error'); }
+};
+
+window.exportCSV = async function(){
+  try{
+    var res = await fetch('/api/articles?limit=1000');
+    if(!res.ok) throw new Error('API error');
+    var data = await res.json();
+    var rows = [['id','title','link','summary']];
+    data.forEach(r=> rows.push([ (r.id||''), (r.title||'').replace(/"/g,'""'), (r.link||''), (r.summary||'').replace(/"/g,'""') ]));
+    var csv = rows.map(r=> r.map(c=>'"'+(c||'')+'"').join(',')).join('\n');
+    var blob = new Blob([csv], {type:'text/csv'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = 'export_articles.csv'; a.click(); URL.revokeObjectURL(url);
+    setMessage('Export CSV pret','success');
+  }catch(e){ console.error(e); setMessage('Erreur export CSV','error'); }
+};
+
+window.closeModal = function(id){
+  var el = qs('#'+id);
+  if(el){ el.style.display='none'; el.remove(); }
+};
+
+// auto-init
+document.addEventListener('DOMContentLoaded', function(){
+  try{
+    window.updateAIStatus = window.updateAIStatus || window.updateAIStatus;
+    // ensure functions global (no-op if already)
+    window.showTab = window.showTab;
+    window.showAIConfig = window.showAIConfig;
+    // attempt to load themes
+    if(typeof window.loadThemesManager === 'function') window.loadThemesManager();
+  }catch(e){ console.error('init error', e); }
+});
+
+})(); // end inserted IIFE
 const API_BASE = window.__API_BASE__ || (location.origin.includes('http') ? location.origin : 'http://localhost:3000');
 
 window.app = (function () {
@@ -1138,154 +1354,6 @@ window.app = (function () {
     
     console.log("✅ Application initialisée");
   }
-
-
-    // ========== FONCTIONS D'INTERFACE IA & MODALES ==========
-    function showAIConfig() {
-        // Affiche le modal de configuration IA si présent
-        const modal = qs('#aiConfigModal');
-        if (modal) {
-            modal.style.display = 'block';
-            // remplir les champs si on a une config
-            try {
-                const cfg = state.aiConfig || JSON.parse(localStorage.getItem('aiConfig') || '{}');
-                if (qs('#openaiKey')) qs('#openaiKey').value = cfg.openaiKey || '';
-                if (qs('#openaiModel')) qs('#openaiModel').value = cfg.openaiModel || 'gpt-3.5-turbo';
-                if (qs('#enableLocal')) qs('#enableLocal').checked = !!cfg.enableLocal;
-                if (qs('#llamaUrl')) qs('#llamaUrl').value = cfg.llamaUrl || '';
-            } catch (e) { /* ignore */ }
-        } else {
-            alert('Configuration IA: modal #aiConfigModal introuvable dans le HTML.');
-        }
-    }
-
-    function saveAIConfig() {
-        try {
-            const cfg = {
-                openaiKey: qs('#openaiKey') ? qs('#openaiKey').value.trim() : '',
-                openaiModel: qs('#openaiModel') ? qs('#openaiModel').value.trim() : '',
-                enableLocal: qs('#enableLocal') ? qs('#enableLocal').checked : false,
-                llamaUrl: qs('#llamaUrl') ? qs('#llamaUrl').value.trim() : ''
-            };
-            state.aiConfig = cfg;
-            localStorage.setItem('aiConfig', JSON.stringify(cfg));
-            setMessage('✅ Configuration IA sauvegardée', 'success');
-            closeModal('aiConfigModal');
-        } catch (e) {
-            console.error('Erreur sauvegarde config IA', e);
-            setMessage('Erreur sauvegarde config IA: '+e.message, 'error');
-        }
-    }
-
-    async function testAIConnection() {
-        // Test basique: vérifier que la config existe et, si enableLocal, tenter un ping
-        try {
-            const cfg = state.aiConfig || JSON.parse(localStorage.getItem('aiConfig') || '{}');
-            if (!cfg) {
-                setMessage('Aucune configuration IA détectée', 'warning');
-                return false;
-            }
-            if (cfg.enableLocal && cfg.llamaUrl) {
-                const url = cfg.llamaUrl.replace(/\/+$/, '') + '/health';
-                try {
-                    const res = await fetch(url, { method: 'GET' , mode: 'cors' });
-                    if (res.ok) {
-                        setMessage('✅ Connexion au modèle local OK', 'success');
-                        return true;
-                    } else {
-                        setMessage('❌ Modèle local non joignable ('+res.status+')', 'error');
-                        return false;
-                    }
-                } catch (err) {
-                    setMessage('❌ Échec connexion modèle local: ' + err.message, 'error');
-                    return false;
-                }
-            } else if (cfg.openaiKey) {
-                // Nous ne pouvons pas tester la clé OpenAI côté client sans backend, indiquer l'état
-                setMessage('ℹ️ Clé OpenAI configurée (test côté serveur requis)', 'info');
-                return true;
-            } else {
-                setMessage('⚠️ Aucune méthode IA configurée (OpenAI ou Local)', 'warning');
-                return false;
-            }
-        } catch (e) {
-            console.error('Erreur testAIConnection', e);
-            setMessage('Erreur test IA: '+e.message, 'error');
-            return false;
-        }
-    }
-
-    function showAddThemeModal() {
-        const modal = qs('#addThemeModal');
-        if (modal) {
-            modal.style.display = 'block';
-        } else {
-            // create a small inline modal if not present
-            const html = `
-              <div id="addThemeModal" class="modal" style="display:block;">
-                <div class="modal-content" style="max-width:600px;margin:40px auto;padding:20px;background:white;border-radius:8px;">
-                  <span class="close" onclick="window.app.closeModal('addThemeModal')">&times;</span>
-                  <h3>Ajouter un thème</h3>
-                  <div style="margin-top:8px;">
-                    <input id="newThemeName" placeholder="Nom du thème" style="width:100%;padding:8px;margin-bottom:8px;">
-                    <textarea id="newThemeKeywords" placeholder="Mots-clés (un par ligne)" style="width:100%;height:120px;padding:8px;"></textarea>
-                    <div style="display:flex;gap:8px;margin-top:8px;">
-                      <input id="newThemeColor" type="color" value="#3b82f6">
-                      <button class="btn btn-success" onclick="window.app.addNewTheme()">💾 Ajouter</button>
-                      <button class="btn btn-secondary" onclick="window.app.closeModal('addThemeModal')">Annuler</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', html);
-        }
-    }
-
-    function showAddFeedModal() {
-        const modal = qs('#addFeedModal');
-        if (modal) {
-            modal.style.display = 'block';
-        } else {
-            const html = `
-              <div id="addFeedModal" class="modal" style="display:block;">
-                <div class="modal-content" style="max-width:600px;margin:40px auto;padding:20px;background:white;border-radius:8px;">
-                  <span class="close" onclick="window.app.closeModal('addFeedModal')">&times;</span>
-                  <h3>Ajouter un flux</h3>
-                  <div style="margin-top:8px;">
-                    <input id="newFeedUrl" placeholder="URL du flux" style="width:100%;padding:8px;margin-bottom:8px;">
-                    <button class="btn btn-success" onclick="(function(){ const url=qs('#newFeedUrl').value; if(url) window.app.addNewFeed(url); })()">💾 Ajouter</button>
-                    <button class="btn btn-secondary" onclick="window.app.closeModal('addFeedModal')">Annuler</button>
-                  </div>
-                </div>
-              </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', html);
-        }
-    }
-
-    
-    async function addNewFeed(url) {
-        try {
-            const feedUrl = url || (qs('#newFeedUrl') ? qs('#newFeedUrl').value.trim() : '');
-            if (!feedUrl) {
-                alert('Veuillez fournir une URL de flux valide');
-                return;
-            }
-            setMessage('Ajout du flux...', 'info');
-            const res = await apiPOST('/feeds', { url: feedUrl });
-            if (res.success) {
-                closeModal('addFeedModal');
-                setMessage('✅ Flux ajouté', 'success');
-                if (window.loadFeedsManager) window.loadFeedsManager();
-            } else {
-                throw new Error(res.error || 'Erreur ajout flux');
-            }
-        } catch (e) {
-            console.error('Erreur addNewFeed', e);
-            alert('Erreur ajout flux: ' + e.message);
-        }
-    }
 
   // ========== EXPOSITION PUBLIQUE ==========
   return {
