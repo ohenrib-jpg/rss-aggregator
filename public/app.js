@@ -1820,6 +1820,13 @@ window.app = (function () {
         exportArticlesToCSV,
         exportToJSON,
 
+        // Rapports IA
+        generateAIAnalysisReport,
+        generateReportWithAI,
+        downloadReportAsPDF,
+        downloadReportAsHTML,
+        copyReportToClipboard,
+
         // Utilitaires
         computeThemesFromArticles,
         updateAllCharts,
@@ -1828,6 +1835,535 @@ window.app = (function () {
         state
     };
 })();
+
+    // ========== RAPPORTS ET ANALYSE IA ==========
+    async function generateAIAnalysisReport() {
+        setMessage("🧠 Génération du rapport d'analyse IA...", "info");
+        
+        try {
+            // Vérifier la configuration IA
+            if (!state.aiConfig?.openaiKey) {
+                setMessage("❌ Clé API OpenAI manquante. Configurez-la dans les paramètres.", "error");
+                showTab("settings");
+                return;
+            }
+
+            // Préparer les données pour l'analyse
+            const analysisData = {
+                timestamp: new Date().toISOString(),
+                summary: {
+                    total_articles: state.articles.length,
+                    period_covered: getAnalysisPeriod(),
+                    themes_analyzed: state.themes.length,
+                    sentiment_distribution: getSentimentDistribution()
+                },
+                key_insights: {
+                    top_themes: state.themes.slice(0, 10),
+                    sentiment_evolution: getSentimentEvolutionData(),
+                    theme_correlations: findThemeCorrelations(),
+                    emerging_trends: detectEmergingTrends()
+                },
+                detailed_analysis: {
+                    articles_by_source: groupArticlesBySource(),
+                    confidence_metrics: calculateConfidenceMetrics(),
+                    temporal_patterns: analyzeTemporalPatterns()
+                }
+            };
+
+            // Afficher l'interface de génération
+            showReportGenerationInterface(analysisData);
+
+        } catch (error) {
+            console.error("❌ Erreur préparation rapport:", error);
+            setMessage("Erreur lors de la préparation du rapport: " + error.message, "error");
+        }
+    }
+
+    function showReportGenerationInterface(analysisData) {
+        const modalHtml = `
+            <div id="reportGenerationModal" class="modal" style="display: block;">
+                <div class="modal-content" style="max-width: 800px;">
+                    <span class="close" onclick="window.app.closeModal('reportGenerationModal')">&times;</span>
+                    <h2>🧠 Rapport d'Analyse Avancée</h2>
+                    
+                    <div style="margin: 20px 0; padding: 15px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+                        <h4>📊 Données à analyser</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px;">
+                            <div>
+                                <strong>Articles:</strong> ${analysisData.summary.total_articles}
+                            </div>
+                            <div>
+                                <strong>Thèmes:</strong> ${analysisData.summary.themes_analyzed}
+                            </div>
+                            <div>
+                                <strong>Période:</strong> ${analysisData.summary.period_covered}
+                            </div>
+                            <div>
+                                <strong>Sources:</strong> ${Object.keys(analysisData.detailed_analysis.articles_by_source).length}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Type d'analyse:</label>
+                        <select id="reportType" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <option value="comprehensive">📈 Analyse complète</option>
+                            <option value="trends">🚨 Détection de tendances</option>
+                            <option value="sentiment">😊 Analyse de sentiment détaillée</option>
+                            <option value="thematic">🎨 Analyse thématique approfondie</option>
+                            <option value="predictive">🔮 Analyse prédictive</option>
+                        </select>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Niveau de détail:</label>
+                        <select id="reportDetail" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <option value="summary">Résumé exécutif</option>
+                            <option value="detailed" selected>Analyse détaillée</option>
+                            <option value="comprehensive">Rapport complet</option>
+                        </select>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Focus d'analyse:</label>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            ${state.themes.slice(0, 8).map(theme => `
+                                <label style="display: flex; align-items: center; gap: 5px;">
+                                    <input type="checkbox" name="focusThemes" value="${theme.name}" checked>
+                                    <span style="padding: 4px 8px; background: ${theme.color}20; color: ${theme.color}; border-radius: 12px; font-size: 0.8rem;">
+                                        ${theme.name}
+                                    </span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div id="reportPreview" style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px; display: none;">
+                        <h4>📝 Aperçu du rapport en cours de génération...</h4>
+                        <div id="reportContent" style="max-height: 300px; overflow-y: auto; margin-top: 10px;"></div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button class="btn btn-success" onclick="window.app.generateReportWithAI()">
+                            🧠 Générer le rapport IA
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.app.closeModal('reportGenerationModal')">
+                            ❌ Annuler
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const oldModal = qs('#reportGenerationModal');
+        if (oldModal) oldModal.remove();
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    async function generateReportWithAI() {
+        const reportType = qs('#reportType').value;
+        const reportDetail = qs('#reportDetail').value;
+        const selectedThemes = Array.from(qsa('input[name="focusThemes"]:checked')).map(cb => cb.value);
+
+        setMessage("🧠 L'IA analyse les données...", "info");
+        
+        // Afficher la prévisualisation
+        const preview = qs('#reportPreview');
+        const content = qs('#reportContent');
+        if (preview) preview.style.display = 'block';
+        if (content) content.innerHTML = '<div class="loading">🔄 Analyse en cours par l\'IA...</div>';
+
+        try {
+            // Préparer le prompt pour l'IA
+            const prompt = buildAIPrompt(reportType, reportDetail, selectedThemes);
+            
+            // Appeler l'API OpenAI
+            const analysisResult = await callOpenAIAnalysis(prompt);
+            
+            // Afficher le résultat
+            if (content) {
+                content.innerHTML = formatAIResponse(analysisResult);
+            }
+            
+            // Proposer le téléchargement
+            showReportDownloadOptions(analysisResult, reportType);
+
+        } catch (error) {
+            console.error("❌ Erreur génération rapport IA:", error);
+            setMessage("❌ Erreur lors de l'analyse IA: " + error.message, "error");
+            if (content) {
+                content.innerHTML = `<div style="color: #ef4444;">❌ Erreur: ${error.message}</div>`;
+            }
+        }
+    }
+
+    function buildAIPrompt(reportType, reportDetail, selectedThemes) {
+        const basePrompt = {
+            comprehensive: "Fournis une analyse complète des données RSS agrégées, incluant les tendances principales, l'analyse de sentiment, et les insights clés.",
+            trends: "Identifie les tendances émergentes, les sujets en croissance, et les patterns temporels significatifs.",
+            sentiment: "Analyse en profondeur l'évolution des sentiments, les corrélations entre thèmes et sentiments, et les événements impactants.",
+            thematic: "Explore les relations entre les différents thèmes, les co-occurrences, et l'évolution thématique dans le temps.",
+            predictive: "Sur la base des données historiques, propose des prédictions sur les tendances futures et recommandations."
+        };
+
+        const detailLevel = {
+            summary: "en te concentrant sur les points clés et un résumé exécutif",
+            detailed: "avec une analyse détaillée et des exemples concrets", 
+            comprehensive: "avec une analyse exhaustive incluant données quantitatives et qualitatives"
+        };
+
+        return `
+En tant qu'analyste expert de données médias, ${basePrompt[reportType]} ${detailLevel[reportDetail]}.
+
+Données à analyser:
+- ${state.articles.length} articles RSS agrégés
+- ${state.themes.length} thèmes identifiés
+- Période: ${getAnalysisPeriod()}
+- Thèmes focus: ${selectedThemes.join(', ')}
+
+Points d'analyse requis:
+1. Synthèse des tendances principales
+2. Analyse des patterns temporels
+3. Évolution des sentiments
+4. Corrélations thèmes/sentiments
+5. Insights actionnables
+6. Recommandations stratégiques
+
+Format de réponse: Structuré en sections claires avec titres, points clés, et données chiffrées.
+`;
+    }
+
+    async function callOpenAIAnalysis(prompt) {
+        if (!state.aiConfig?.openaiKey) {
+            throw new Error("Clé API OpenAI non configurée");
+        }
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.aiConfig.openaiKey}`
+            },
+            body: JSON.stringify({
+                model: state.aiConfig.openaiModel || 'gpt-4',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'Tu es un analyste expert de données médias et RSS. Tu fournis des analyses structurées, factuelles et actionnables basées sur les données fournies.'
+                    },
+                    {
+                        role: 'user', 
+                        content: prompt
+                    }
+                ],
+                max_tokens: 2000,
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`OpenAI API: ${errorData.error?.message || 'Erreur inconnue'}`);
+        }
+
+        const data = await response.json();
+        return data.choices[0]?.message?.content || 'Aucune réponse générée';
+    }
+
+    function formatAIResponse(response) {
+        // Formater la réponse de l'IA avec un style professionnel
+        return `
+            <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6;">
+                ${response.replace(/\n/g, '<br>')
+                         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                         .replace(/### (.*?)(?=\n|$)/g, '<h3 style="color: #3b82f6; margin-top: 20px;">$1</h3>')
+                         .replace(/## (.*?)(?=\n|$)/g, '<h2 style="color: #1e40af; border-bottom: 2px solid #3b82f6; padding-bottom: 5px; margin-top: 25px;">$1</h2>')
+                         .replace(/- (.*?)(?=\n|$)/g, '<li style="margin: 5px 0;">$1</li>')
+                         .replace(/(\d+\. .*?)(?=\n|$)/g, '<li style="margin: 5px 0;">$1</li>')}
+            </div>
+        `;
+    }
+
+    function showReportDownloadOptions(analysisResult, reportType) {
+        const modal = qs('#reportGenerationModal .modal-content');
+        if (!modal) return;
+
+        const downloadSection = `
+            <div style="margin: 20px 0; padding: 15px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+                <h4 style="color: #16a34a; margin-bottom: 10px;">✅ Rapport généré avec succès</h4>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="window.app.downloadReportAsPDF('${reportType}')">
+                        📄 Télécharger PDF
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.app.downloadReportAsHTML('${reportType}')">
+                        🌐 Télécharger HTML
+                    </button>
+                    <button class="btn btn-info" onclick="window.app.copyReportToClipboard()">
+                        📋 Copier le texte
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Ajouter la section de téléchargement si elle n'existe pas déjà
+        if (!qs('#downloadSection', modal)) {
+            modal.insertAdjacentHTML('beforeend', downloadSection);
+        }
+    }
+
+    async function downloadReportAsPDF(reportType) {
+        try {
+            setMessage("Génération du PDF...", "info");
+            
+            // Utiliser html2pdf.js ou une solution similaire
+            const content = qs('#reportContent').innerHTML;
+            const opt = {
+                margin: 1,
+                filename: `rapport-analyse-${reportType}-${new Date().toISOString().split('T')[0]}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'cm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Si html2pdf est disponible
+            if (window.html2pdf) {
+                await html2pdf().set(opt).from(content).save();
+                setMessage("✅ Rapport PDF téléchargé", "success");
+            } else {
+                // Fallback: ouvrir dans une nouvelle fenêtre pour impression
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>Rapport d'Analyse</title>
+                            <style>
+                                body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+                                h1 { color: #1e40af; }
+                                h2 { color: #3b82f6; border-bottom: 1px solid #3b82f6; }
+                                .header { text-align: center; margin-bottom: 30px; }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="header">
+                                <h1>Rapport d'Analyse RSS</h1>
+                                <p>Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+                            </div>
+                            ${content}
+                        </body>
+                    </html>
+                `);
+                printWindow.document.close();
+                printWindow.print();
+            }
+        } catch (error) {
+            console.error("❌ Erreur génération PDF:", error);
+            setMessage("Erreur lors de la génération du PDF", "error");
+        }
+    }
+
+    function downloadReportAsHTML(reportType) {
+        try {
+            const content = qs('#reportContent').innerHTML;
+            const fullHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport d'Analyse RSS - ${reportType}</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            line-height: 1.6; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            color: #333;
+        }
+        .header { 
+            text-align: center; 
+            margin-bottom: 40px; 
+            border-bottom: 3px solid #3b82f6; 
+            padding-bottom: 20px;
+        }
+        h1 { color: #1e40af; }
+        h2 { color: #3b82f6; border-bottom: 1px solid #3b82f6; padding-bottom: 5px; }
+        h3 { color: #2563eb; }
+        .metadata { 
+            background: #f8fafc; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 20px 0; 
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧠 Rapport d'Analyse RSS</h1>
+        <div class="metadata">
+            <p><strong>Type:</strong> ${reportType} | <strong>Date:</strong> ${new Date().toLocaleDateString('fr-FR')}</p>
+            <p><strong>Articles analysés:</strong> ${state.articles.length} | <strong>Thèmes:</strong> ${state.themes.length}</p>
+        </div>
+    </div>
+    ${content}
+</body>
+</html>`;
+
+            const blob = new Blob([fullHtml], { type: 'text/html' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `rapport-${reportType}-${new Date().toISOString().split('T')[0]}.html`;
+            link.click();
+            
+            setMessage("✅ Rapport HTML téléchargé", "success");
+        } catch (error) {
+            console.error("❌ Erreur téléchargement HTML:", error);
+            setMessage("Erreur lors du téléchargement HTML", "error");
+        }
+    }
+
+    async function copyReportToClipboard() {
+        try {
+            const content = qs('#reportContent').textContent;
+            await navigator.clipboard.writeText(content);
+            setMessage("✅ Rapport copié dans le presse-papier", "success");
+        } catch (error) {
+            console.error("❌ Erreur copie presse-papier:", error);
+            setMessage("Erreur lors de la copie", "error");
+        }
+    }
+
+    // Fonctions utilitaires pour l'analyse
+    function getAnalysisPeriod() {
+        if (state.articles.length === 0) return "Aucune donnée";
+        const dates = state.articles.map(a => new Date(a.date)).filter(d => !isNaN(d));
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date(Math.max(...dates));
+        return `${minDate.toLocaleDateString('fr-FR')} - ${maxDate.toLocaleDateString('fr-FR')}`;
+    }
+
+    function getSentimentDistribution() {
+        const distribution = {
+            positive: state.articles.filter(a => a.sentiment?.sentiment === 'positive').length,
+            neutral: state.articles.filter(a => a.sentiment?.sentiment === 'neutral').length,
+            negative: state.articles.filter(a => a.sentiment?.sentiment === 'negative').length
+        };
+        return distribution;
+    }
+
+    function getSentimentEvolutionData() {
+        const dates = Array.from(new Set(state.articles.map(a => isoDay(a.date)))).filter(d => d).sort();
+        return dates.map(date => {
+            const articlesOfDay = state.articles.filter(a => isoDay(a.date) === date);
+            const avgSentiment = articlesOfDay.length > 0 ? 
+                articlesOfDay.reduce((sum, a) => sum + (a.sentiment?.score || 0), 0) / articlesOfDay.length : 0;
+            return { date, avgSentiment, count: articlesOfDay.length };
+        });
+    }
+
+    function findThemeCorrelations() {
+        const correlations = [];
+        const topThemes = state.themes.slice(0, 10);
+        
+        for (let i = 0; i < topThemes.length; i++) {
+            for (let j = i + 1; j < topThemes.length; j++) {
+                const themeA = topThemes[i].name;
+                const themeB = topThemes[j].name;
+                const coOccurrences = state.articles.filter(a => 
+                    a.themes.includes(themeA) && a.themes.includes(themeB)
+                ).length;
+                
+                if (coOccurrences > 0) {
+                    correlations.push({
+                        themeA, themeB, coOccurrences,
+                        strength: coOccurrences / Math.min(
+                            state.themes.find(t => t.name === themeA)?.count || 1,
+                            state.themes.find(t => t.name === themeB)?.count || 1
+                        )
+                    });
+                }
+            }
+        }
+        
+        return correlations.sort((a, b) => b.strength - a.strength).slice(0, 10);
+    }
+
+    function detectEmergingTrends() {
+        const recentArticles = state.articles
+            .filter(a => {
+                const articleDate = new Date(a.date);
+                const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                return articleDate > weekAgo;
+            })
+            .slice(0, 100);
+
+        const themeCounts = {};
+        recentArticles.forEach(article => {
+            article.themes.forEach(theme => {
+                themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+            });
+        });
+
+        return Object.entries(themeCounts)
+            .map(([theme, count]) => ({ theme, count, growth: calculateThemeGrowth(theme) }))
+            .filter(trend => trend.growth > 1.5)
+            .sort((a, b) => b.growth - a.growth)
+            .slice(0, 5);
+    }
+
+    function calculateThemeGrowth(theme) {
+        const now = new Date();
+        const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+        const recentCount = state.articles.filter(a => 
+            new Date(a.date) > lastWeek && a.themes.includes(theme)
+        ).length;
+
+        const previousCount = state.articles.filter(a => 
+            new Date(a.date) > twoWeeksAgo && new Date(a.date) <= lastWeek && a.themes.includes(theme)
+        ).length;
+
+        return previousCount > 0 ? recentCount / previousCount : recentCount > 0 ? 2 : 1;
+    }
+
+    function groupArticlesBySource() {
+        const sources = {};
+        state.articles.forEach(article => {
+            const source = article.feed || 'Inconnu';
+            sources[source] = (sources[source] || 0) + 1;
+        });
+        return sources;
+    }
+
+    function calculateConfidenceMetrics() {
+        const confidences = state.articles.map(a => a.confidence || 0).filter(c => c > 0);
+        const avgConfidence = confidences.length > 0 ? 
+            confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
+        
+        return {
+            average: avgConfidence,
+            high_confidence: confidences.filter(c => c > 0.8).length,
+            low_confidence: confidences.filter(c => c < 0.5).length
+        };
+    }
+
+    function analyzeTemporalPatterns() {
+        const hourlyDistribution = Array(24).fill(0);
+        state.articles.forEach(article => {
+            const hour = new Date(article.date).getHours();
+            hourlyDistribution[hour]++;
+        });
+
+        const peakHour = hourlyDistribution.indexOf(Math.max(...hourlyDistribution));
+        
+        return {
+            hourly_distribution: hourlyDistribution,
+            peak_hour: peakHour,
+            articles_per_day: state.articles.length / 30 // approximation sur 30 jours
+        };
+    }
 
 // ========== INITIALISATION AU CHARGEMENT ==========
 document.addEventListener("DOMContentLoaded", function () {
