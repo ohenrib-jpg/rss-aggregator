@@ -126,7 +126,7 @@
         <div id="analysisTab" class="tab-content">
             <div class="card">
                 <h2 style="margin-bottom: 20px; color: #1e40af;">📈 Analyse des Données</h2>
-                
+
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
                     <div class="chart-container">
                         <h3>📊 Répartition par Thème</h3>
@@ -137,11 +137,17 @@
                         <canvas id="sentimentChart" height="300"></canvas>
                     </div>
                 </div>
-                
+
                 <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
                     <div class="chart-container">
                         <h3>📈 Évolution Temporelle</h3>
-                        <canvas id="timelineChart" height="300"></canvas>
+                        
+                        <!-- Contrôles de zoom (insérer avant <canvas id="timelineChart">) -->
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                            <button class="btn btn-secondary" onclick="zoomTimelineChart(1.5)" title="Zoom avant">🔍+</button>
+                            <button class="btn btn-secondary" onclick="zoomTimelineChart(0.66)" title="Zoom arrière">🔍−</button>
+                            <button class="btn btn-secondary" onclick="resetTimelineZoom()" title="Réinitialiser zoom">↺ Réinit</button>
+                            <canvas id="timelineChart" height="300"></canvas>
                     </div>
                     <div class="chart-container">
                         <h3>🚀 Évolution des Thèmes</h3>
@@ -179,7 +185,7 @@
         <div id="metricsTab" class="tab-content">
             <div class="card">
                 <h2 style="margin-bottom: 20px; color: #1e40af;">📊 Métriques Globales</h2>
-                
+
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
                     <div class="metric-card" style="text-align: center; padding: 20px; background: #f0f9ff; border-radius: 12px;">
                         <h3>📚 Articles Totaux</h3>
@@ -198,7 +204,7 @@
                         <div style="font-size: 2.5rem; color: #ef4444; font-weight: bold;" id="m_corro">0%</div>
                     </div>
                 </div>
-                
+
                 <div class="card">
                     <h3 style="margin-bottom: 15px;">🏆 Thèmes les Plus Populaires</h3>
                     <ul id="topThemes" style="list-style: none;">
@@ -206,13 +212,13 @@
                     </ul>
                 </div>
             </div>
-            
+
             <!-- Statistiques de Sentiment -->
             <div id="sentimentOverview" class="card">
                 <h3 style="margin-bottom: 20px;">😊 Aperçu des Sentiments</h3>
                 <div class="loading">Chargement des statistiques de sentiment...</div>
             </div>
-            
+
             <!-- Statistiques d'Apprentissage -->
             <div id="learningStats" class="card">
                 <h3 style="margin-bottom: 20px;">🤖 Statistiques d'Apprentissage</h3>
@@ -226,7 +232,7 @@
                 <!-- Configuration IA -->
                 <div class="card full-width" style="margin-bottom: 20px;">
                     <h3>🤖 Configuration de l'IA</h3>
-                    
+
                     <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px;">
                         <h4 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h4>
                         <div style="margin-bottom: 15px;">
@@ -251,7 +257,7 @@
                 <!-- Configuration Email -->
                 <div class="card full-width" style="margin-bottom: 20px;">
                     <h3>✉️ Configuration Email</h3>
-                    
+
                     <div style="margin: 20px 0;">
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Serveur SMTP:</label>
@@ -288,7 +294,7 @@
                 <!-- Configuration Interface -->
                 <div class="card full-width">
                     <h3>🎨 Paramètres d'Interface</h3>
-                    
+
                     <div style="margin: 20px 0;">
                         <div style="margin-bottom: 20px;">
                             <label style="display: block; margin-bottom: 10px; font-weight: 600;">Thème visuel:</label>
@@ -325,6 +331,34 @@
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-success" onclick="appCall('showAddFeedModal')">✅ Ajouter</button>
                     <button class="btn btn-secondary" onclick="appCall('closeModal', 'addFeedModal')">❌ Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Ajout Thème — insérer avant le bouton flottant Rapport IA ou avant </div> de la "container" -->
+        <div id="addThemeModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="appCall('closeModal', 'addThemeModal')">&times;</span>
+                <h2>➕ Ajouter un Thème</h2>
+
+                <div style="margin: 12px 0; display: grid; gap:10px;">
+                    <input type="text" id="newThemeName" placeholder="Nom du thème" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
+
+                    <textarea id="newThemeKeywords" placeholder="Mots-clés (un par ligne)" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:8px; height:120px; font-family: monospace;"></textarea>
+
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <label style="display:flex; align-items:center; gap:8px;">
+                            <span>Couleur:</span>
+                            <input type="color" id="newThemeColor" value="#6366f1" style="height:36px; width:56px; border:none; background:transparent;">
+                        </label>
+                    </div>
+
+                    <textarea id="newThemeDescription" placeholder="Description (optionnelle)" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:8px; height:80px;"></textarea>
+                </div>
+
+                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px;">
+                    <button class="btn btn-success" onclick="appCall('createTheme')">✅ Ajouter</button>
+                    <button class="btn btn-secondary" onclick="appCall('closeModal', 'addThemeModal')">❌ Annuler</button>
                 </div>
             </div>
         </div>

@@ -174,7 +174,8 @@ window.app = (function () {
         try {
             const json = await apiGET("/articles?limit=200");
 
-            if (json.success && Array.isArray(json.articles)) {
+            // Amélioration: accepter plusieurs formats de réponse de l'API
+            if (json && json.success && Array.isArray(json.articles)) {
                 state.articles = json.articles.map(normalizeArticle).filter(a => a !== null);
                 state.summary = { total_articles: json.total || state.articles.length };
                 console.log(`✅ ${state.articles.length} articles chargés`);
@@ -212,9 +213,16 @@ window.app = (function () {
         try {
             const data = await apiGET("/themes");
 
-            if (data.success && Array.isArray(data.themes)) {
+            // Accept plusieurs formats que l'API peut renvoyer (tableau direct ou { themes: [...] })
+            if (Array.isArray(data)) {
+                state.themes = data;
+                console.log(`✅ ${state.themes.length} thèmes chargés (array)`);
+                return state.themes;
+            }
+
+            if (data && Array.isArray(data.themes)) {
                 state.themes = data.themes;
-                console.log(`✅ ${state.themes.length} thèmes chargés`);
+                console.log(`✅ ${state.themes.length} thèmes chargés (obj.themes)`);
                 return state.themes;
             }
 
@@ -237,9 +245,15 @@ window.app = (function () {
         try {
             const data = await apiGET("/feeds/manager");
 
-            if (data.success && Array.isArray(data.feeds)) {
+            if (Array.isArray(data)) {
+                state.feeds = data;
+                console.log(`✅ ${state.feeds.length} flux chargés (array)`);
+                return state.feeds;
+            }
+
+            if (data && Array.isArray(data.feeds)) {
                 state.feeds = data.feeds;
-                console.log(`✅ ${state.feeds.length} flux chargés`);
+                console.log(`✅ ${state.feeds.length} flux chargés (obj.feeds)`);
                 return state.feeds;
             }
 
@@ -273,6 +287,9 @@ window.app = (function () {
 
             setMessage(`✅ ${refreshResult.details?.articles_processed || 0} nouveaux articles récupérés`, "success");
             await loadArticles(true);
+
+            // Recharger les métriques après le rafraîchissement pour mettre à jour les compteurs (articles, postérieur, corroboration, ...)
+            await loadMetrics();
 
             setMessage("🎨 Analyse thématique en cours...", "info");
 
@@ -483,53 +500,37 @@ window.app = (function () {
             state.charts.timelineChart.destroy();
         }
 
-        const dates = Array.from(new Set(state.articles.map(a => isoDay(a.date)))).filter(d => d).sort().slice(-30);
-
-        if (dates.length === 0) {
-            ctx.parentElement.innerHTML = `
-                <h3>📈 Évolution Temporelle</h3>
-                <div style="text-align: center; padding: 60px 20px; color: #64748b;">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">📈</div>
-                    <div style="font-size: 1.1rem;">Aucune donnée temporelle disponible</div>
-                </div>
-            `;
-            return;
+        // registre explicitement le plugin si nécessaire
+        if (typeof Chart.register === 'function' && window['ChartZoom']) {
+            try { Chart.register(window['ChartZoom']); } catch (e) { /* déjà enregistré */ }
         }
 
         const topThemes = state.themes.filter(t => t.count > 0).slice(0, 5);
         const themeCounts = {};
 
         topThemes.forEach(theme => {
-            themeCounts[theme.name] = dates.map(date =>
-                state.articles.filter(a => isoDay(a.date) === date && a.themes.includes(theme.name)).length
+            themeCounts[theme.name] = (state.articles || []).map(a =>
+                a.themes.includes(theme.name) ? 1 : 0
             );
         });
 
-        state.charts.timelineChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates.map(d => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })),
-                datasets: Object.entries(themeCounts).map(([themeName, counts]) => ({
-                    label: themeName,
-                    data: counts,
-                    borderColor: getThemeColor(themeName),
-                    backgroundColor: getThemeColor(themeName) + '20',
-                    tension: 0.4,
-                    fill: true,
-                    borderWidth: 2
-                }))
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: { padding: 15, usePointStyle: true }
-                    }
-                }
-            }
-        });
+        const data = {
+            dates: Array.from(new Set(state.articles.map(a => isoDay(a.date)))).filter(d => d).sort().slice(-30),
+            themes: topThemes.map(theme => ({
+                name: theme.name,
+                color: theme.color,
+                values: state.articles.map(article => {
+                    const date = isoDay(article.date);
+                    return date && themeCounts[theme.name] ? themeCounts[theme.name][state.articles.indexOf(article)] : 0;
+                })
+            }))
+        };
+
+        // Applique les données transformées au graphique
+        updateTimelineChart(data);
+
+
+
     } function createSentimentChart() {
         const ctx = qs("#sentimentChart");
         if (!ctx) return;
@@ -738,6 +739,13 @@ window.app = (function () {
 
             if (state.themes.length > 0) {
                 container.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="font-weight: 600; color: #1e293b;">Thèmes configurés</div>
+                        <div>
+                            <button onclick="window.app.showAddThemeModal()" class="btn btn-success" style="padding: 8px 12px;">➕ Ajouter un thème</button>
+                            <button onclick="window.app.importThemesFromFile()" class="btn btn-secondary" style="padding: 8px 12px; margin-left:8px;">📥 Importer</button>
+                        </div>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
                         ${state.themes.map(theme => `
                             <div class="theme-card" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -787,9 +795,14 @@ window.app = (function () {
                     <div class="loading" style="text-align: center; padding: 60px 20px;">
                         <div style="font-size: 3rem; margin-bottom: 20px;">🎨</div>
                         <div style="font-size: 1.2rem; color: #64748b; margin-bottom: 20px;">Aucun thème configuré</div>
-                        <button onclick="window.app.importThemesFromFile()" class="btn btn-success" style="padding: 15px 30px; font-size: 1.1rem;">
-                            📥 Charger les thèmes par défaut
-                        </button>
+                        <div style="display:flex; gap:10px; justify-content:center;">
+                            <button onclick="window.app.showAddThemeModal()" class="btn btn-success" style="padding: 15px 20px; font-size: 1.1rem;">
+                                ➕ Ajouter un thème
+                            </button>
+                            <button onclick="window.app.importThemesFromFile()" class="btn btn-secondary" style="padding: 15px 20px; font-size: 1.1rem;">
+                                📥 Charger les thèmes par défaut
+                            </button>
+                        </div>
                     </div>
                 `;
             }
@@ -1876,7 +1889,8 @@ Format de réponse: Structuré en sections claires avec titres, points clés, et
         editTheme,
         saveThemeEdits,
         deleteTheme,
-        showAddThemeModal: () => showAddFeedModal(),
+        showAddThemeModal: showAddThemeModal,
+        createTheme,
 
         // Gestion des flux
         loadFeedsManager,
@@ -1925,3 +1939,117 @@ document.addEventListener("DOMContentLoaded", function () {
 // ========== EXPOSITION GLOBALE POUR COMPATIBILITÉ HTML ==========
 window.showTab = window.app.showTab;
 window.closeModal = window.app.closeModal;
+
+// updateTimelineChart + helpers (à coller dans le scope où state et Chart sont accessibles)
+
+function updateTimelineChart(data) {
+    const ctx = document.querySelector("#timelineChart");
+    if (!ctx) return;
+
+    // détruit ancien chart si présent
+    if (state.charts.timelineChart) {
+        state.charts.timelineChart.destroy();
+        state.charts.timelineChart = null;
+    }
+
+    // registre explicitement le plugin si nécessaire
+    if (typeof Chart.register === 'function' && window['ChartZoom']) {
+        try { Chart.register(window['ChartZoom']); } catch (e) { /* déjà enregistré */ }
+    }
+
+    const datasets = (data.themes || []).map(t => ({
+        label: t.name,
+        data: (data.dates || []).map((d, i) => ({ x: d, y: t.values[i] || 0 })),
+        borderColor: t.color || '#3b82f6',
+        backgroundColor: (t.color || '#3b82f6') + '33',
+        tension: 0.3,
+        fill: true,
+        pointRadius: 2,
+        borderWidth: 2
+    }));
+
+    const config = {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            parsing: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'day', tooltipFormat: 'dd MMM yyyy' },
+                    ticks: { maxRotation: 0, autoSkip: true },
+                    title: { display: true, text: 'Date' }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Nombre d\'articles' }
+                }
+            },
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { position: 'top' },
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        modifierKey: 'ctrl' // optionnel : pan avec Ctrl+drag
+                    },
+                    zoom: {
+                        wheel: { enabled: true, speed: 0.1 }, // molette
+                        pinch: { enabled: true },             // pinch smartphone
+                        mode: 'x'
+                    },
+                    limits: {
+                        x: {
+                            min: data.dates && data.dates.length ? data.dates[0] : undefined,
+                            max: data.dates && data.dates.length ? data.dates[data.dates.length - 1] : undefined
+                        },
+                        y: { min: 0 }
+                    }
+                }
+            },
+            elements: { point: { radius: 0 } }
+        }
+    };
+
+    state.charts.timelineChart = new Chart(ctx, config);
+}
+
+// Programmatic helpers (exposés globalement)
+function zoomTimelineChart(factor = 1.5) {
+    const chart = state.charts.timelineChart;
+    if (!chart) return;
+
+    const scale = chart.scales.x;
+    if (!scale) return;
+
+    const min = scale.min;
+    const max = scale.max;
+    if (min == null || max == null) return;
+
+    const center = (min + max) / 2;
+    const range = max - min;
+    const newRange = Math.max(1, range / factor);
+
+    chart.options.scales.x.min = center - newRange / 2;
+    chart.options.scales.x.max = center + newRange / 2;
+    chart.update('none');
+}
+
+function resetTimelineZoom() {
+    const chart = state.charts.timelineChart;
+    if (!chart) return;
+    if (typeof chart.resetZoom === 'function') {
+        chart.resetZoom(); // fournie par chartjs-plugin-zoom
+        return;
+    }
+    delete chart.options.scales.x.min;
+    delete chart.options.scales.x.max;
+    chart.update('none');
+}
+
+// Exposer si besoin
+window.zoomTimelineChart = zoomTimelineChart;
+window.resetTimelineZoom = resetTimelineZoom;           window.closeModal = window.app.closeModal;
