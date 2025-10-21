@@ -1103,16 +1103,48 @@ app.use((error, req, res, next) => {
   res.status(500).json({ success: false, error: 'Erreur serveur interne' });
 });
 
+// Fonction utilitaire pour exécuter les migrations SQL
+async function runSqlMigrationIfExists(migrationFilename) {
+     try {
+        const migrationPath = path.join(__dirname, 'db', 'migrations', migrationFilename);
+       
+        try {
+          await fs.access(migrationPath);    
+        } catch (err) {
+          console.log(`ℹ️ Migration non trouvée: ${migrationPath}`);
+          return false;
+        }
+        
+        const sql = await fs.readFile(migrationPath, 'utf8');
+        if (!sql || sql.trim().length === 0) {
+          console.log(`ℹ️ Fichier de migration vide: ${migrationPath}`);
+          return false;
+        }
+     
+      const client = await pool.connect();
+      try {
+         console.log(`🔧 Exécution migration SQL: ${migrationFilename}`);
+         await client.query(sql);
+         console.log(`✅ Migration appliquée: ${migrationFilename}`);
+       } finally {
+         client.release();
+       }
+   
+      return true; 
+    } catch (err) {
+      console.error(`❌ Échec migration ${migrationFilename}:`, err.message || err);
+      return false;
+    }
+}
 // ========== INITIALISATION & DÉMARRAGE ==========
-
 async function initializeApplication() {
-  try {
-    console.log('🚀 Initialisation de l\'application...');
-    await initializeDatabase();
-    await initializeDefaultThemes();
-    console.log('✅ Base de données et thèmes prêts');
+   try {
+      console.log('🚀 Initialisation de l\'application...');
+      await initializeDatabase();
+      await initializeDefaultThemes();
+      console.log('✅ Base de données et thèmes prêts');
 
-    // Premier rafraîchissement après 30 secondes
+   // Premier rafraîchissement après 30 secondes
     setTimeout(() => {
       console.log('🔄 Rafraîchissement initial...');
       refreshData().then(result => {
@@ -1175,58 +1207,21 @@ process.on('SIGINT', async () => {
 
 startServer();
 
-// Ajoutez ceci près du haut du fichier, après les autres imports existants
-const fs = require('fs').promises;
-const path = require('path');
-// Ajoutez cette fonction utilitaire dans server.js (par ex. avant initializeApplication)
-async function runSqlMigrationIfExists(migrationFilename) {
-  try {
-    const migrationPath = path.join(__dirname, 'db', 'migrations', migrationFilename);
-    // vérifier si le fichier existe
-    try {
-      await fs.access(migrationPath);
-    } catch (err) {
-      console.log(`ℹ️ Migration non trouvée: ${migrationPath}`);
-      return false;
-    }
-
-    const sql = await fs.readFile(migrationPath, 'utf8');
-    if (!sql || sql.trim().length === 0) {
-      console.log(`ℹ️ Fichier de migration vide: ${migrationPath}`);
-      return false;
-    }
-
-    const client = await pool.connect();
-    try {
-      console.log(`🔁 Exécution migration SQL: ${migrationFilename}`);
-      // Exécute le SQL : attention aux multiples instructions séparées par ; — node-postgres les gère
-      await client.query(sql);
-      console.log(`✅ Migration appliquée: ${migrationFilename}`);
-    } finally {
-      client.release();
-    }
-
     return true;
   } catch (err) {
     console.error(`❌ Échec migration ${migrationFilename}:`, err.message || err);
     return false;
   }
 }
-// Dans initializeApplication(), appelez la migration AVANT initializeDefaultThemes()
-// Remplacez / modifiez la section où vous appelez initializeDatabase() / initializeDefaultThemes()
+// ==appelez la migration AVANT initializeDefaultThemee, et mettre de fichus egals==
 async function initializeApplication() {
-  try {
-    console.log('🚀 Initialisation de l\'application...');
-    await initializeDatabase();
-
-    // Exécute automatiquement la migration bayésienne si présente
-    await runSqlMigrationIfExists('001_create_bayesian_tables.sql');
-
-    await initializeDefaultThemes();
-    console.log('✅ Base de données et thèmes prêts');
-
-    // ... reste inchangé ...
-// Ajoutez ce nouvel endpoint léger pour lire un prior depuis bayes_priors
+    try {
+      console.log('🚀 Initialisation de l\'application...');
+      await initializeDatabase();
+      await initializeDefaultThemes();
+      console.log('✅ Base de données et thèmes prêts');
+      
+// endpoint léger pour lire un prior depuis bayes_priors
 app.get('/api/priors/:type/:id', async (req, res) => {
   try {
     const { type, id } = req.params;
