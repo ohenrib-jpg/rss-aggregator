@@ -35,7 +35,7 @@ window.app = (function () {
         }
     };
 
-    // ========== UTILITAIRES ==========
+        // ========== UTILITAIRES ==========
     function qs(sel, root = document) { return root.querySelector(sel); }
     function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
@@ -79,14 +79,41 @@ window.app = (function () {
 
     function plural(n, s = "s") { return n > 1 ? s : ""; }
 
-    // ========== UTILITAIRES ==========
-        function qs(sel, root = document) { return root.querySelector(sel); }
-        function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
+    function setMessage(msg, type = "info") {
+        const container = qs("#messageContainer");
+        if (!container) return;
 
-        function escapeHtml(s) {
-            if (!s && s !== 0) return "";
-            return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+        if (!msg) {
+            container.innerHTML = "";
+            return;
+        }
+
+        const colors = {
+            info: "#3b82f6",
+            error: "#ef4444",
+            success: "#10b981",
+            warning: "#f59e0b"
+        };
+
+        const color = colors[type] || colors.info;
+        const icon = type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️";
+
+        container.innerHTML = `
+            <div style="color: ${color}; padding: 12px; text-align: center; font-weight: 500; background: ${color}10; border: 1px solid ${color}30; border-radius: 8px; margin: 10px 0;">
+                ${icon} ${msg}
+            </div>
+        `;
+
+        if (type === "success" || type === "error") {
+            setTimeout(() => setMessage(""), 5000);
+        }
+    }
+
+    function closeModal(modalId) {
+        const modal = qs(`#${modalId}`);
+        if (modal) {
+            modal.style.display = "none";
+        }
     }
 
     // ========== FONCTIONS API ROBUSTES ==========
@@ -1859,30 +1886,8 @@ window.app = (function () {
                 return;
             }
 
-            // Préparer les données pour l'analyse
-            const analysisData = {
-                timestamp: new Date().toISOString(),
-                summary: {
-                    total_articles: state.articles.length,
-                    period_covered: getAnalysisPeriod(),
-                    themes_analyzed: state.themes.length,
-                    sentiment_distribution: getSentimentDistribution()
-                },
-                key_insights: {
-                    top_themes: state.themes.slice(0, 10),
-                    sentiment_evolution: getSentimentEvolutionData(),
-                    theme_correlations: findThemeCorrelations(),
-                    emerging_trends: detectEmergingTrends()
-                },
-                detailed_analysis: {
-                    articles_by_source: groupArticlesBySource(),
-                    confidence_metrics: calculateConfidenceMetrics(),
-                    temporal_patterns: analyzeTemporalPatterns()
-                }
-            };
-
             // Afficher l'interface de génération
-            showReportGenerationInterface(analysisData);
+            showReportGenerationInterface();
 
         } catch (error) {
             console.error("❌ Erreur préparation rapport:", error);
@@ -1890,75 +1895,52 @@ window.app = (function () {
         }
     }
 
-    function showReportGenerationInterface(analysisData) {
+    function showReportGenerationInterface() {
         const modalHtml = `
-            <div id="reportGenerationModal" class="modal" style="display: block;">
-                <div class="modal-content" style="max-width: 800px;">
-                    <span class="close" onclick="window.app.closeModal('reportGenerationModal')">&times;</span>
-                    <h2>🧠 Rapport d'Analyse Avancée</h2>
+            <div id="reportGenerationModal" class="modal" style="display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+                <div class="modal-content" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 12px; max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                    <span class="close" onclick="window.app.closeModal('reportGenerationModal')" style="float: right; font-size: 28px; cursor: pointer; color: #64748b;">&times;</span>
+                    <h2 style="color: #1e40af; margin-bottom: 20px;">🧠 Rapport d'Analyse Avancée</h2>
                     
                     <div style="margin: 20px 0; padding: 15px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
-                        <h4>📊 Données à analyser</h4>
+                        <h4 style="color: #0369a1; margin-bottom: 10px;">📊 Données disponibles</h4>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px;">
-                            <div>
-                                <strong>Articles:</strong> ${analysisData.summary.total_articles}
-                            </div>
-                            <div>
-                                <strong>Thèmes:</strong> ${analysisData.summary.themes_analyzed}
-                            </div>
-                            <div>
-                                <strong>Période:</strong> ${analysisData.summary.period_covered}
-                            </div>
-                            <div>
-                                <strong>Sources:</strong> ${Object.keys(analysisData.detailed_analysis.articles_by_source).length}
-                            </div>
+                            <div><strong>Articles:</strong> ${state.articles.length}</div>
+                            <div><strong>Thèmes:</strong> ${state.themes.length}</div>
+                            <div><strong>Période:</strong> ${getAnalysisPeriod()}</div>
+                            <div><strong>Sources:</strong> ${Object.keys(groupArticlesBySource()).length}</div>
                         </div>
                     </div>
 
                     <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Type d'analyse:</label>
-                        <select id="reportType" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #374151;">Type d'analyse:</label>
+                        <select id="reportType" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="comprehensive">📈 Analyse complète</option>
                             <option value="trends">🚨 Détection de tendances</option>
-                            <option value="sentiment">😊 Analyse de sentiment détaillée</option>
-                            <option value="thematic">🎨 Analyse thématique approfondie</option>
-                            <option value="predictive">🔮 Analyse prédictive</option>
+                            <option value="sentiment">😊 Analyse de sentiment</option>
+                            <option value="thematic">🎨 Analyse thématique</option>
                         </select>
                     </div>
 
                     <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Niveau de détail:</label>
-                        <select id="reportDetail" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #374151;">Niveau de détail:</label>
+                        <select id="reportDetail" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
                             <option value="summary">Résumé exécutif</option>
                             <option value="detailed" selected>Analyse détaillée</option>
                             <option value="comprehensive">Rapport complet</option>
                         </select>
                     </div>
 
-                    <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Focus d'analyse:</label>
-                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                            ${state.themes.slice(0, 8).map(theme => `
-                                <label style="display: flex; align-items: center; gap: 5px;">
-                                    <input type="checkbox" name="focusThemes" value="${theme.name}" checked>
-                                    <span style="padding: 4px 8px; background: ${theme.color}20; color: ${theme.color}; border-radius: 12px; font-size: 0.8rem;">
-                                        ${theme.name}
-                                    </span>
-                                </label>
-                            `).join('')}
-                        </div>
-                    </div>
-
                     <div id="reportPreview" style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px; display: none;">
-                        <h4>📝 Aperçu du rapport en cours de génération...</h4>
-                        <div id="reportContent" style="max-height: 300px; overflow-y: auto; margin-top: 10px;"></div>
+                        <h4 style="color: #374151;">📝 Aperçu du rapport</h4>
+                        <div id="reportContent" style="max-height: 300px; overflow-y: auto; margin-top: 10px; padding: 10px; background: white; border-radius: 4px;"></div>
                     </div>
 
-                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                        <button class="btn btn-success" onclick="window.app.generateReportWithAI()">
-                            🧠 Générer le rapport IA
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
+                        <button class="btn btn-success" onclick="window.app.generateReportWithAI()" style="padding: 12px 24px; font-size: 14px;">
+                            🧠 Générer le rapport
                         </button>
-                        <button class="btn btn-secondary" onclick="window.app.closeModal('reportGenerationModal')">
+                        <button class="btn btn-secondary" onclick="window.app.closeModal('reportGenerationModal')" style="padding: 12px 24px; font-size: 14px;">
                             ❌ Annuler
                         </button>
                     </div>
@@ -1975,47 +1957,39 @@ window.app = (function () {
     async function generateReportWithAI() {
         const reportType = qs('#reportType').value;
         const reportDetail = qs('#reportDetail').value;
-        const selectedThemes = Array.from(qsa('input[name="focusThemes"]:checked')).map(cb => cb.value);
 
         setMessage("🧠 L'IA analyse les données...", "info");
         
-        // Afficher la prévisualisation
         const preview = qs('#reportPreview');
         const content = qs('#reportContent');
         if (preview) preview.style.display = 'block';
-        if (content) content.innerHTML = '<div class="loading">🔄 Analyse en cours par l\'IA...</div>';
+        if (content) content.innerHTML = '<div style="text-align: center; padding: 20px; color: #64748b;">🔄 Analyse en cours par l\'IA...</div>';
 
         try {
-            // Préparer le prompt pour l'IA
-            const prompt = buildAIPrompt(reportType, reportDetail, selectedThemes);
-            
-            // Appeler l'API OpenAI
+            const prompt = buildAIPrompt(reportType, reportDetail);
             const analysisResult = await callOpenAIAnalysis(prompt);
             
-            // Afficher le résultat
             if (content) {
                 content.innerHTML = formatAIResponse(analysisResult);
             }
             
-            // Proposer le téléchargement
             showReportDownloadOptions(analysisResult, reportType);
 
         } catch (error) {
             console.error("❌ Erreur génération rapport IA:", error);
             setMessage("❌ Erreur lors de l'analyse IA: " + error.message, "error");
             if (content) {
-                content.innerHTML = `<div style="color: #ef4444;">❌ Erreur: ${error.message}</div>`;
+                content.innerHTML = `<div style="color: #ef4444; padding: 20px; text-align: center;">❌ Erreur: ${error.message}</div>`;
             }
         }
     }
 
-    function buildAIPrompt(reportType, reportDetail, selectedThemes) {
+    function buildAIPrompt(reportType, reportDetail) {
         const basePrompt = {
             comprehensive: "Fournis une analyse complète des données RSS agrégées, incluant les tendances principales, l'analyse de sentiment, et les insights clés.",
             trends: "Identifie les tendances émergentes, les sujets en croissance, et les patterns temporels significatifs.",
-            sentiment: "Analyse en profondeur l'évolution des sentiments, les corrélations entre thèmes et sentiments, et les événements impactants.",
-            thematic: "Explore les relations entre les différents thèmes, les co-occurrences, et l'évolution thématique dans le temps.",
-            predictive: "Sur la base des données historiques, propose des prédictions sur les tendances futures et recommandations."
+            sentiment: "Analyse en profondeur l'évolution des sentiments, les corrélations entre thèmes et sentiments.",
+            thematic: "Explore les relations entre les différents thèmes, les co-occurrences, et l'évolution thématique."
         };
 
         const detailLevel = {
@@ -2031,11 +2005,11 @@ Données à analyser:
 - ${state.articles.length} articles RSS agrégés
 - ${state.themes.length} thèmes identifiés
 - Période: ${getAnalysisPeriod()}
-- Thèmes focus: ${selectedThemes.join(', ')}
+- Distribution des sentiments: ${JSON.stringify(getSentimentDistribution())}
 
 Points d'analyse requis:
 1. Synthèse des tendances principales
-2. Analyse des patterns temporels
+2. Analyse des patterns temporels  
 3. Évolution des sentiments
 4. Corrélations thèmes/sentiments
 5. Insights actionnables
@@ -2083,16 +2057,15 @@ Format de réponse: Structuré en sections claires avec titres, points clés, et
     }
 
     function formatAIResponse(response) {
-        // Formater la réponse de l'IA avec un style professionnel
         return `
-            <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6;">
+            <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; color: #374151;">
                 ${response.replace(/\n/g, '<br>')
-                         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                         .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                         .replace(/### (.*?)(?=\n|$)/g, '<h3 style="color: #3b82f6; margin-top: 20px;">$1</h3>')
-                         .replace(/## (.*?)(?=\n|$)/g, '<h2 style="color: #1e40af; border-bottom: 2px solid #3b82f6; padding-bottom: 5px; margin-top: 25px;">$1</h2>')
-                         .replace(/- (.*?)(?=\n|$)/g, '<li style="margin: 5px 0;">$1</li>')
-                         .replace(/(\d+\. .*?)(?=\n|$)/g, '<li style="margin: 5px 0;">$1</li>')}
+                         .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1e40af;">$1</strong>')
+                         .replace(/\*(.*?)\*/g, '<em style="color: #6b7280;">$1</em>')
+                         .replace(/### (.*?)(?=\n|$)/g, '<h3 style="color: #3b82f6; margin-top: 20px; font-size: 1.2em;">$1</h3>')
+                         .replace(/## (.*?)(?=\n|$)/g, '<h2 style="color: #1e40af; border-bottom: 2px solid #3b82f6; padding-bottom: 5px; margin-top: 25px; font-size: 1.4em;">$1</h2>')
+                         .replace(/- (.*?)(?=\n|$)/g, '<li style="margin: 8px 0; padding-left: 10px;">• $1</li>')
+                         .replace(/(\d+\. .*?)(?=\n|$)/g, '<li style="margin: 8px 0; padding-left: 10px;">$1</li>')}
             </div>
         `;
     }
@@ -2104,21 +2077,20 @@ Format de réponse: Structuré en sections claires avec titres, points clés, et
         const downloadSection = `
             <div style="margin: 20px 0; padding: 15px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
                 <h4 style="color: #16a34a; margin-bottom: 10px;">✅ Rapport généré avec succès</h4>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="window.app.downloadReportAsPDF('${reportType}')">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="window.app.downloadReportAsPDF('${reportType}')" style="padding: 10px 15px;">
                         📄 Télécharger PDF
                     </button>
-                    <button class="btn btn-secondary" onclick="window.app.downloadReportAsHTML('${reportType}')">
+                    <button class="btn btn-secondary" onclick="window.app.downloadReportAsHTML('${reportType}')" style="padding: 10px 15px;">
                         🌐 Télécharger HTML
                     </button>
-                    <button class="btn btn-info" onclick="window.app.copyReportToClipboard()">
+                    <button class="btn btn-info" onclick="window.app.copyReportToClipboard()" style="padding: 10px 15px;">
                         📋 Copier le texte
                     </button>
                 </div>
             </div>
         `;
 
-        // Ajouter la section de téléchargement si elle n'existe pas déjà
         if (!qs('#downloadSection', modal)) {
             modal.insertAdjacentHTML('beforeend', downloadSection);
         }
@@ -2127,47 +2099,33 @@ Format de réponse: Structuré en sections claires avec titres, points clés, et
     async function downloadReportAsPDF(reportType) {
         try {
             setMessage("Génération du PDF...", "info");
-            
-            // Utiliser html2pdf.js ou une solution similaire
             const content = qs('#reportContent').innerHTML;
-            const opt = {
-                margin: 1,
-                filename: `rapport-analyse-${reportType}-${new Date().toISOString().split('T')[0]}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2 },
-                jsPDF: { unit: 'cm', format: 'a4', orientation: 'portrait' }
-            };
-
-            // Si html2pdf est disponible
-            if (window.html2pdf) {
-                await html2pdf().set(opt).from(content).save();
-                setMessage("✅ Rapport PDF téléchargé", "success");
-            } else {
-                // Fallback: ouvrir dans une nouvelle fenêtre pour impression
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(`
-                    <html>
-                        <head>
-                            <title>Rapport d'Analyse</title>
-                            <style>
-                                body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
-                                h1 { color: #1e40af; }
-                                h2 { color: #3b82f6; border-bottom: 1px solid #3b82f6; }
-                                .header { text-align: center; margin-bottom: 30px; }
-                            </style>
-                        </head>
-                        <body>
-                            <div class="header">
-                                <h1>Rapport d'Analyse RSS</h1>
-                                <p>Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
-                            </div>
-                            ${content}
-                        </body>
-                    </html>
-                `);
-                printWindow.document.close();
-                printWindow.print();
-            }
+            
+            // Fallback: ouvrir pour impression
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Rapport d'Analyse RSS</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+                            h1 { color: #1e40af; }
+                            h2 { color: #3b82f6; border-bottom: 1px solid #3b82f6; }
+                            .header { text-align: center; margin-bottom: 30px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h1>Rapport d'Analyse RSS</h1>
+                            <p>Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+                        </div>
+                        ${content}
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+            
         } catch (error) {
             console.error("❌ Erreur génération PDF:", error);
             setMessage("Erreur lors de la génération du PDF", "error");
@@ -2255,88 +2213,11 @@ Format de réponse: Structuré en sections claires avec titres, points clés, et
     }
 
     function getSentimentDistribution() {
-        const distribution = {
+        return {
             positive: state.articles.filter(a => a.sentiment?.sentiment === 'positive').length,
             neutral: state.articles.filter(a => a.sentiment?.sentiment === 'neutral').length,
             negative: state.articles.filter(a => a.sentiment?.sentiment === 'negative').length
         };
-        return distribution;
-    }
-
-    function getSentimentEvolutionData() {
-        const dates = Array.from(new Set(state.articles.map(a => isoDay(a.date)))).filter(d => d).sort();
-        return dates.map(date => {
-            const articlesOfDay = state.articles.filter(a => isoDay(a.date) === date);
-            const avgSentiment = articlesOfDay.length > 0 ? 
-                articlesOfDay.reduce((sum, a) => sum + (a.sentiment?.score || 0), 0) / articlesOfDay.length : 0;
-            return { date, avgSentiment, count: articlesOfDay.length };
-        });
-    }
-
-    function findThemeCorrelations() {
-        const correlations = [];
-        const topThemes = state.themes.slice(0, 10);
-        
-        for (let i = 0; i < topThemes.length; i++) {
-            for (let j = i + 1; j < topThemes.length; j++) {
-                const themeA = topThemes[i].name;
-                const themeB = topThemes[j].name;
-                const coOccurrences = state.articles.filter(a => 
-                    a.themes.includes(themeA) && a.themes.includes(themeB)
-                ).length;
-                
-                if (coOccurrences > 0) {
-                    correlations.push({
-                        themeA, themeB, coOccurrences,
-                        strength: coOccurrences / Math.min(
-                            state.themes.find(t => t.name === themeA)?.count || 1,
-                            state.themes.find(t => t.name === themeB)?.count || 1
-                        )
-                    });
-                }
-            }
-        }
-        
-        return correlations.sort((a, b) => b.strength - a.strength).slice(0, 10);
-    }
-
-    function detectEmergingTrends() {
-        const recentArticles = state.articles
-            .filter(a => {
-                const articleDate = new Date(a.date);
-                const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-                return articleDate > weekAgo;
-            })
-            .slice(0, 100);
-
-        const themeCounts = {};
-        recentArticles.forEach(article => {
-            article.themes.forEach(theme => {
-                themeCounts[theme] = (themeCounts[theme] || 0) + 1;
-            });
-        });
-
-        return Object.entries(themeCounts)
-            .map(([theme, count]) => ({ theme, count, growth: calculateThemeGrowth(theme) }))
-            .filter(trend => trend.growth > 1.5)
-            .sort((a, b) => b.growth - a.growth)
-            .slice(0, 5);
-    }
-
-    function calculateThemeGrowth(theme) {
-        const now = new Date();
-        const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-
-        const recentCount = state.articles.filter(a => 
-            new Date(a.date) > lastWeek && a.themes.includes(theme)
-        ).length;
-
-        const previousCount = state.articles.filter(a => 
-            new Date(a.date) > twoWeeksAgo && new Date(a.date) <= lastWeek && a.themes.includes(theme)
-        ).length;
-
-        return previousCount > 0 ? recentCount / previousCount : recentCount > 0 ? 2 : 1;
     }
 
     function groupArticlesBySource() {
