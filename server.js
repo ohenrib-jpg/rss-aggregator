@@ -855,10 +855,10 @@ app.get('/api/feeds/manager', async (req, res) => {
 
 app.post('/api/feeds', async (req, res) => {
   try {
-    const { url, title } = req.body;
+    const { url, title, is_active   } = req.body;
     if (!url) return res.status(400).json({ success: false, error: 'URL requise' });
 
-    const client = await pool.connect();
+    const client = await pool.connect();    
     const result = await client.query(
       `INSERT INTO feeds (url, title, is_active) VALUES ($1, $2, true) 
        ON CONFLICT (url) DO UPDATE SET is_active = true
@@ -1066,6 +1066,32 @@ app.post('/api/test-email', async (req, res) => {
   }
 });
 
+// Endpoint d'ingestion d'évidence (léger, appelé par le code JS au moment opportun)
+app.post('/api/evidence', async (req, res) => {
+  try {
+    const { entity_type, entity_id, evidence_type, value = 0.5, confidence = 0.5, meta = {} } = req.body;
+    if (!entity_type || !entity_id || !evidence_type) {
+      return res.status(400).json({ success: false, error: 'entity_type, entity_id et evidence_type requis' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query(
+        `INSERT INTO bayes_evidence (entity_type, entity_id, evidence_type, value, confidence, meta)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [entity_type, entity_id, evidence_type, value, confidence, meta]
+      );
+    } finally {
+      client.release();
+    }
+
+    res.json({ success: true, message: 'Evidence enregistrée' });
+  } catch (error) {
+    console.error('❌ Erreur /api/evidence:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ========== GESTION DES ERREURS ==========
 
 app.use((req, res) => {
@@ -1149,4 +1175,83 @@ process.on('SIGINT', async () => {
 
 startServer();
 
+// Ajoutez ceci près du haut du fichier, après les autres imports existants
+const fs = require('fs').promises;
+const path = require('path');
+// Ajoutez cette fonction utilitaire dans server.js (par ex. avant initializeApplication)
+async function runSqlMigrationIfExists(migrationFilename) {
+  try {
+    const migrationPath = path.join(__dirname, 'db', 'migrations', migrationFilename);
+    // vérifier si le fichier existe
+    try {
+      await fs.access(migrationPath);
+    } catch (err) {
+      console.log(`ℹ️ Migration non trouvée: ${migrationPath}`);
+      return false;
+    }
+
+    const sql = await fs.readFile(migrationPath, 'utf8');
+    if (!sql || sql.trim().length === 0) {
+      console.log(`ℹ️ Fichier de migration vide: ${migrationPath}`);
+      return false;
+    }
+
+    const client = await pool.connect();
+    try {
+      console.log(`🔁 Exécution migration SQL: ${migrationFilename}`);
+      // Exécute le SQL : attention aux multiples instructions séparées par ; — node-postgres les gère
+      await client.query(sql);
+      console.log(`✅ Migration appliquée: ${migrationFilename}`);
+    } finally {
+      client.release();
+    }
+
+    return true;
+  } catch (err) {
+    console.error(`❌ Échec migration ${migrationFilename}:`, err.message || err);
+    return false;
+  }
+}
+// Dans initializeApplication(), appelez la migration AVANT initializeDefaultThemes()
+// Remplacez / modifiez la section où vous appelez initializeDatabase() / initializeDefaultThemes()
+async function initializeApplication() {
+  try {
+    console.log('🚀 Initialisation de l\'application...');
+    await initializeDatabase();
+
+    // Exécute automatiquement la migration bayésienne si présente
+    await runSqlMigrationIfExists('001_create_bayesian_tables.sql');
+
+    await initializeDefaultThemes();
+    console.log('✅ Base de données et thèmes prêts');
+
+    // ... reste inchangé ...
+// Ajoutez ce nouvel endpoint léger pour lire un prior depuis bayes_priors
+app.get('/api/priors/:type/:id', async (req, res) => {
+  try {
+    const { type, id } = req.params;
+    if (!type || !id) return res.status(400).json({ success: false, error: 'type et id requis' });
+
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `SELECT entity_type, entity_id, mu, sigma, alpha, beta, updated_at
+         FROM bayes_priors
+         WHERE entity_type = $1 AND entity_id = $2`,
+        [type, id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Prior non trouvé' });
+      }
+
+      return res.json({ success: true, prior: result.rows[0] });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('❌ Erreur /api/priors/:type/:id:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 module.exports = { app, startServer, refreshData, sendMail };

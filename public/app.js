@@ -111,9 +111,12 @@ window.app = (function () {
 
     function closeModal(modalId) {
         const modal = qs(`#${modalId}`);
-        if (modal) {
-            modal.style.display = "none";
-        }
+        if (!modal) return;
+        // masquer d'abord pour animation fluide, puis retirer du DOM
+        modal.style.display = "none";
+        setTimeout(() => {
+            if (modal.parentNode) modal.parentNode.removeChild(modal);
+        }, 250);
     }    // ========== FONCTIONS API ==========
     async function apiCall(method, path, body = null) {
         try {
@@ -1058,52 +1061,114 @@ window.app = (function () {
         if (modal) modal.style.display = 'block';
     }
 
-    // Crée un thème via l'API et recharge la liste des thèmes
-    async function createTheme() {
-        const nameEl = qs('#newThemeName');
-        const keywordsEl = qs('#newThemeKeywords');
-        const colorEl = qs('#newThemeColor');
-        const descEl = qs('#newThemeDescription');
+    // Ouvre le modal d'ajout de flux RSS (modal complet)
+    function showAddFeedModal() {
+        const old = qs('#addFeedModal');
+        if (old) old.remove();
 
-        const name = nameEl ? nameEl.value.trim() : '';
-        const keywordsText = keywordsEl ? keywordsEl.value : '';
-        const color = colorEl ? colorEl.value : '#6366f1';
-        const description = descEl ? descEl.value.trim() : '';
+        const modalHtml = `
+            <div id="addFeedModal" class="modal" style="display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1100;">
+                <div class="modal-content" style="background: white; border-radius: 10px; max-width: 640px; width: 92%; margin: 6vh auto; padding: 20px; position: relative;">
+                    <span class="close" onclick="window.app.closeModal('addFeedModal')" style="position: absolute; right: 14px; top: 10px; font-size: 22px; cursor: pointer; color: #64748b;">&times;</span>
+                    <h2 style="margin-top:0; color: #1e40af;">➕ Ajouter un flux RSS</h2>
 
-        if (!name) {
-            alert('Veuillez renseigner un nom de thème.');
+                    <div style="margin-top: 12px;">
+                        <label style="display:block; font-weight:600; margin-bottom:6px;">Titre (optionnel)</label>
+                        <input id="newFeedTitle" type="text" placeholder="Titre du flux (ex: Le Monde)" 
+                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px;">
+                    </div>
+
+                    <div style="margin-top: 12px;">
+                        <label style="display:block; font-weight:600; margin-bottom:6px;">URL du flux (obligatoire)</label>
+                        <input id="newFeedURL" type="url" placeholder="https://exemple.com/rss.xml" 
+                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px;">
+                    </div>
+
+                    <div style="margin-top: 12px; display:flex; gap:12px; align-items:center;">
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+                            <input id="newFeedIsActive" type="checkbox" checked>
+                            <span style="font-weight:400;">Activer le flux</span>
+                        </label>
+                        <span style="color:#64748b; font-size:0.9rem;">Vous pouvez le désactiver plus tard</span>
+                    </div>
+
+                    <div id="addFeedError" style="display:none; color:#ef4444; margin-top:12px;"></div>
+
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+                        <button class="btn btn-secondary" onclick="window.app.closeModal('addFeedModal')" style="padding:10px 14px;">❌ Annuler</button>
+                        <button id="createFeedBtn" class="btn btn-success" style="padding:10px 14px;" onclick="window.app.createFeed()">✅ Ajouter le flux</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const urlInput = qs('#newFeedURL');
+        if (urlInput) urlInput.focus();
+    }
+
+    // Crée un flux via l'API et rafraîchit la liste (compatible /api/feeds du server.js)
+    async function createFeed() {
+        const btn = qs('#createFeedBtn');
+        const errBox = qs('#addFeedError');
+        if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+
+        const titleEl = qs('#newFeedTitle');
+        const urlEl = qs('#newFeedURL');
+        const activeEl = qs('#newFeedIsActive');
+
+        const title = titleEl ? titleEl.value.trim() : '';
+        const url = urlEl ? urlEl.value.trim() : '';
+        const isActive = activeEl ? !!activeEl.checked : true;
+
+        if (!url) {
+            if (errBox) { errBox.style.display = 'block'; errBox.textContent = '❌ URL du flux requise.'; }
             return;
         }
 
-        const keywords = keywordsText.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+        try {
+            new URL(url);
+        } catch (e) {
+            if (errBox) { errBox.style.display = 'block'; errBox.textContent = '❌ URL invalide.'; }
+            return;
+        }
 
-        setMessage("Création du thème...", "info");
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Création en cours...';
+        }
+        setMessage("Création du flux...", "info");
 
         try {
-            const payload = {
-                name,
-                keywords,
-                color,
-                description
-            };
-            const res = await apiPOST('/themes', payload);
-            if (res && res.success) {
-                setMessage("✅ Thème créé avec succès", "success");
-                // fermer modal
-                const modal = qs('#addThemeModal');
-                if (modal) modal.style.display = 'none';
-                // rafraîchir thèmes et graphiques
-                await loadThemes();
-                computeThemesFromArticles();
-                updateAllCharts();
-            } else {
-                throw new Error(res?.error || 'Erreur création thème');
+            // server.js attend { url, title } ; is_active est toléré
+            const payload = { url, title: title || undefined, is_active: isActive };
+
+            const res = await apiPOST('/feeds', payload);
+
+            if (!res || !res.success) {
+                const msg = res?.error || 'Erreur création flux';
+                if (errBox) { errBox.style.display = 'block'; errBox.textContent = '❌ ' + msg; }
+                setMessage("❌ " + msg, "error");
+                throw new Error(msg);
             }
-        } catch (err) {
-            console.error('❌ createTheme error:', err);
-            setMessage('Erreur création thème: ' + (err.message || err), 'error');
+
+            // Fermer modal et rafraîchir l'affichage des flux
+            closeModal('addFeedModal');
+            await loadFeeds();
+            await loadFeedsManager();
+
+            setMessage("✅ Flux ajouté avec succès", "success");
+        } catch (error) {
+            console.error('❌ createFeed error:', error);
+            if (!errBox) alert('Erreur création flux: ' + (error.message || error));
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '✅ Ajouter le flux';
+            }
         }
-    }    // ========== STATISTIQUES ==========
+    }
+    // ========== STATISTIQUES ==========
     async function loadMetrics() {
         const container = qs("#metricsTab");
         if (!container) return;
@@ -1944,6 +2009,7 @@ Format de réponse: Structuré en sections claires avec titres, points clés, et
         toggleFeed,
         deleteFeed,
         showAddFeedModal,
+        createFeed,
 
         // Statistiques
         loadMetrics,
@@ -2099,4 +2165,4 @@ function resetTimelineZoom() {
 
 // Exposer si besoin
 window.zoomTimelineChart = zoomTimelineChart;
-window.resetTimelineZoom = resetTimelineZoom;           window.closeModal = window.app.closeModal;
+window.resetTimelineZoom = resetTimelineZoom;
