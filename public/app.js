@@ -1052,11 +1052,58 @@ window.app = (function () {
         }
     }
 
-    function showAddFeedModal() {
-        const modal = qs('#addFeedModal');
+    // Ouvre le modal d'ajout de thème
+    function showAddThemeModal() {
+        const modal = qs('#addThemeModal');
         if (modal) modal.style.display = 'block';
-    }// JavaScript source code
-    // ========== STATISTIQUES ==========
+    }
+
+    // Crée un thème via l'API et recharge la liste des thèmes
+    async function createTheme() {
+        const nameEl = qs('#newThemeName');
+        const keywordsEl = qs('#newThemeKeywords');
+        const colorEl = qs('#newThemeColor');
+        const descEl = qs('#newThemeDescription');
+
+        const name = nameEl ? nameEl.value.trim() : '';
+        const keywordsText = keywordsEl ? keywordsEl.value : '';
+        const color = colorEl ? colorEl.value : '#6366f1';
+        const description = descEl ? descEl.value.trim() : '';
+
+        if (!name) {
+            alert('Veuillez renseigner un nom de thème.');
+            return;
+        }
+
+        const keywords = keywordsText.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+
+        setMessage("Création du thème...", "info");
+
+        try {
+            const payload = {
+                name,
+                keywords,
+                color,
+                description
+            };
+            const res = await apiPOST('/themes', payload);
+            if (res && res.success) {
+                setMessage("✅ Thème créé avec succès", "success");
+                // fermer modal
+                const modal = qs('#addThemeModal');
+                if (modal) modal.style.display = 'none';
+                // rafraîchir thèmes et graphiques
+                await loadThemes();
+                computeThemesFromArticles();
+                updateAllCharts();
+            } else {
+                throw new Error(res?.error || 'Erreur création thème');
+            }
+        } catch (err) {
+            console.error('❌ createTheme error:', err);
+            setMessage('Erreur création thème: ' + (err.message || err), 'error');
+        }
+    }    // ========== STATISTIQUES ==========
     async function loadMetrics() {
         const container = qs("#metricsTab");
         if (!container) return;
