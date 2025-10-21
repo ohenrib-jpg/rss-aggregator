@@ -37,6 +37,8 @@ const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587;
 const SMTP_SECURE = process.env.SMTP_SECURE === 'true';
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
+const BAYESIAN_SERVICE_URL = process.env.BAYESIAN_SERVICE_URL || 'https://rss-bayesian-worker.onrender.com';
+const BAYES_TRIGGER_TOKEN = process.env.BAYES_TRIGGER_TOKEN || 'BayesSecure_2024_k8mP9xL3vQn7RwT5';
 
 let mailerTransport = null;
 if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
@@ -447,8 +449,27 @@ async function refreshData() {
       return await processFeedsRefresh(updatedFeeds);
     }
 
-    return await processFeedsRefresh(feeds);
-    
+      return await processFeedsRefresh(feeds);
+
+      // Déclencher l'analyse bayésienne après le refresh
+      if (result.success && result.articles_processed > 0) {
+          console.log('🧮 Déclenchement analyse bayésienne post-refresh...');
+          try {
+              await axios.post(
+                  `${BAYESIAN_SERVICE_URL}/run-bayes`,
+                  {},
+                  {
+                      headers: { 'Authorization': `Bearer ${BAYES_TRIGGER_TOKEN}` },
+                      timeout: 5000
+                  }
+              );
+              console.log('✅ Analyse bayésienne déclenchée');
+          } catch (err) {
+              console.warn('⚠️  Analyse bayésienne non disponible:', err.message);
+          }
+      }
+
+      return result;
   } catch (error) {
     console.error('❌ Erreur rafraîchissement:', error);
     return { success: false, error: error.message, articles_processed: 0 };
@@ -913,6 +934,43 @@ app.delete('/api/feeds/:id', async (req, res) => {
     console.error('❌ Erreur /api/feeds DELETE:', error);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// ========== ROUTE ANALYSE BAYÉSIENNE ==========
+
+app.post('/api/bayesian/trigger', async (req, res) => {
+    try {
+        console.log('🧮 Déclenchement analyse bayésienne...');
+
+        const response = await axios.post(
+            `${BAYESIAN_SERVICE_URL}/run-bayes`,
+            {},
+            {
+                headers: {
+                    'Authorization': `Bearer ${BAYES_TRIGGER_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
+            }
+        );
+
+        console.log('✅ Analyse bayésienne déclenchée:', response.data);
+
+        res.json({
+            success: true,
+            message: 'Analyse bayésienne en cours',
+            details: response.data
+        });
+    } catch (error) {
+        console.error('❌ Erreur déclenchement bayésien:', error.message);
+
+        // Ne pas bloquer l'API même si le service bayésien est down
+        res.json({
+            success: false,
+            error: 'Service bayésien temporairement indisponible',
+            message: 'Les analyses continueront sans fusion bayésienne'
+        });
+    }
 });
 
 // ========== ROUTES STATISTIQUES ==========
