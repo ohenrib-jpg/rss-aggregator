@@ -587,41 +587,32 @@
         </div>
     </div> <!-- Fin du container -->
 
-    <!-- CDN externes -->
+        <!-- CDN externes -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- Configuration -->
     <script>
         // Configuration de l'API
         window.__API_BASE__ = 'http://localhost:3000';
-        console.log('🚀 Configuration chargée - Base API:', window.__API_BASE__);
+        console.log('🚀 Configuration chargée');
     </script>
 
-    <!-- Application - CHEMIN CORRIGÉ -->
+    <!-- Application -->
     <script src="/app.js"></script>
 
     <!-- Initialisation -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('📄 DOM chargé - Recherche de l application...');
+            console.log('📄 DOM chargé - Initialisation...');
             
-            // Vérification en boucle jusqu'à ce que l'app soit chargée
-            const checkAppLoaded = setInterval(function() {
+            setTimeout(function() {
                 if (window.app && typeof window.app.init === 'function') {
-                    clearInterval(checkAppLoaded);
-                    console.log('✅ App détectée - Initialisation...');
+                    console.log('✅ App détectée - Lancement init...');
                     window.app.init();
+                } else {
+                    console.error('❌ App non disponible');
                 }
             }, 100);
-
-            // Timeout de sécurité après 5 secondes
-            setTimeout(function() {
-                clearInterval(checkAppLoaded);
-                if (!window.app) {
-                    console.error('❌ App non chargée après 5 secondes');
-                    alert('Erreur de chargement. Vérifiez que app.js est dans /public/');
-                }
-            }, 5000);
         });
     </script>
 

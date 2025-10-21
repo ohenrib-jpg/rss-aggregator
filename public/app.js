@@ -542,7 +542,7 @@ window.app = (function () {
         });
     }
 
-    function createSentimentChart() {
+        function createSentimentChart() {
         const ctx = qs("#sentimentChart");
         if (!ctx) return;
 
@@ -550,11 +550,28 @@ window.app = (function () {
             state.charts.sentimentChart.destroy();
         }
 
+        // COMPTAGE CORRIGÉ avec vérification des sentiments
         const sentimentData = {
-            positive: state.articles.filter(a => a.sentiment?.sentiment === 'positive').length,
-            neutral: state.articles.filter(a => a.sentiment?.sentiment === 'neutral').length,
-            negative: state.articles.filter(a => a.sentiment?.sentiment === 'negative').length
+            positive: state.articles.filter(a => a.sentiment && a.sentiment.sentiment === 'positive').length,
+            neutral: state.articles.filter(a => a.sentiment && a.sentiment.sentiment === 'neutral').length,
+            negative: state.articles.filter(a => a.sentiment && a.sentiment.sentiment === 'negative').length
         };
+
+        // Si aucun sentiment, afficher un message
+        const total = sentimentData.positive + sentimentData.neutral + sentimentData.negative;
+        if (total === 0) {
+            ctx.parentElement.innerHTML = `
+                <h3>😊 Analyse des Sentiments</h3>
+                <div style="text-align: center; padding: 40px 20px; color: #64748b;">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">😊</div>
+                    <div style="font-size: 1.1rem;">Aucune donnée de sentiment disponible</div>
+                    <p style="font-size: 0.9rem; color: #94a3b8; margin-top: 10px;">
+                        Les sentiments seront analysés après le chargement des articles
+                    </p>
+                </div>
+            `;
+            return;
+        }
 
         state.charts.sentimentChart = new Chart(ctx, {
             type: 'bar',
@@ -571,7 +588,19 @@ window.app = (function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
             }
         });
     }
@@ -752,12 +781,32 @@ window.app = (function () {
                                         ${theme.count || 0} articles
                                     </span>
                                 </div>
+                                
                                 <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 15px;">
                                     ${escapeHtml(theme.description || 'Pas de description')}
                                 </div>
+                                
+                                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px;">
+                                    ${(theme.keywords || []).slice(0, 8).map(keyword => `
+                                        <span style="padding: 2px 8px; background: #f1f5f9; border-radius: 12px; font-size: 0.75rem; color: #475569;">
+                                            ${escapeHtml(keyword)}
+                                        </span>
+                                    `).join('')}
+                                    ${(theme.keywords || []).length > 8 ? `
+                                        <span style="font-size: 0.75rem; color: #64748b;">+${theme.keywords.length - 8} autres</span>
+                                    ` : ''}
+                                    ${(theme.keywords || []).length === 0 ? `
+                                        <span style="font-size: 0.75rem; color: #94a3b8; font-style: italic;">Aucun mot-clé</span>
+                                    ` : ''}
+                                </div>
+                                
                                 <div style="display: flex; gap: 8px;">
-                                    <button onclick="window.app.editTheme('${theme.id}')" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;">✏️ Modifier</button>
-                                    <button onclick="window.app.deleteTheme('${theme.id}')" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85rem;">🗑️ Supprimer</button>
+                                    <button onclick="window.app.editTheme('${theme.id}')" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;">
+                                       ✏️ Modifier
+                                    </button>
+                                    <button onclick="window.app.deleteTheme('${theme.id}')" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85rem;">
+                                        🗑️ Supprimer
+                                    </button>
                                 </div>
                             </div>
                         `).join('')}
@@ -805,7 +854,7 @@ window.app = (function () {
         }
     }
 
-    async function editTheme(themeId) {
+        async function editTheme(themeId) {
         try {
             const theme = state.themes.find(t => t.id === themeId);
             if (!theme) {
@@ -817,11 +866,33 @@ window.app = (function () {
                 <div id="editThemeModal" class="modal" style="display: block;">
                     <div class="modal-content">
                         <span class="close" onclick="window.app.closeModal('editThemeModal')">&times;</span>
-                        <h2>✏️ Modifier le Thème</h2>
+                        <h2✏️ Modifier le Thème</h2>
+                        
                         <div style="margin: 15px 0;">
-                            <label>Nom du thème:</label>
-                            <input type="text" id="editThemeName" value="${escapeHtml(theme.name)}" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+                            <input type="text" id="editThemeName" value="${escapeHtml(theme.name)}" 
+                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                         </div>
+                        
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+                            <textarea id="editThemeKeywords" 
+                                      style="width: 100%; height: 150px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace;">${(theme.keywords || []).join('\n')}</textarea>
+                            <small style="color: #64748b;">Chaque mot-clé doit être sur une ligne séparée</small>
+                        </div>
+                        
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+                            <input type="color" id="editThemeColor" value="${theme.color || '#6366f1'}" 
+                                   style="width: 100%; height: 40px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        </div>
+                        
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
+                            <textarea id="editThemeDescription" 
+                                      style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">${escapeHtml(theme.description || '')}</textarea>
+                        </div>
+
                         <div style="display: flex; gap: 10px;">
                             <button class="btn btn-success" onclick="window.app.saveThemeEdits('${themeId}')">💾 Enregistrer</button>
                             <button class="btn btn-secondary" onclick="window.app.closeModal('editThemeModal')">❌ Annuler</button>
@@ -832,6 +903,7 @@ window.app = (function () {
 
             const oldModal = qs('#editThemeModal');
             if (oldModal) oldModal.remove();
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
         } catch (error) {
             console.error('❌ Erreur édition thème:', error);
@@ -839,47 +911,57 @@ window.app = (function () {
         }
     }
 
-    async function saveThemeEdits(oldThemeId) {
+    async function saveThemeEdits(themeId) {
         const name = qs('#editThemeName').value;
+        const keywordsText = qs('#editThemeKeywords').value;
+        const color = qs('#editThemeColor').value;
+        const description = qs('#editThemeDescription').value;
+
         if (!name || name.trim().length === 0) {
             alert('Veuillez entrer un nom de thème valide');
             return;
         }
 
+        // Traitement des mots-clés
+        const keywords = keywordsText.split('\n')
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+
+        if (keywords.length === 0) {
+            alert('Veuillez entrer au moins un mot-clé');
+            return;
+        }
+
         setMessage("Sauvegarde du thème...", "info");
+
         try {
-            const data = await apiPOST("/themes", { name });
+            const data = await apiPOST("/themes", { 
+                name, 
+                keywords, 
+                color, 
+                description 
+            });
+
             if (data.success) {
                 closeModal('editThemeModal');
                 await loadThemes();
                 loadThemesManager();
                 setMessage("✅ Thème modifié avec succès !", "success");
+
+                // Relancer l'analyse thématique
+                setTimeout(async () => {
+                    try {
+                        await apiPOST("/themes/analyze");
+                        await loadArticles(true);
+                    } catch (error) {
+                        console.warn("⚠️ Analyse thématique échouée:", error);
+                    }
+                }, 1000);
             } else {
                 throw new Error(data.error || "Erreur inconnue");
             }
         } catch (error) {
             console.error('❌ Erreur sauvegarde thème:', error);
-            alert('Erreur: ' + error.message);
-        }
-    }
-
-    async function deleteTheme(themeId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer ce thème ?\n\nCette action supprimera également toutes les analyses associées.')) {
-            return;
-        }
-
-        setMessage("Suppression du thème...", "info");
-        try {
-            const data = await apiDELETE(`/themes/${themeId}`);
-            if (data.success) {
-                await loadThemes();
-                loadThemesManager();
-                setMessage("✅ Thème supprimé avec succès", "success");
-            } else {
-                throw new Error(data.error || "Erreur inconnue");
-            }
-        } catch (error) {
-            console.error('❌ Erreur suppression thème:', error);
             alert('Erreur: ' + error.message);
         }
     }
@@ -1384,6 +1466,83 @@ window.app = (function () {
             console.error("❌ Erreur export JSON:", error);
             setMessage("Erreur lors de l'export JSON: " + error.message, "error");
         }
+    }
+
+    // ========== FONCTIONS MANQUANTES ==========
+    function saveEmailConfig() {
+        const smtpHost = qs("#smtpHost");
+        const smtpUser = qs("#smtpUser"); 
+        const smtpPort = qs("#smtpPort");
+        const smtpPass = qs("#smtpPass");
+        const smtpSecure = qs("#smtpSecure");
+
+        if (!smtpHost || !smtpUser) {
+            setMessage("❌ Champs email manquants", "error");
+            return;
+        }
+
+        state.emailConfig = {
+            smtpHost: smtpHost.value || '',
+            smtpUser: smtpUser.value || '',
+            smtpPort: parseInt(smtpPort?.value) || 587,
+            smtpPass: smtpPass?.value || '',
+            smtpSecure: smtpSecure?.checked || false
+        };
+
+        localStorage.setItem("emailConfig", JSON.stringify(state.emailConfig));
+        setMessage("✅ Configuration email sauvegardée", "success");
+    }
+
+    async function testEmailConfig() {
+        if (!state.emailConfig || !state.emailConfig.smtpHost) {
+            setMessage("❌ Veuillez d'abord configurer les paramètres email", "error");
+            return;
+        }
+
+        setMessage("📧 Envoi d'un email de test...", "info");
+
+        try {
+            const response = await apiPOST("/test-email", {
+                to: state.emailConfig.smtpUser,
+                subject: "Test - Agrégateur RSS",
+                body: "Ceci est un email de test. Votre configuration fonctionne correctement !"
+            });
+
+            if (response.success) {
+                setMessage("✅ Email de test envoyé avec succès", "success");
+            } else {
+                setMessage("❌ Échec de l'envoi: " + response.error, "error");
+            }
+        } catch (error) {
+            setMessage("❌ Erreur: " + error.message, "error");
+        }
+    }
+
+    // Fonctions placeholder pour l'interface
+    function changeLanguage(lang) {
+        console.log("Langue changée:", lang);
+        setMessage(`🌐 Langue changée: ${lang}`, "info");
+    }
+
+    function changeChartColors(palette) {
+        console.log("Palette changée:", palette);
+        setMessage(`🎨 Palette de couleurs changée: ${palette}`, "info");
+        updateAllCharts();
+    }
+
+    function resetUIConfig() {
+        if (!confirm("Réinitialiser tous les paramètres d'interface ?")) return;
+
+        state.uiConfig = {
+            theme: 'light',
+            language: 'fr',
+            chartColors: 'default'
+        };
+
+        localStorage.setItem("uiConfig", JSON.stringify(state.uiConfig));
+        loadSettings();
+        applyUIConfig();
+        setMessage("✅ Paramètres réinitialisés", "success");
     }
 
     // ========== RAPPORTS ET ANALYSE IA ==========
