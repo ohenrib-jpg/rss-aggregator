@@ -5,260 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agrégateur RSS Intelligent</title>
     
-    <!-- Styles CSS -->
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
         
         /* Header */
-        .header {
-            background: white;
-            padding: 20px 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        
-        .header h1 {
-            color: #1e40af;
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
+        .header { background: white; padding: 20px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .header h1 { color: #1e40af; font-size: 2.5rem; margin-bottom: 10px; }
         
         /* Navigation */
-        .tabs {
-            display: flex;
-            background: white;
-            border-radius: 12px;
-            padding: 5px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
+        .tabs { display: flex; background: white; border-radius: 12px; padding: 5px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .tab { flex: 1; padding: 15px 20px; border: none; background: transparent; cursor: pointer; border-radius: 8px; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; }
+        .tab:hover { background: #f1f5f9; }
+        .tab.active { background: #3b82f6; color: white; }
         
-        .tab {
-            flex: 1;
-            padding: 15px 20px;
-            border: none;
-            background: transparent;
-            cursor: pointer;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        
-        .tab:hover {
-            background: #f1f5f9;
-        }
-        
-        .tab.active {
-            background: #3b82f6;
-            color: white;
-        }
-        
-        /* Contenu des onglets */
-        .tab-content {
-            display: none;
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
+        /* Contenu */
+        .tab-content { display: none; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .tab-content.active { display: block; }
         
         /* Boutons */
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .btn-success {
-            background: #10b981;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #059669;
-        }
-        
-        .btn-info {
-            background: #3b82f6;
-            color: white;
-        }
-        
-        .btn-info:hover {
-            background: #2563eb;
-        }
-        
-        .btn-secondary {
-            background: #6b7280;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #4b5563;
-        }
-        
-        .btn-warning {
-            background: #f59e0b;
-            color: white;
-        }
-        
-        .btn-warning:hover {
-            background: #d97706;
-        }
-        
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #dc2626;
-        }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-info { background: #3b82f6; color: white; }
+        .btn-info:hover { background: #2563eb; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .btn-secondary:hover { background: #4b5563; }
+        .btn-warning { background: #f59e0b; color: white; }
+        .btn-warning:hover { background: #d97706; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
         
         /* Cartes */
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        
-        .full-width {
-            width: 100%;
-        }
+        .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .full-width { width: 100%; }
         
         /* Messages */
-        #messageContainer {
-            margin-bottom: 20px;
-        }
+        #messageContainer { margin-bottom: 20px; }
         
         /* Loading */
-        .loading {
-            text-align: center;
-            padding: 40px 20px;
-            color: #64748b;
-        }
+        .loading { text-align: center; padding: 40px 20px; color: #64748b; }
         
         /* Panneau de contrôle */
-        .control-panel {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 25px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-        
-        .control-panel h3 {
-            margin-bottom: 15px;
-            font-size: 1.5rem;
-        }
+        .control-panel { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; }
         
         /* Articles */
-        .article-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-            background: white;
-            transition: all 0.3s ease;
-        }
-        
-        .article-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
-        }
+        .article-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px; background: white; transition: all 0.3s ease; }
+        .article-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
         
         /* Graphiques */
-        .chart-container {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
+        .chart-container { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         
         /* Modals */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
+        .close { float: right; font-size: 28px; cursor: pointer; color: #64748b; }
         
-        .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        
-        .close {
-            float: right;
-            font-size: 28px;
-            cursor: pointer;
-            color: #64748b;
-        }
-        
-        /* Responsive */
         @media (max-width: 768px) {
-            .tabs {
-                flex-direction: column;
-            }
-            
-            .tab {
-                margin-bottom: 5px;
-            }
-            
-            .control-buttons {
-                flex-direction: column;
-            }
-            
-            .btn {
-                width: 100%;
-                justify-content: center;
-                margin-bottom: 10px;
-            }
+            .tabs { flex-direction: column; }
+            .tab { margin-bottom: 5px; }
+            .control-buttons { flex-direction: column; }
+            .btn { width: 100%; justify-content: center; margin-bottom: 10px; }
         }
     </style>
 </head>
@@ -274,16 +82,16 @@
             <div class="control-panel">
                 <h3>🛠️ Centre de Contrôle</h3>
                 <div class="control-buttons" style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn btn-success" onclick="window.app.refreshArticles()">
+                    <button class="btn btn-success" onclick="appCall('refreshArticles')">
                         🔄 Actualiser les données
                     </button>
-                    <button class="btn btn-info" onclick="window.app.generateAIAnalysisReport()">
+                    <button class="btn btn-info" onclick="appCall('generateAIAnalysisReport')">
                         🧠 Générer rapport IA
                     </button>
-                    <button class="btn btn-warning" onclick="window.app.exportArticlesToCSV()">
+                    <button class="btn btn-warning" onclick="appCall('exportArticlesToCSV')">
                         📊 Exporter CSV
                     </button>
-                    <button class="btn btn-secondary" onclick="window.app.exportToJSON()">
+                    <button class="btn btn-secondary" onclick="appCall('exportToJSON')">
                         💾 Exporter JSON
                     </button>
                 </div>
@@ -292,12 +100,12 @@
 
         <!-- Navigation par onglets -->
         <nav class="tabs">
-            <button class="tab active" onclick="window.app.showTab('articles')">📰 Articles</button>
-            <button class="tab" onclick="window.app.showTab('analysis')">📈 Analyse</button>
-            <button class="tab" onclick="window.app.showTab('themes')">🎨 Thèmes</button>
-            <button class="tab" onclick="window.app.showTab('feeds')">📡 Flux RSS</button>
-            <button class="tab" onclick="window.app.showTab('metrics')">📊 Métriques</button>
-            <button class="tab" onclick="window.app.showTab('settings')">⚙️ Paramètres</button>
+            <button class="tab active" onclick="appCall('showTab', 'articles')">📰 Articles</button>
+            <button class="tab" onclick="appCall('showTab', 'analysis')">📈 Analyse</button>
+            <button class="tab" onclick="appCall('showTab', 'themes')">🎨 Thèmes</button>
+            <button class="tab" onclick="appCall('showTab', 'feeds')">📡 Flux RSS</button>
+            <button class="tab" onclick="appCall('showTab', 'metrics')">📊 Métriques</button>
+            <button class="tab" onclick="appCall('showTab', 'settings')">⚙️ Paramètres</button>
         </nav>
 
         <!-- Conteneur pour les messages -->
@@ -422,25 +230,20 @@
                         <h4 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h4>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Clé API OpenAI:</label>
-                            <input type="password" id="openaiKey" placeholder="sk-..." 
-                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                            <small style="color: #64748b; display: block; margin-top: 5px;">
-                                Obtenez une clé sur <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a>
-                            </small>
+                            <input type="password" id="openaiKey" placeholder="sk-..." style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                         </div>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle:</label>
                             <select id="openaiModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (rapide)</option>
-                                <option value="gpt-4">GPT-4 (précis)</option>
-                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                <option value="gpt-4">GPT-4</option>
                             </select>
                         </div>
                     </div>
 
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-success" onclick="window.app.saveAIConfig()">💾 Sauvegarder</button>
-                        <button class="btn btn-secondary" onclick="window.app.testAIConnection()">🔌 Tester la connexion</button>
+                        <button class="btn btn-success" onclick="appCall('saveAIConfig')">💾 Sauvegarder</button>
+                        <button class="btn btn-secondary" onclick="appCall('testAIConnection')">🔌 Tester</button>
                     </div>
                 </div>
 
@@ -448,35 +251,24 @@
                 <div class="card full-width" style="margin-bottom: 20px;">
                     <h3>✉️ Configuration Email</h3>
                     
-                    <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 8px; border: 1px solid #fbbf24;">
-                        <strong>ℹ️ À quoi sert cette configuration ?</strong>
-                        <p style="margin-top: 10px; color: #92400e;">
-                            Recevez des notifications par email en cas d'erreur critique, de nouveau contenu important, ou de résumés quotidiens.
-                        </p>
-                    </div>
-
                     <div style="margin: 20px 0;">
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Serveur SMTP:</label>
-                            <input type="text" id="smtpHost" placeholder="smtp.gmail.com" 
-                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <input type="text" id="smtpHost" placeholder="smtp.gmail.com" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                         </div>
                         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 15px;">
                             <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 600;">Utilisateur:</label>
-                                <input type="email" id="smtpUser" placeholder="votre-email@example.com" 
-                                       style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <input type="email" id="smtpUser" placeholder="votre-email@example.com" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                             </div>
                             <div>
                                 <label style="display: block; margin-bottom: 5px; font-weight: 600;">Port:</label>
-                                <input type="number" id="smtpPort" placeholder="587" value="587"
-                                       style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <input type="number" id="smtpPort" placeholder="587" value="587" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                             </div>
                         </div>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mot de passe:</label>
-                            <input type="password" id="smtpPass" placeholder="••••••••" 
-                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <input type="password" id="smtpPass" placeholder="••••••••" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                         </div>
                         <div style="margin-bottom: 15px;">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -487,8 +279,8 @@
                     </div>
 
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-success" onclick="window.app.saveEmailConfig()">💾 Sauvegarder</button>
-                        <button class="btn btn-secondary" onclick="window.app.testEmailConfig()">📧 Envoyer un email de test</button>
+                        <button class="btn btn-success" onclick="appCall('saveEmailConfig')">💾 Sauvegarder</button>
+                        <button class="btn btn-secondary" onclick="appCall('testEmailConfig')">📧 Tester</button>
                     </div>
                 </div>
 
@@ -501,46 +293,21 @@
                             <label style="display: block; margin-bottom: 10px; font-weight: 600;">Thème visuel:</label>
                             <div style="display: flex; gap: 15px;">
                                 <label style="padding: 15px; border: 2px solid #3b82f6; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
-                                    <input type="radio" name="theme" value="light" checked onchange="window.app.changeTheme('light')" style="display: none;">
+                                    <input type="radio" name="theme" value="light" checked style="display: none;">
                                     <div style="font-size: 2rem;">☀️</div>
                                     <div style="font-weight: 600; margin-top: 5px;">Clair</div>
                                 </label>
                                 <label style="padding: 15px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
-                                    <input type="radio" name="theme" value="dark" onchange="window.app.changeTheme('dark')" style="display: none;">
+                                    <input type="radio" name="theme" value="dark" style="display: none;">
                                     <div style="font-size: 2rem;">🌙</div>
                                     <div style="font-weight: 600; margin-top: 5px;">Sombre</div>
                                 </label>
-                                <label style="padding: 15px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
-                                    <input type="radio" name="theme" value="auto" onchange="window.app.changeTheme('auto')" style="display: none;">
-                                    <div style="font-size: 2rem;">🔄</div>
-                                    <div style="font-weight: 600; margin-top: 5px;">Auto</div>
-                                </label>
                             </div>
-                        </div>
-
-                        <div style="margin-bottom: 20px;">
-                            <label style="display: block; margin-bottom: 10px; font-weight: 600;">Langue:</label>
-                            <select id="languageSelect" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;" onchange="window.app.changeLanguage(this.value)">
-                                <option value="fr" selected>🇫🇷 Français</option>
-                                <option value="en">🇬🇧 English</option>
-                                <option value="es">🇪🇸 Español</option>
-                            </select>
-                        </div>
-
-                        <div style="margin-bottom: 20px;">
-                            <label style="display: block; margin-bottom: 10px; font-weight: 600;">Palette de couleurs pour les graphiques:</label>
-                            <select id="chartColorsSelect" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;" onchange="window.app.changeChartColors(this.value)">
-                                <option value="default" selected>Par défaut</option>
-                                <option value="pastel">Pastel</option>
-                                <option value="vibrant">Vibrant</option>
-                                <option value="monochrome">Monochrome</option>
-                            </select>
                         </div>
                     </div>
 
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-success" onclick="window.app.saveUIConfig()">💾 Sauvegarder</button>
-                        <button class="btn btn-secondary" onclick="window.app.resetUIConfig()">🔄 Réinitialiser</button>
+                        <button class="btn btn-success" onclick="appCall('saveUIConfig')">💾 Sauvegarder</button>
                     </div>
                 </div>
             </div>
@@ -549,52 +316,42 @@
         <!-- Modal Ajout Flux RSS -->
         <div id="addFeedModal" class="modal">
             <div class="modal-content">
-                <span class="close" onclick="window.app.closeModal('addFeedModal')">&times;</span>
+                <span class="close" onclick="appCall('closeModal', 'addFeedModal')">&times;</span>
                 <h2>➕ Ajouter un Flux RSS</h2>
                 <div style="margin: 20px 0;">
-                    <input type="text" id="newFeedUrl" placeholder="https://example.com/rss" 
-                           style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
+                    <input type="text" id="newFeedUrl" placeholder="https://example.com/rss" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success">✅ Ajouter</button>
-                    <button class="btn btn-secondary" onclick="window.app.closeModal('addFeedModal')">❌ Annuler</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Ajout Thème -->
-        <div id="addThemeModal" class="modal">
-            <div class="modal-content">
-                <span class="close" onclick="window.app.closeModal('addThemeModal')">&times;</span>
-                <h2>🎨 Ajouter un Thème</h2>
-                <div style="margin: 20px 0;">
-                    <input type="text" id="newThemeName" placeholder="Nom du thème" 
-                           style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success">✅ Ajouter</button>
-                    <button class="btn btn-secondary" onclick="window.app.closeModal('addThemeModal')">❌ Annuler</button>
+                    <button class="btn btn-success" onclick="appCall('showAddFeedModal')">✅ Ajouter</button>
+                    <button class="btn btn-secondary" onclick="appCall('closeModal', 'addFeedModal')">❌ Annuler</button>
                 </div>
             </div>
         </div>
 
         <!-- Bouton flottant Rapport IA -->
         <div style="position: fixed; bottom: 30px; right: 30px; z-index: 1000;">
-            <button class="btn btn-info" onclick="window.app.generateAIAnalysisReport()" 
-                    style="padding: 16px 20px; border-radius: 50px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); font-size: 1.1rem;">
+            <button class="btn btn-info" onclick="appCall('generateAIAnalysisReport')" style="padding: 16px 20px; border-radius: 50px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); font-size: 1.1rem;">
                 🧠 Rapport IA
             </button>
         </div>
-    </div> <!-- Fin du container -->
+    </div>
 
-        <!-- CDN externes -->
+    <!-- CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- Configuration -->
     <script>
-        // Configuration de l'API
         window.__API_BASE__ = 'http://localhost:3000';
-        console.log('🚀 Configuration chargée');
+        
+        // Fonction sécurisée pour appeler l'app
+        function appCall(functionName, ...args) {
+            if (window.app && window.app[functionName]) {
+                return window.app[functionName](...args);
+            } else {
+                console.warn('App non disponible:', functionName);
+                return false;
+            }
+        }
     </script>
 
     <!-- Application -->
@@ -603,42 +360,24 @@
     <!-- Initialisation -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('📄 DOM chargé - Initialisation...');
+            console.log('📄 DOM chargé');
             
-            setTimeout(function() {
+            const initApp = setInterval(() => {
                 if (window.app && typeof window.app.init === 'function') {
-                    console.log('✅ App détectée - Lancement init...');
+                    clearInterval(initApp);
+                    console.log('✅ Initialisation de l app');
                     window.app.init();
-                } else {
-                    console.error('❌ App non disponible');
                 }
             }, 100);
+
+            setTimeout(() => {
+                clearInterval(initApp);
+                if (!window.app) {
+                    console.error('❌ App non chargée après 5s');
+                }
+            }, 5000);
         });
     </script>
+</body>
+</html>
 
-        // Gestion des erreurs de boutons
-        function safeCall(fnName) {
-            return function() {
-                if (window.app && window.app[fnName]) {
-                    window.app[fnName]();
-                } else {
-                    console.error('Fonction non disponible:', fnName, 'App:', window.app);
-                    alert('Application en cours de chargement...');
-                }
-            };
-        }
-
-        // Redéfinir les onclick de manière sécurisée
-        setTimeout(function() {
-            const buttons = document.querySelectorAll('button[onclick]');
-            buttons.forEach(btn => {
-                const onclick = btn.getAttribute('onclick');
-                if (onclick && onclick.includes('window.app.')) {
-                    const fnName = onclick.match(/window\.app\.(\w+)/)?.[1];
-                    if (fnName) {
-                        btn.onclick = safeCall(fnName);
-                    }
-                }
-            });
-        }, 1000);
-    </script>
