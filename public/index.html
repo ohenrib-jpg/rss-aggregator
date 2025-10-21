@@ -3,331 +3,651 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrégateur RSS + IA v2.5</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
-    <link rel="stylesheet" href="style.css">
+    <title>Agrégateur RSS Intelligent</title>
+    
+    <!-- Styles CSS -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            padding: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: #1e40af;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        /* Navigation */
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 12px;
+            padding: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .tab:hover {
+            background: #f1f5f9;
+        }
+        
+        .tab.active {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        /* Contenu des onglets */
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Boutons */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #059669;
+        }
+        
+        .btn-info {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-info:hover {
+            background: #2563eb;
+        }
+        
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+        
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #d97706;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        /* Cartes */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .full-width {
+            width: 100%;
+        }
+        
+        /* Messages */
+        #messageContainer {
+            margin-bottom: 20px;
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+        
+        /* Panneau de contrôle */
+        .control-panel {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .control-panel h3 {
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        
+        /* Articles */
+        .article-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        
+        .article-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        /* Graphiques */
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .close {
+            float: right;
+            font-size: 28px;
+            cursor: pointer;
+            color: #64748b;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .tab {
+                margin-bottom: 5px;
+            }
+            
+            .control-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-    <!-- En-tête -->
-    <header>
-        <div class="header-main">
-            <h1>📊 Agrégateur RSS Thématique + IA</h1>
-            <div style="display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap;">
-                <span style="background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;">Olivier Henri B.</span>
-                <span style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">V.2.5</span>
-                <span id="aiStatus" style="background: rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem;">🤖 IA: Prêt</span>
+    <div class="container">
+
+        <!-- Header -->
+        <header class="header">
+            <h1>📰 Agrégateur RSS Intelligent</h1>
+            <p>Analyse avancée des flux RSS avec IA et apprentissage automatique</p>
+            
+            <!-- Panneau de contrôle -->
+            <div class="control-panel">
+                <h3>🛠️ Centre de Contrôle</h3>
+                <div class="control-buttons" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="window.app.refreshArticles()">
+                        🔄 Actualiser les données
+                    </button>
+                    <button class="btn btn-info" onclick="window.app.generateAIAnalysisReport()">
+                        🧠 Générer rapport IA
+                    </button>
+                    <button class="btn btn-warning" onclick="window.app.exportArticlesToCSV()">
+                        📊 Exporter CSV
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.app.exportToJSON()">
+                        💾 Exporter JSON
+                    </button>
+                </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <!-- Messages -->
-    <div id="messageContainer"></div>
+        <!-- Navigation par onglets -->
+        <nav class="tabs">
+            <button class="tab active" onclick="window.app.showTab('articles')">📰 Articles</button>
+            <button class="tab" onclick="window.app.showTab('analysis')">📈 Analyse</button>
+            <button class="tab" onclick="window.app.showTab('themes')">🎨 Thèmes</button>
+            <button class="tab" onclick="window.app.showTab('feeds')">📡 Flux RSS</button>
+            <button class="tab" onclick="window.app.showTab('metrics')">📊 Métriques</button>
+            <button class="tab" onclick="window.app.showTab('settings')">⚙️ Paramètres</button>
+        </nav>
 
-    <!-- Barre de statut -->
-    <div class="status-bar">
-        <div class="last-update" id="lastUpdate">Prêt</div>
-        <div class="refresh-controls">
-            <div class="auto-refresh-indicator"><span class="blink">🔄</span> Auto-actualisation active</div>
-            <button id="refreshBtn">🔄 Actualiser</button>
-        </div>
-    </div>
+        <!-- Conteneur pour les messages -->
+        <div id="messageContainer"></div>
 
-    <!-- Barre d'actions -->
-    <div class="export-bar">
-        <div class="export-controls">
-            <button class="btn btn-success" id="exportJsonBtn">📥 Exporter JSON</button>
-            <button class="btn btn-success" id="exportCsvBtn">📥 Exporter CSV</button>
-            <button class="btn btn-secondary" id="learningTabBtn">📊 Stats IA</button>
-            <button class="btn btn-secondary" id="settingsTabBtn">⚙️ Paramètres</button>
-        </div>
-    </div>
-
-    <!-- Panneau de contrôle dédié rapport IA -->
-    <div class="control-panel" style="padding: 15px; background: #f8fafc; border-radius: 8px; margin: 15px 0;">
-        <h3 style="margin-bottom: 15px;">🛠️ Outils d'Analyse Avancée</h3>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn btn-success" onclick="window.app.refreshArticles()">
-                🔄 Actualiser les données
-            </button>
-            <button class="btn btn-info" onclick="window.app.generateAIAnalysisReport()">
-                🧠 Générer rapport IA
-            </button>
-            <button class="btn btn-warning" onclick="window.app.exportArticlesToCSV()">
-                📊 Exporter CSV
-            </button>
-            <button class="btn btn-secondary" onclick="window.app.exportToJSON()">
-                💾 Exporter JSON
-            </button>
-        </div>
-        <p style="margin-top: 10px; color: #64748b; font-size: 0.9rem;">
-            Le rapport IA analyse en profondeur vos données avec l'intelligence artificielle.
-        </p>
-    </div>
-
-    <!-- Onglets -->
-    <div class="tab-container">
-        <div class="tabs">
-            <div class="tab active" data-tab="articles">📄 Articles</div>
-            <div class="tab" data-tab="analysis">📈 Analyse</div>
-            <div class="tab" data-tab="metrics">🎯 Métriques</div>
-            <div class="tab" data-tab="sentiment">😊 Sentiment</div>
-            <div class="tab" data-tab="learning">🧠 Apprentissage</div>
-            <div class="tab" data-tab="feeds">📰 Flux RSS</div>
-            <div class="tab" data-tab="themes">🎨 Thèmes</div>
-            <div class="tab" data-tab="settings">⚙️ Paramètres</div>
-        </div>
-
-        <!-- Articles -->
+        <!-- Onglet Articles -->
         <div id="articlesTab" class="tab-content active">
-            <div class="card full-width">
-                <h3>📄 Derniers Articles</h3>
-                <div id="articlesList" class="loading">Chargement...</div>
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #1e40af;">📰 Articles Récents</h2>
+                <div id="articlesList" class="loading">
+                    Chargement des articles...
+                </div>
             </div>
         </div>
 
-        <!-- Analyse -->
+        <!-- Onglet Analyse -->
         <div id="analysisTab" class="tab-content">
-            <div class="dashboard">
-                <div class="card">
-                    <h3>📊 Répartition par Thème</h3>
-                    <canvas id="themeChart" style="max-height: 400px;"></canvas>
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #1e40af;">📈 Analyse des Données</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                    <div class="chart-container">
+                        <h3>📊 Répartition par Thème</h3>
+                        <canvas id="themeChart" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>😊 Analyse des Sentiments</h3>
+                        <canvas id="sentimentChart" height="300"></canvas>
+                    </div>
                 </div>
-                <div class="card">
-                    <h3>📈 Évolution Temporelle</h3>
-                    <canvas id="timelineChart" style="max-height: 400px;"></canvas>
+                
+                <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+                    <div class="chart-container">
+                        <h3>📈 Évolution Temporelle</h3>
+                        <canvas id="timelineChart" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>🚀 Évolution des Thèmes</h3>
+                        <canvas id="themeEvolutionChart" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>📅 Évolution du Sentiment</h3>
+                        <canvas id="sentimentEvolutionChart" height="300"></canvas>
+                    </div>
                 </div>
-            </div>
-            <div class="card full-width" style="margin-top: 20px;">
-                <h3>🔄 Évolution des Thèmes</h3>
-                <canvas id="themeEvolutionChart" style="max-height: 400px;"></canvas>
             </div>
         </div>
 
-        <!-- Métriques -->
-        <div id="metricsTab" class="tab-content">
-            <div class="stats-grid">
-                <div class="metric-card">
-                    <strong>Total Articles :</strong>
-                    <span id="m_total" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #3b82f6;">—</span>
-                </div>
-                <div class="metric-card">
-                    <strong>Confiance :</strong>
-                    <span id="m_confidence" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #10b981;">—</span>
-                </div>
-                <div class="metric-card">
-                    <strong>Bayésien :</strong>
-                    <span id="m_posterior" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #8b5cf6;">—</span>
-                </div>
-                <div class="metric-card">
-                    <strong>Corroboration :</strong>
-                    <span id="m_corro" style="font-size: 1.5rem; display: block; margin-top: 10px; color: #f59e0b;">—</span>
-                </div>
-            </div>
-            <div class="card full-width" style="margin-top: 20px;">
-                <h3>🏆 Thèmes les plus populaires</h3>
-                <ul id="topThemes" class="top-themes">
-                    <li class="loading">Chargement...</li>
-                </ul>
-            </div>
-        </div>
-
-        <!-- Sentiment -->
-        <div id="sentimentTab" class="tab-content">
-            <div id="sentimentOverview" class="loading">Chargement de l'analyse de sentiment...</div>
-        </div>
-
-        <!-- Apprentissage -->
-        <div id="learningTab" class="tab-content">
-            <div id="learningStats" class="loading">Chargement des statistiques d'apprentissage...</div>
-        </div>
-
-        <!-- Flux RSS -->
-        <div id="feedsTab" class="tab-content">
-            <div class="card full-width">
-                <h3>📰 Gestion des Flux RSS</h3>
-                <div style="margin-bottom: 20px;">
-                    <button class="btn btn-success" id="addFeedBtn">➕ Ajouter un flux</button>
-                </div>
-                <div id="feedsManagerList" class="loading">Chargement des flux...</div>
-            </div>
-        </div>
-
-        <!-- Thèmes -->
+        <!-- Onglet Thèmes -->
         <div id="themesTab" class="tab-content">
-            <div class="card full-width">
-                <h3>🎨 Gestion des Thèmes</h3>
-                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-success" id="addThemeBtn">➕ Ajouter un thème</button>
-                    <button class="btn btn-secondary" id="importThemesBtn">📥 Importer thèmes</button>
-                    <button class="btn btn-secondary" id="analyzeThemesBtn">🔍 Analyser articles</button>
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #1e40af;">🎨 Gestion des Thèmes</h2>
+                <div id="themesManagerList" class="loading">
+                    Chargement des thèmes...
                 </div>
-                <div id="themesManagerList" class="loading">Chargement des thèmes...</div>
             </div>
         </div>
 
-        <!-- Paramètres -->
+        <!-- Onglet Flux RSS -->
+        <div id="feedsTab" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #1e40af;">📡 Gestion des Flux RSS</h2>
+                <div id="feedsManagerList" class="loading">
+                    Chargement des flux...
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Métriques -->
+        <div id="metricsTab" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #1e40af;">📊 Métriques Globales</h2>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    <div class="metric-card" style="text-align: center; padding: 20px; background: #f0f9ff; border-radius: 12px;">
+                        <h3>📚 Articles Totaux</h3>
+                        <div style="font-size: 2.5rem; color: #3b82f6; font-weight: bold;" id="m_total">0</div>
+                    </div>
+                    <div class="metric-card" style="text-align: center; padding: 20px; background: #f0fdf4; border-radius: 12px;">
+                        <h3>🎯 Confiance Moyenne</h3>
+                        <div style="font-size: 2.5rem; color: #10b981; font-weight: bold;" id="m_confidence">0%</div>
+                    </div>
+                    <div class="metric-card" style="text-align: center; padding: 20px; background: #fef3c7; border-radius: 12px;">
+                        <h3>🔬 Postérieur Bayesien</h3>
+                        <div style="font-size: 2.5rem; color: #f59e0b; font-weight: bold;" id="m_posterior">0%</div>
+                    </div>
+                    <div class="metric-card" style="text-align: center; padding: 20px; background: #fef2f2; border-radius: 12px;">
+                        <h3>🔗 Corroboration</h3>
+                        <div style="font-size: 2.5rem; color: #ef4444; font-weight: bold;" id="m_corro">0%</div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3 style="margin-bottom: 15px;">🏆 Thèmes les Plus Populaires</h3>
+                    <ul id="topThemes" style="list-style: none;">
+                        <li class="loading">Chargement des thèmes...</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Statistiques de Sentiment -->
+            <div id="sentimentOverview" class="card">
+                <h3 style="margin-bottom: 20px;">😊 Aperçu des Sentiments</h3>
+                <div class="loading">Chargement des statistiques de sentiment...</div>
+            </div>
+            
+            <!-- Statistiques d'Apprentissage -->
+            <div id="learningStats" class="card">
+                <h3 style="margin-bottom: 20px;">🤖 Statistiques d'Apprentissage</h3>
+                <div class="loading">Chargement des statistiques d'apprentissage...</div>
+            </div>
+        </div>
+
+        <!-- Onglet Paramètres -->
         <div id="settingsTab" class="tab-content">
-            <div class="loading">Chargement des paramètres...</div>
-        </div>
-    </div>
-</div>
+            <div class="settings-container">
+                <!-- Configuration IA -->
+                <div class="card full-width" style="margin-bottom: 20px;">
+                    <h3>🤖 Configuration de l'IA</h3>
+                    
+                    <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                        <h4 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h4>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Clé API OpenAI:</label>
+                            <input type="password" id="openaiKey" placeholder="sk-..." 
+                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <small style="color: #64748b; display: block; margin-top: 5px;">
+                                Obtenez une clé sur <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a>
+                            </small>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle:</label>
+                            <select id="openaiModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (rapide)</option>
+                                <option value="gpt-4">GPT-4 (précis)</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            </select>
+                        </div>
+                    </div>
 
-<!-- Modals -->
-<div id="addFeedModal" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2>➕ Ajouter un Flux RSS</h2>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">URL du flux:</label>
-            <input type="url" id="feedUrl" placeholder="https://example.com/rss.xml" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        </div>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Titre (optionnel):</label>
-            <input type="text" id="feedTitle" placeholder="Nom du flux" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button class="btn btn-success" id="saveFeedBtn">💾 Sauvegarder</button>
-            <button class="btn btn-secondary" id="cancelFeedBtn">❌ Annuler</button>
-        </div>
-    </div>
-</div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="window.app.saveAIConfig()">💾 Sauvegarder</button>
+                        <button class="btn btn-secondary" onclick="window.app.testAIConnection()">🔌 Tester la connexion</button>
+                    </div>
+                </div>
 
-<div id="addThemeModal" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2>🎨 Ajouter un Thème</h2>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
-            <input type="text" id="themeName" placeholder="Politique internationale" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        </div>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
-            <textarea id="themeKeywords" placeholder="diplomatie&#10;relations internationales&#10;conflit" style="width: 100%; height: 150px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
-        </div>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
-            <input type="color" id="themeColor" value="#6366f1" style="width: 100%; height: 40px;">
-        </div>
-        <div style="margin: 20px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description:</label>
-            <textarea id="themeDescription" placeholder="Description du thème..." style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button class="btn btn-success" id="saveThemeBtn">💾 Sauvegarder</button>
-            <button class="btn btn-secondary" id="cancelThemeBtn">❌ Annuler</button>
-        </div>
-    </div>
-</div>
+                <!-- Configuration Email -->
+                <div class="card full-width" style="margin-bottom: 20px;">
+                    <h3>✉️ Configuration Email</h3>
+                    
+                    <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 8px; border: 1px solid #fbbf24;">
+                        <strong>ℹ️ À quoi sert cette configuration ?</strong>
+                        <p style="margin-top: 10px; color: #92400e;">
+                            Recevez des notifications par email en cas d'erreur critique, de nouveau contenu important, ou de résumés quotidiens.
+                        </p>
+                    </div>
 
-<!-- Scripts -->
-<script src="app.js"></script>
-<script>
-// Gestion des événements une fois que l'application est chargée
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialiser l'application
-    window.app.init();
-    
-    // Configuration des écouteurs d'événements pour les onglets
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-            const tabName = this.getAttribute('data-tab');
-            if (window.app && window.app.showTab) {
-                window.app.showTab(tabName);
-            }
+                    <div style="margin: 20px 0;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Serveur SMTP:</label>
+                            <input type="text" id="smtpHost" placeholder="smtp.gmail.com" 
+                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        </div>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Utilisateur:</label>
+                                <input type="email" id="smtpUser" placeholder="votre-email@example.com" 
+                                       style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Port:</label>
+                                <input type="number" id="smtpPort" placeholder="587" value="587"
+                                       style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mot de passe:</label>
+                            <input type="password" id="smtpPass" placeholder="••••••••" 
+                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="smtpSecure">
+                                <span>Utiliser SSL/TLS</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="window.app.saveEmailConfig()">💾 Sauvegarder</button>
+                        <button class="btn btn-secondary" onclick="window.app.testEmailConfig()">📧 Envoyer un email de test</button>
+                    </div>
+                </div>
+
+                <!-- Configuration Interface -->
+                <div class="card full-width">
+                    <h3>🎨 Paramètres d'Interface</h3>
+                    
+                    <div style="margin: 20px 0;">
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 10px; font-weight: 600;">Thème visuel:</label>
+                            <div style="display: flex; gap: 15px;">
+                                <label style="padding: 15px; border: 2px solid #3b82f6; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
+                                    <input type="radio" name="theme" value="light" checked onchange="window.app.changeTheme('light')" style="display: none;">
+                                    <div style="font-size: 2rem;">☀️</div>
+                                    <div style="font-weight: 600; margin-top: 5px;">Clair</div>
+                                </label>
+                                <label style="padding: 15px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
+                                    <input type="radio" name="theme" value="dark" onchange="window.app.changeTheme('dark')" style="display: none;">
+                                    <div style="font-size: 2rem;">🌙</div>
+                                    <div style="font-weight: 600; margin-top: 5px;">Sombre</div>
+                                </label>
+                                <label style="padding: 15px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
+                                    <input type="radio" name="theme" value="auto" onchange="window.app.changeTheme('auto')" style="display: none;">
+                                    <div style="font-size: 2rem;">🔄</div>
+                                    <div style="font-weight: 600; margin-top: 5px;">Auto</div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 10px; font-weight: 600;">Langue:</label>
+                            <select id="languageSelect" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;" onchange="window.app.changeLanguage(this.value)">
+                                <option value="fr" selected>🇫🇷 Français</option>
+                                <option value="en">🇬🇧 English</option>
+                                <option value="es">🇪🇸 Español</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 10px; font-weight: 600;">Palette de couleurs pour les graphiques:</label>
+                            <select id="chartColorsSelect" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;" onchange="window.app.changeChartColors(this.value)">
+                                <option value="default" selected>Par défaut</option>
+                                <option value="pastel">Pastel</option>
+                                <option value="vibrant">Vibrant</option>
+                                <option value="monochrome">Monochrome</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="window.app.saveUIConfig()">💾 Sauvegarder</button>
+                        <button class="btn btn-secondary" onclick="window.app.resetUIConfig()">🔄 Réinitialiser</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Ajout Flux RSS -->
+        <div id="addFeedModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="window.app.closeModal('addFeedModal')">&times;</span>
+                <h2>➕ Ajouter un Flux RSS</h2>
+                <div style="margin: 20px 0;">
+                    <input type="text" id="newFeedUrl" placeholder="https://example.com/rss" 
+                           style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success">✅ Ajouter</button>
+                    <button class="btn btn-secondary" onclick="window.app.closeModal('addFeedModal')">❌ Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Ajout Thème -->
+        <div id="addThemeModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="window.app.closeModal('addThemeModal')">&times;</span>
+                <h2>🎨 Ajouter un Thème</h2>
+                <div style="margin: 20px 0;">
+                    <input type="text" id="newThemeName" placeholder="Nom du thème" 
+                           style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success">✅ Ajouter</button>
+                    <button class="btn btn-secondary" onclick="window.app.closeModal('addThemeModal')">❌ Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bouton flottant Rapport IA -->
+        <div style="position: fixed; bottom: 30px; right: 30px; z-index: 1000;">
+            <button class="btn btn-info" onclick="window.app.generateAIAnalysisReport()" 
+                    style="padding: 16px 20px; border-radius: 50px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); font-size: 1.1rem;">
+                🧠 Rapport IA
+            </button>
+        </div>
+    </div> <!-- Fin du container -->
+
+    <!-- CDN externes -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Configuration -->
+    <script>
+        // Configuration de l'API
+        window.__API_BASE__ = 'http://localhost:3000';
+        console.log('🚀 Configuration chargée - Base API:', window.__API_BASE__);
+    </script>
+
+    <!-- Application - CHEMIN CORRIGÉ -->
+    <script src="/app.js"></script>
+
+    <!-- Initialisation -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📄 DOM chargé - Recherche de l application...');
+            
+            // Vérification en boucle jusqu'à ce que l'app soit chargée
+            const checkAppLoaded = setInterval(function() {
+                if (window.app && typeof window.app.init === 'function') {
+                    clearInterval(checkAppLoaded);
+                    console.log('✅ App détectée - Initialisation...');
+                    window.app.init();
+                }
+            }, 100);
+
+            // Timeout de sécurité après 5 secondes
+            setTimeout(function() {
+                clearInterval(checkAppLoaded);
+                if (!window.app) {
+                    console.error('❌ App non chargée après 5 secondes');
+                    alert('Erreur de chargement. Vérifiez que app.js est dans /public/');
+                }
+            }, 5000);
         });
-    });
-    
-    // Configuration des autres boutons
-    document.getElementById('refreshBtn').addEventListener('click', function() {
-        if (window.app && window.app.refreshArticles) {
-            window.app.refreshArticles();
+    </script>
+
+        // Gestion des erreurs de boutons
+        function safeCall(fnName) {
+            return function() {
+                if (window.app && window.app[fnName]) {
+                    window.app[fnName]();
+                } else {
+                    console.error('Fonction non disponible:', fnName, 'App:', window.app);
+                    alert('Application en cours de chargement...');
+                }
+            };
         }
-    });
-    
-    document.getElementById('exportJsonBtn').addEventListener('click', function() {
-        if (window.app && window.app.exportToJSON) {
-            window.app.exportToJSON();
-        }
-    });
-    
-    document.getElementById('exportCsvBtn').addEventListener('click', function() {
-        if (window.app && window.app.exportArticlesToCSV) {
-            window.app.exportArticlesToCSV();
-        }
-    });
-    
-    document.getElementById('learningTabBtn').addEventListener('click', function() {
-        if (window.app && window.app.showTab) {
-            window.app.showTab('learning');
-        }
-    });
-    
-    document.getElementById('settingsTabBtn').addEventListener('click', function() {
-        if (window.app && window.app.showTab) {
-            window.app.showTab('settings');
-        }
-    });
-    
-    document.getElementById('addFeedBtn').addEventListener('click', function() {
-        if (window.app && window.app.showAddFeedModal) {
-            window.app.showAddFeedModal();
-        }
-    });
-    
-    document.getElementById('addThemeBtn').addEventListener('click', function() {
-        if (window.app && window.app.showAddThemeModal) {
-            window.app.showAddThemeModal();
-        }
-    });
-    
-    document.getElementById('importThemesBtn').addEventListener('click', function() {
-        if (window.app && window.app.importThemesFromFile) {
-            window.app.importThemesFromFile();
-        }
-    });
-    
-    document.getElementById('analyzeThemesBtn').addEventListener('click', function() {
-        // Cette fonctionnalité sera implémentée plus tard
-        alert('Analyse thématique déclenchée');
-    });
-    
-    // Gestion des modals
-    document.querySelectorAll('.modal .close').forEach(closeBtn => {
-        closeBtn.addEventListener('click', function() {
-            this.closest('.modal').style.display = 'none';
-        });
-    });
-    
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.style.display = 'none';
-            }
-        });
-    });
-    
-    // Gestion de la sauvegarde des flux
-    document.getElementById('saveFeedBtn').addEventListener('click', function() {
-        // Implémentation à venir
-        alert('Fonctionnalité de sauvegarde de flux à implémenter');
-    });
-    
-    document.getElementById('cancelFeedBtn').addEventListener('click', function() {
-        document.getElementById('addFeedModal').style.display = 'none';
-    });
-    
-    // Gestion de la sauvegarde des thèmes
-    document.getElementById('saveThemeBtn').addEventListener('click', function() {
-        // Implémentation à venir
-        alert('Fonctionnalité de sauvegarde de thème à implémenter');
-    });
-    
-    document.getElementById('cancelThemeBtn').addEventListener('click', function() {
-        document.getElementById('addThemeModal').style.display = 'none';
-    });
-});
-</script>
-</body>
-</html>
+
+        // Redéfinir les onclick de manière sécurisée
+        setTimeout(function() {
+            const buttons = document.querySelectorAll('button[onclick]');
+            buttons.forEach(btn => {
+                const onclick = btn.getAttribute('onclick');
+                if (onclick && onclick.includes('window.app.')) {
+                    const fnName = onclick.match(/window\.app\.(\w+)/)?.[1];
+                    if (fnName) {
+                        btn.onclick = safeCall(fnName);
+                    }
+                }
+            });
+        }, 1000);
+    </script>

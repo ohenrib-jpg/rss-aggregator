@@ -1141,6 +1141,51 @@ window.app = (function () {
                     </div>
                 </div>
 
+                <!-- Configuration Email -->
+                <div class="card full-width" style="margin-bottom: 20px;">
+                    <h3>✉️ Configuration Email</h3>
+                    
+                    <div style="margin: 20px 0;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Serveur SMTP:</label>
+                            <input type="text" id="smtpHost" value="${state.emailConfig?.smtpHost || ''}" 
+                                   placeholder="smtp.gmail.com" 
+                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        </div>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Utilisateur:</label>
+                                <input type="email" id="smtpUser" value="${state.emailConfig?.smtpUser || ''}" 
+                                       placeholder="votre-email@example.com" 
+                                       style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Port:</label>
+                                <input type="number" id="smtpPort" value="${state.emailConfig?.smtpPort || '587'}" 
+                                       placeholder="587" 
+                                       style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mot de passe:</label>
+                            <input type="password" id="smtpPass" value="${state.emailConfig?.smtpPass || ''}" 
+                                   placeholder="••••••••" 
+                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="smtpSecure" ${state.emailConfig?.smtpSecure ? 'checked' : ''}>
+                                <span>Utiliser SSL/TLS</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="window.app.saveEmailConfig()">💾 Sauvegarder</button>
+                        <button class="btn btn-secondary" onclick="window.app.testEmailConfig()">📧 Tester</button>
+                    </div>
+                </div>
+
                 <!-- Configuration Interface -->
                 <div class="card full-width">
                     <h3>🎨 Paramètres d'Interface</h3>
@@ -1225,6 +1270,45 @@ window.app = (function () {
     function applyUIConfig() {
         if (state.uiConfig.theme) {
             applyTheme(state.uiConfig.theme);
+        }
+    }
+
+        // ========== CONFIGURATION EMAIL ==========
+    function saveEmailConfig() {
+        state.emailConfig = {
+            smtpHost: qs("#smtpHost")?.value || '',
+            smtpUser: qs("#smtpUser")?.value || '',
+            smtpPort: parseInt(qs("#smtpPort")?.value) || 587,
+            smtpPass: qs("#smtpPass")?.value || '',
+            smtpSecure: qs("#smtpSecure")?.checked || false
+        };
+
+        localStorage.setItem("emailConfig", JSON.stringify(state.emailConfig));
+        setMessage("✅ Configuration email sauvegardée", "success");
+    }
+
+    async function testEmailConfig() {
+        if (!state.emailConfig || !state.emailConfig.smtpHost) {
+            alert("Veuillez d'abord configurer les paramètres email");
+            return;
+        }
+
+        setMessage("📧 Envoi d'un email de test...", "info");
+
+        try {
+            const response = await apiPOST("/test-email", {
+                to: state.emailConfig.smtpUser,
+                subject: "Test - Agrégateur RSS",
+                body: "Ceci est un email de test. Votre configuration fonctionne correctement !"
+            });
+
+            if (response.success) {
+                setMessage("✅ Email de test envoyé avec succès", "success");
+            } else {
+                setMessage("❌ Échec de l'envoi: " + response.error, "error");
+            }
+        } catch (error) {
+            setMessage("❌ Erreur: " + error.message, "error");
         }
     }
 
