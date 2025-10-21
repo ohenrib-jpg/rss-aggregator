@@ -78,6 +78,17 @@ window.app = (function () {
     }
 
     function plural(n, s = "s") { return n > 1 ? s : ""; }
+
+    // ========== UTILITAIRES ==========
+        function qs(sel, root = document) { return root.querySelector(sel); }
+        function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
+
+        function escapeHtml(s) {
+            if (!s && s !== 0) return "";
+            return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    }
+
     // ========== FONCTIONS API ROBUSTES ==========
     async function apiCall(method, path, body = null) {
         try {
