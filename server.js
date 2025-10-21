@@ -1207,19 +1207,49 @@ process.on('SIGINT', async () => {
 
 startServer();
 
-    return true;
-  } catch (err) {
-    console.error(`❌ Échec migration ${migrationFilename}:`, err.message || err);
-    return false;
-  }
+return true;
+} catch (err) {
+  console.error(`❌ Échec migration ${migrationFilename}:`, err.message || err);
+  return false;
 }
-// ==appelez la migration AVANT initializeDefaultThemee, et mettre de fichus egals==
-async function initializeApplication() {
+}
+// Endpoint léger pour lire un prior depuis bayes_priors
+app.get('/api/priors/:type/:id', async (req, res) => {
     try {
-      console.log('🚀 Initialisation de l\'application...');
-      await initializeDatabase();
-      await initializeDefaultThemes();
-      console.log('✅ Base de données et thèmes prêts');
+        const { type, id } = req.params;
+        if (!type || !id) return res.status(400).json({ success: false, error: 'type et id requis' });
+        const client = await pool.connect();
+    try {
+        const result = await client.query(
+               `SELECT entity_type, entity_id, mu, sigma, alpha, beta, updated_at
+                FROM bayes_priors
+                WHERE entity_type = $1 AND entity_id = $2`,
+              [type, id]
+            );
+           
+            if (result.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Prior non trouvé' });
+             }
+            
+            return res.json({ success: true, prior: result.rows[0] });
+        } finally {
+          client.release();
+        }
+    } catch (error) {
+      console.error('❌ Erreur /api/priors/:type/:id:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+async function initializeApplication() {
+  try {
+   console.log('🚀 Initialisation de l\'application...');
+   await initializeDatabase();
+   await runSqlMigrationIfExists('001_create_bayesian_tables.sql');
+   await initializeDefaultThemes();
+   console.log('✅ Base de données et thèmes prêts');
+        // Premier rafraîchissement après 30 secondes
+   setTimeout(() => {
       
 // endpoint léger pour lire un prior depuis bayes_priors
 app.get('/api/priors/:type/:id', async (req, res) => {
