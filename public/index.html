@@ -44,6 +44,28 @@
         </div>
     </div>
 
+    <!-- Panneau de contrôle dédié rapport IA -->
+    <div class="control-panel" style="padding: 15px; background: #f8fafc; border-radius: 8px; margin: 15px 0;">
+        <h3 style="margin-bottom: 15px;">🛠️ Outils d'Analyse Avancée</h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-success" onclick="window.app.refreshArticles()">
+                🔄 Actualiser les données
+            </button>
+            <button class="btn btn-info" onclick="window.app.generateAIAnalysisReport()">
+                🧠 Générer rapport IA
+            </button>
+            <button class="btn btn-warning" onclick="window.app.exportArticlesToCSV()">
+                📊 Exporter CSV
+            </button>
+            <button class="btn btn-secondary" onclick="window.app.exportToJSON()">
+                💾 Exporter JSON
+            </button>
+        </div>
+        <p style="margin-top: 10px; color: #64748b; font-size: 0.9rem;">
+            Le rapport IA analyse en profondeur vos données avec l'intelligence artificielle.
+        </p>
+    </div>
+
     <!-- Onglets -->
     <div class="tab-container">
         <div class="tabs">
@@ -216,28 +238,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-
-    // Panneau de controle dedie rapport IA
-<div class="control-panel" style="padding: 15px; background: #f8fafc; border-radius: 8px; margin: 15px 0;">
-    <h3 style="margin-bottom: 15px;">🛠️ Outils d'Analyse Avancée</h3>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button class="btn btn-success" onclick="window.app.refreshArticles()">
-            🔄 Actualiser les données
-        </button>
-        <button class="btn btn-info" onclick="window.app.generateAIAnalysisReport()">
-            🧠 Générer rapport IA
-        </button>
-        <button class="btn btn-warning" onclick="window.app.exportArticlesToCSV()">
-            📊 Exporter CSV
-        </button>
-        <button class="btn btn-secondary" onclick="window.app.exportToJSON()">
-            💾 Exporter JSON
-        </button>
-    </div>
-    <p style="margin-top: 10px; color: #64748b; font-size: 0.9rem;">
-        Le rapport IA analyse en profondeur vos données avec l'intelligence artificielle.
-    </p>
-</div>
     
     // Configuration des autres boutons
     document.getElementById('refreshBtn').addEventListener('click', function() {
