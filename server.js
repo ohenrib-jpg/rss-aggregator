@@ -449,27 +449,27 @@ async function refreshData() {
       return await processFeedsRefresh(updatedFeeds);
     }
 
-      return await processFeedsRefresh(feeds);
+    const result = await processFeedsRefresh(feeds);
 
-      // Déclencher l'analyse bayésienne après le refresh
-      if (result.success && result.articles_processed > 0) {
-          console.log('🧮 Déclenchement analyse bayésienne post-refresh...');
-          try {
-              await axios.post(
-                  `${BAYESIAN_SERVICE_URL}/run-bayes`,
-                  {},
-                  {
-                      headers: { 'Authorization': `Bearer ${BAYES_TRIGGER_TOKEN}` },
-                      timeout: 5000
-                  }
-              );
-              console.log('✅ Analyse bayésienne déclenchée');
-          } catch (err) {
-              console.warn('⚠️  Analyse bayésienne non disponible:', err.message);
+    // Déclencher l'analyse bayésienne après le refresh
+    if (result.success && result.articles_processed > 0) {
+      console.log('🧮 Déclenchement analyse bayésienne post-refresh...');
+      try {
+        await axios.post(
+          `${BAYESIAN_SERVICE_URL}/run-bayes`,
+          {},
+          {
+            headers: { 'Authorization': `Bearer ${BAYES_TRIGGER_TOKEN}` },
+            timeout: 5000
           }
+        );
+        console.log('✅ Analyse bayésienne déclenchée');
+      } catch (err) {
+        console.warn('⚠️  Analyse bayésienne non disponible:', err.message);
       }
+    }
 
-      return result;
+    return result;
   } catch (error) {
     console.error('❌ Erreur rafraîchissement:', error);
     return { success: false, error: error.message, articles_processed: 0 };
@@ -478,7 +478,7 @@ async function refreshData() {
 
 async function processFeedsRefresh(feeds) {
   const allArticles = [];
-  const limitedFeeds = feeds.slice(0, 20); // Augmenté à 20 flux
+  const limitedFeeds = feeds.slice(0, 20);
   let successCount = 0;
   let errorCount = 0;
   
@@ -494,7 +494,7 @@ async function processFeedsRefresh(feeds) {
         continue;
       }
       
-      const limitedItems = feed.items.slice(0, 30); // Augmenté à 30 articles par flux
+      const limitedItems = feed.items.slice(0, 30);
       console.log(`✔ ${limitedItems.length} articles trouvés dans ${feedUrl}`);
       
       for (const item of limitedItems) {
@@ -876,7 +876,7 @@ app.get('/api/feeds/manager', async (req, res) => {
 
 app.post('/api/feeds', async (req, res) => {
   try {
-    const { url, title, is_active   } = req.body;
+    const { url, title, is_active } = req.body;
     if (!url) return res.status(400).json({ success: false, error: 'URL requise' });
 
     const client = await pool.connect();    
@@ -891,29 +891,6 @@ app.post('/api/feeds', async (req, res) => {
     res.json({ success: true, message: 'Flux ajouté avec succès', feed: result.rows[0] });
   } catch (error) {
     console.error('❌ Erreur /api/feeds POST:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.put('/api/feeds/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { is_active } = req.body;
-
-    const client = await pool.connect();
-    const result = await client.query(
-      'UPDATE feeds SET is_active = $1 WHERE id = $2 RETURNING *',
-      [is_active, id]
-    );
-    client.release();
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Flux non trouvé' });
-    }
-
-    res.json({ success: true, feed: result.rows[0] });
-  } catch (error) {
-    console.error('❌ Erreur /api/feeds PUT:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -936,216 +913,88 @@ app.delete('/api/feeds/:id', async (req, res) => {
   }
 });
 
-// ========== ROUTE ANALYSE BAYÉSIENNE ==========
+// ========== ROUTES SENTIMENT ==========
 
-app.post('/api/bayesian/trigger', async (req, res) => {
-    try {
-        console.log('🧮 Déclenchement analyse bayésienne...');
+app.post('/api/sentiment', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'Texte requis' });
 
-        const response = await axios.post(
-            `${BAYESIAN_SERVICE_URL}/run-bayes`,
-            {},
-            {
-                headers: {
-                    'Authorization': `Bearer ${BAYES_TRIGGER_TOKEN}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            }
-        );
-
-        console.log('✅ Analyse bayésienne déclenchée:', response.data);
-
-        res.json({
-            success: true,
-            message: 'Analyse bayésienne en cours',
-            details: response.data
-        });
-    } catch (error) {
-        console.error('❌ Erreur déclenchement bayésien:', error.message);
-
-        // Ne pas bloquer l'API même si le service bayésien est down
-        res.json({
-            success: false,
-            error: 'Service bayésien temporairement indisponible',
-            message: 'Les analyses continueront sans fusion bayésienne'
-        });
-    }
+    const result = sentimentAnalyzer.analyze(text);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Erreur /api/sentiment:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ========== ROUTES STATISTIQUES ==========
 
-app.get('/api/sentiment/stats', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    const result = await client.query(`
-      SELECT 
-        COUNT(*) FILTER (WHERE sentiment_type = 'positive') as positive,
-        COUNT(*) FILTER (WHERE sentiment_type = 'neutral') as neutral,
-        COUNT(*) FILTER (WHERE sentiment_type = 'negative') as negative,
-        COUNT(*) as total,
-        AVG(sentiment_score) as average_score,
-        AVG(sentiment_confidence) as average_confidence
-      FROM articles 
-      WHERE sentiment_type IS NOT NULL
-    `);
-    client.release();
-
-    const stats = result.rows[0];
-    res.json({
-      success: true,
-      stats: {
-        total: parseInt(stats.total) || 0,
-        positive: parseInt(stats.positive) || 0,
-        negative: parseInt(stats.negative) || 0,
-        neutral: parseInt(stats.neutral) || 0,
-        average_score: parseFloat(stats.average_score) || 0,
-        average_confidence: parseFloat(stats.average_confidence) || 0
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erreur /api/sentiment/stats:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/stats/global', async (req, res) => {
-  try {
-    const client = await pool.connect();
-
-    const statsQuery = await client.query(`
-      SELECT 
-        COUNT(*) as total_articles,
-        COUNT(DISTINCT feed_url) as total_feeds,
-        AVG(sentiment_score) as avg_sentiment,
-        AVG(sentiment_confidence) as avg_confidence
-      FROM articles
-    `);
-
-    const themesQuery = await client.query(`
-      SELECT t.name, COUNT(ta.article_id) as count
-      FROM themes t
-      LEFT JOIN theme_analyses ta ON t.id = ta.theme_id
-      GROUP BY t.id, t.name
-      ORDER BY count DESC
-      LIMIT 10
-    `);
-
-    client.release();
-
-    const stats = statsQuery.rows[0];
-
-    res.json({
-      success: true,
-      total_articles: parseInt(stats.total_articles) || 0,
-      total_feeds: parseInt(stats.total_feeds) || 0,
-      avg_sentiment: parseFloat(stats.avg_sentiment) || 0,
-      avg_confidence: parseFloat(stats.avg_confidence) || 0,
-      top_themes: themesQuery.rows.map(row => ({ 
-        name: row.name, 
-        count: parseInt(row.count) || 0 
-      }))
-    });
-  } catch (error) {
-    console.error('❌ Erreur /api/stats/global:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/learning/stats', async (req, res) => {
+app.get('/api/stats', async (req, res) => {
   try {
     const client = await pool.connect();
     
-    const [articles, themes, analyses] = await Promise.all([
-      client.query('SELECT COUNT(*) as count FROM articles'),
-      client.query('SELECT COUNT(*) as count FROM themes'),
-      client.query('SELECT COUNT(*) as count FROM theme_analyses')
-    ]);
-
+    const articlesCount = await client.query('SELECT COUNT(*) as count FROM articles');
+    const feedsCount = await client.query('SELECT COUNT(*) as count FROM feeds WHERE is_active = true');
+    const themesCount = await client.query('SELECT COUNT(*) as count FROM themes');
+    const sentimentStats = await client.query(`
+      SELECT 
+        sentiment_type,
+        COUNT(*) as count,
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM articles), 2) as percentage
+      FROM articles 
+      GROUP BY sentiment_type
+    `);
+    
+    const recentArticles = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM articles 
+      WHERE pub_date >= NOW() - INTERVAL '24 hours'
+    `);
+    
     client.release();
 
     const stats = {
-      success: true,
-      total_articles_processed: parseInt(articles.rows[0].count) || 0,
-      sentiment_accuracy: 0.87,
-      theme_detection_accuracy: 0.79,
-      bayesian_fusion_used: parseInt(analyses.rows[0].count) || 0,
-      corroboration_avg: 0.65,
-      avg_processing_time: 2.1,
-      model_version: "2.5",
-      accuracy: 0.87,
-      is_trained: true,
-      labeled_articles: parseInt(articles.rows[0].count) || 0,
-      last_trained: new Date().toISOString(),
-      modules_active: [
-        "Analyseur de sentiment",
-        "Détection de thèmes",
-        "Extraction RSS",
-        "Base de données PostgreSQL",
-        "Lexique dynamique",
-        "Fusion bayésienne",
-        "Corroboration multi-sources"
-      ]
+      articles: parseInt(articlesCount.rows[0].count),
+      feeds: parseInt(feedsCount.rows[0].count),
+      themes: parseInt(themesCount.rows[0].count),
+      recent_articles: parseInt(recentArticles.rows[0].count),
+      sentiment: sentimentStats.rows.reduce((acc, row) => {
+        acc[row.sentiment_type] = {
+          count: parseInt(row.count),
+          percentage: parseFloat(row.percentage)
+        };
+        return acc;
+      }, {})
     };
 
-    res.json(stats);
+    res.json({ success: true, stats });
   } catch (error) {
-    console.error('❌ Erreur /api/learning/stats:', error);
+    console.error('❌ Erreur /api/stats:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ========== ROUTE TEST EMAIL ==========
+// ========== ROUTES ADMIN ==========
 
-app.post('/api/test-email', async (req, res) => {
+app.post('/api/admin/reset', async (req, res) => {
   try {
-    const { to, subject, body } = req.body;
-
-    if (!to || !subject) {
-      return res.status(400).json({ success: false, error: 'Destinataire et sujet requis' });
-    }
-
-    const result = await sendMail({
-      from: SMTP_USER,
-      to: to,
-      subject: subject,
-      text: body || 'Email de test depuis l\'agrégateur RSS',
-      html: `<p>${body || 'Email de test depuis l\'agrégateur RSS'}</p>`
-    });
-
-    if (result) {
-      res.json({ success: true, message: 'Email envoyé avec succès' });
-    } else {
-      res.json({ success: false, error: 'SMTP non configuré ou erreur d\'envoi' });
-    }
-  } catch (error) {
-    console.error('❌ Erreur /api/test-email:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Endpoint d'ingestion d'évidence (léger, appelé par le code JS au moment opportun)
-app.post('/api/evidence', async (req, res) => {
-  try {
-    const { entity_type, entity_id, evidence_type, value = 0.5, confidence = 0.5, meta = {} } = req.body;
-    if (!entity_type || !entity_id || !evidence_type) {
-      return res.status(400).json({ success: false, error: 'entity_type, entity_id et evidence_type requis' });
+    const { token } = req.body;
+    if (token !== process.env.ADMIN_TOKEN) {
+      return res.status(403).json({ success: false, error: 'Token invalide' });
     }
 
     const client = await pool.connect();
-    try {
-      await client.query(
-        `INSERT INTO bayes_evidence (entity_type, entity_id, evidence_type, value, confidence, meta)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [entity_type, entity_id, evidence_type, value, confidence, meta]
-      );
-    } finally {
-      client.release();
-    }
+    await client.query('DELETE FROM theme_analyses');
+    await client.query('DELETE FROM articles');
+    await client.query('DELETE FROM themes');
+    client.release();
 
-    res.json({ success: true, message: 'Evidence enregistrée' });
+    await initializeDefaultThemes();
+
+    res.json({ success: true, message: 'Base de données réinitialisée' });
   } catch (error) {
-    console.error('❌ Erreur /api/evidence:', error);
+    console.error('❌ Erreur /api/admin/reset:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1157,184 +1006,33 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
-  console.error('Erreur serveur:', error);
-  res.status(500).json({ success: false, error: 'Erreur serveur interne' });
+  console.error('❌ Erreur serveur:', error);
+  res.status(500).json({ success: false, error: 'Erreur interne du serveur' });
 });
 
-// Fonction utilitaire pour exécuter les migrations SQL
-async function runSqlMigrationIfExists(migrationFilename) {
-     try {
-        const migrationPath = path.join(__dirname, 'db', 'migrations', migrationFilename);
-       
-        try {
-          await fs.access(migrationPath);    
-        } catch (err) {
-          console.log(`ℹ️ Migration non trouvée: ${migrationPath}`);
-          return false;
-        }
-        
-        const sql = await fs.readFile(migrationPath, 'utf8');
-        if (!sql || sql.trim().length === 0) {
-          console.log(`ℹ️ Fichier de migration vide: ${migrationPath}`);
-          return false;
-        }
-     
-      const client = await pool.connect();
-      try {
-         console.log(`🔧 Exécution migration SQL: ${migrationFilename}`);
-         await client.query(sql);
-         console.log(`✅ Migration appliquée: ${migrationFilename}`);
-       } finally {
-         client.release();
-       }
-   
-      return true; 
-    } catch (err) {
-      console.error(`❌ Échec migration ${migrationFilename}:`, err.message || err);
-      return false;
-    }
-}
-// ========== INITIALISATION & DÉMARRAGE ==========
-async function initializeApplication() {
-   try {
-      console.log('🚀 Initialisation de l\'application...');
-      await initializeDatabase();
-      await initializeDefaultThemes();
-      console.log('✅ Base de données et thèmes prêts');
-
-   // Premier rafraîchissement après 30 secondes
-    setTimeout(() => {
-      console.log('🔄 Rafraîchissement initial...');
-      refreshData().then(result => {
-        console.log(`✅ ${result.articles_processed} articles chargés`);
-        // Lancer l'analyse thématique après le rafraîchissement
-        autoAnalyzeThemes();
-      }).catch(err => {
-        console.warn('⚠️ Rafraîchissement initial échoué:', err.message);
-      });
-    }, 30000);
-
-    // Rafraîchissement automatique toutes les heures
-    setInterval(() => {
-      console.log('⏰ Rafraîchissement automatique...');
-      refreshData().then(result => {
-        console.log(`✅ ${result.articles_processed} nouveaux articles`);
-        autoAnalyzeThemes();
-      }).catch(err => {
-        console.warn('⚠️ Rafraîchissement auto échoué:', err.message);
-      });
-    }, 3600000);
-
-    return true;
-  } catch (error) {
-    console.error('❌ Échec initialisation:', error);
-    return false;
-  }
-}
+// ========== DÉMARRAGE DU SERVEUR ==========
 
 async function startServer() {
   try {
-    await initializeApplication();
-
+    console.log('🚀 Initialisation du serveur RSS Aggregator...');
+    
+    await initializeDatabase();
+    console.log('✅ Base de données initialisée');
+    
+    await initializeDefaultThemes();
+    console.log('✅ Thèmes initialisés');
+    
     app.listen(PORT, () => {
-      console.log('='.repeat(60));
-      console.log(`✅ Serveur démarré sur le port ${PORT}`);
-      console.log(`📊 Interface: http://localhost:${PORT}`);
-      console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
-      console.log(`💾 Mode: ${NODE_ENV}`);
-      console.log('='.repeat(60));
+      console.log(`\n✅ Serveur démarré sur le port ${PORT}`);
+      console.log(`📊 Environnement: ${NODE_ENV}`);
+      console.log(`🔗 URL: http://localhost:${PORT}`);
+      console.log(`📡 API Health: http://localhost:${PORT}/api/health`);
+      console.log(`\n🚀 Prêt à recevoir des requêtes !\n`);
     });
-
   } catch (error) {
     console.error('❌ Erreur démarrage serveur:', error);
     process.exit(1);
   }
 }
 
-// Gestion propre de l'arrêt
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Arrêt du serveur...');
-  try {
-    await pool.end();
-    console.log('✅ Connexions DB fermées');
-  } catch (error) {
-    console.error('❌ Erreur fermeture DB:', error);
-  }
-  process.exit(0);
-});
-
 startServer();
-
-return true;
-} catch (err) {
-  console.error(`❌ Échec migration ${migrationFilename}:`, err.message || err);
-  return false;
-}
-}
-// Endpoint léger pour lire un prior depuis bayes_priors
-app.get('/api/priors/:type/:id', async (req, res) => {
-    try {
-        const { type, id } = req.params;
-        if (!type || !id) return res.status(400).json({ success: false, error: 'type et id requis' });
-        const client = await pool.connect();
-    try {
-        const result = await client.query(
-               `SELECT entity_type, entity_id, mu, sigma, alpha, beta, updated_at
-                FROM bayes_priors
-                WHERE entity_type = $1 AND entity_id = $2`,
-              [type, id]
-            );
-           
-            if (result.rows.length === 0) {
-                return res.status(404).json({ success: false, error: 'Prior non trouvé' });
-             }
-            
-            return res.json({ success: true, prior: result.rows[0] });
-        } finally {
-          client.release();
-        }
-    } catch (error) {
-      console.error('❌ Erreur /api/priors/:type/:id:', error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-async function initializeApplication() {
-  try {
-   console.log('🚀 Initialisation de l\'application...');
-   await initializeDatabase();
-   await runSqlMigrationIfExists('001_create_bayesian_tables.sql');
-   await initializeDefaultThemes();
-   console.log('✅ Base de données et thèmes prêts');
-        // Premier rafraîchissement après 30 secondes
-   setTimeout(() => {
-      
-// endpoint léger pour lire un prior depuis bayes_priors
-app.get('/api/priors/:type/:id', async (req, res) => {
-  try {
-    const { type, id } = req.params;
-    if (!type || !id) return res.status(400).json({ success: false, error: 'type et id requis' });
-
-    const client = await pool.connect();
-    try {
-      const result = await client.query(
-        `SELECT entity_type, entity_id, mu, sigma, alpha, beta, updated_at
-         FROM bayes_priors
-         WHERE entity_type = $1 AND entity_id = $2`,
-        [type, id]
-      );
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ success: false, error: 'Prior non trouvé' });
-      }
-
-      return res.json({ success: true, prior: result.rows[0] });
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('❌ Erreur /api/priors/:type/:id:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-module.exports = { app, startServer, refreshData, sendMail };
