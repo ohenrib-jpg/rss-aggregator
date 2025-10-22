@@ -7,6 +7,10 @@ class ChartManager {
         this.aggregation = "count";
         this.showMinorThemes = false;
         this.minorThreshold = 0.02; // 2% du total
+        this.defaultDays = 30; // plage par défaut pour l'axe temporel
+        this.minDays = 7;
+        this.maxDays = 180;
+        this.customRange = null; // { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' }
         this.initialize();
     }
 
@@ -38,6 +42,9 @@ class ChartManager {
                     <button onclick="app.chartManager.deselectAllThemes()" class="control-btn">✗ Tout désélectionner</button>
                     <button onclick="app.chartManager.selectTopThemes(5)" class="control-btn">🏆 Top 5</button>
                     <button onclick="app.chartManager.selectTopThemes(10)" class="control-btn">🎯 Top 10</button>
+                    <button onclick="app.chartManager.zoomIn()" class="control-btn">🔍+</button>
+                    <button onclick="app.chartManager.zoomOut()" class="control-btn">🔍−</button>
+                    <button onclick="app.chartManager.resetZoom()" class="control-btn">↺ Réinitialiser zoom</button>
                 </div>
             </div>
         `;
@@ -118,47 +125,128 @@ class ChartManager {
         this.refreshChart();
     }
 
+    // ---------- ZOOM API ----------
+    zoomIn() {
+        // réduire la fenêtre temporelle (minDays garanti)
+        const newDays = Math.max(this.minDays, Math.ceil(this._currentDays() / 2));
+        this.customRange = null;
+        this.defaultDays = newDays;
+        this.refreshChart();
+    }
+
+    zoomOut() {
+        // élargir la fenêtre temporelle (maxDays limité)
+        const newDays = Math.min(this.maxDays, Math.ceil(this._currentDays() * 2));
+        this.customRange = null;
+        this.defaultDays = newDays;
+        this.refreshChart();
+    }
+
+    resetZoom() {
+        this.customRange = null;
+        this.defaultDays = 30;
+        this.refreshChart();
+    }
+
+    zoomToRange(startIso, endIso) {
+        // startIso / endIso : 'YYYY-MM-DD' ou Date-parseable
+        const start = this._toIsoDate(startIso);
+        const end = this._toIsoDate(endIso);
+        if (!start || !end) return;
+        this.customRange = { start: start, end: end };
+        this.refreshChart();
+    }
+
+    _currentDays() {
+        if (this.customRange) {
+            const s = new Date(this.customRange.start);
+            const e = new Date(this.customRange.end);
+            const diff = Math.max(1, Math.round((e - s) / (24*3600*1000)) + 1);
+            return Math.min(this.maxDays, Math.max(this.minDays, diff));
+        }
+        return this.defaultDays;
+    }
+    // ---------- /ZOOM API ----------
+
     refreshChart() {
         if (this.app && typeof this.app.updateTimelineChart === "function") {
-            const filteredData = this.prepareChartData();
+            const filteredData = this.prepareChartData(this._currentDays());
             this.app.updateTimelineChart(filteredData);
         }
     }
 
-    prepareChartData() {
-    if (!this.app.articles || !this.app.themes || this.app.articles.length === 0) {
-        return { dates: [], themes: [] };
+    // utilitaire : parser date robuste -> iso 'YYYY-MM-DD'
+    _toIsoDate(obj) {
+        if (!obj) return null;
+        try {
+            const d = new Date(obj);
+            if (isNaN(d)) return null;
+            return d.toISOString().split("T")[0];
+        } catch (e) {
+            return null;
+        }
     }
 
-    // Construire un set of dates (ISO date strings)
-    const dateSet = new Set();
-    this.app.articles.forEach(a => {
-        const d = new Date(a.pubDate || a.date);
-        if (!isNaN(d)) dateSet.add(d.toISOString().split("T")[0]);
-    });
-    const dates = Array.from(dateSet).sort();
+    // utilitaire : plage de dates continue (dernier N jours) ou customRange si défini
+    _dateRange(days = this.defaultDays) {
+        if (this.customRange) {
+            const start = new Date(this.customRange.start);
+            const end = new Date(this.customRange.end);
+            start.setHours(0,0,0,0); end.setHours(0,0,0,0);
+            const res = [];
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                res.push(new Date(d).toISOString().split("T")[0]);
+                if (res.length > this.maxDays) break;
+            }
+            return res;
+        }
+        const res = [];
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(today.getDate() - i);
+            res.push(d.toISOString().split("T")[0]);
+        }
+        return res;
+    }
 
-    // Assurer liste des Themes
-    const availableThemes = this.getAvailableThemes();
-    const chosen = availableThemes.filter(t => this.selectedThemes.has(t.name));
-    const MAX = 8;
-    let themesToShow = chosen.length ? chosen : availableThemes.slice(0, MAX);
+    // Prépare les données pour le timeline chart — garantit une plage X stable (dernier N jours ou customRange)
+    prepareChartData(days = this.defaultDays) {
+        const dates = this._dateRange(days);
 
-    // Caler les dates et les themes (sql, je te deteste)
-    const themeObjects = themesToShow.map(t => {
-        const values = dates.map(date => {
-            // count articles on this date that include theme.name
-            const count = (this.app.articles || []).filter(a => {
-                const d = new Date(a.pubDate || a.date).toISOString().split("T")[0];
-                return d === date && (a.themes || []).includes(t.name);
-            }).length;
-            return count;
+        // si pas de thèmes disponibles -> thème vide
+        const availableThemes = this.getAvailableThemes();
+        const MAX = 8;
+        const chosen = availableThemes.filter(t => this.selectedThemes.has(t.name));
+        let themesToShow = chosen.length ? chosen : availableThemes.slice(0, MAX);
+
+        // construire mapping date->counts pour chaque thème
+        const articles = this.app.articles || [];
+
+        // Precompute article date ISO and themes list for speed
+        const pre = articles.map(a => {
+            const iso = this._toIsoDate(a.pubDate || a.date || a.pub_date || a.published);
+            return { iso: iso, themes: (a.themes || []) };
         });
-        return { name: t.name, color: t.color, values: values, total: values.reduce((a,b)=>a+b,0) };
-    });
 
-    return { dates: dates, themes: themeObjects };
-}
+        const themeObjects = themesToShow.map(t => {
+            const values = dates.map(date => {
+                // count articles on this date that include theme.name
+                let count = 0;
+                for (let i = 0; i < pre.length; i++) {
+                    const p = pre[i];
+                    if (!p.iso) continue;
+                    if (p.iso !== date) continue;
+                    if ((p.themes || []).includes(t.name)) count++;
+                }
+                return count;
+            });
+            return { name: t.name, color: t.color, values: values, total: values.reduce((a,b)=>a+b,0) };
+        });
+
+        return { dates: dates, themes: themeObjects };
+    }
 
     processThemesData(periods) {
         const availableThemes = this.getAvailableThemes();

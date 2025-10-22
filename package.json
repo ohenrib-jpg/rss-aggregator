@@ -6,14 +6,17 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "body-parser": "^1.20.2",
-    "rss-parser": "^3.13.0",
-    "dotenv": "^16.3.1",
-    "pg": "^8.11.3",
     "axios": "^1.6.0",
+    "body-parser": "^1.20.2",
     "chart.js": "^4.5.1",
-    "nodemailer": "^6.9.7"
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "nodemailer": "^6.9.7",
+    "pg": "^8.11.3",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.38.0"
   }
 }
