@@ -1,0 +1,992 @@
+// public/app.js - VERSION CORRIGÉE avec gestion d'erreurs robuste
+
+// Configuration API
+const API_BASE = window.location.origin;
+const API_TIMEOUT = 30000; // 30 secondes
+
+console.log('🚀 App.js loading - API Base:', API_BASE);
+
+window.app = (function () {
+    // ========== ÉTAT GLOBAL ==========
+    const state = {
+        apiBase: "/api",
+        articles: [],
+        themes: [],
+        feeds: [],
+        summary: {},
+        loading: {
+            articles: false,
+            themes: false,
+            feeds: false
+        },
+        charts: {
+            themeChart: null,
+            timelineChart: null,
+            sentimentChart: null
+        }
+    };
+
+    // ========== UTILITAIRES ==========
+    function qs(sel) { return document.querySelector(sel); }
+    function qsa(sel) { return Array.from(document.querySelectorAll(sel)); }
+
+    function escapeHtml(s) {
+        if (!s && s !== 0) return "";
+        return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    }
+
+    function formatDate(dateStr) {
+        try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('fr-FR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (e) {
+            return dateStr;
+        }
+    }
+
+    function setMessage(msg, type = "info") {
+        const container = qs("#messageContainer");
+        if (!container) return;
+
+        if (!msg) {
+            container.innerHTML = "";
+            return;
+        }
+
+        const colors = {
+            info: "#3b82f6",
+            error: "#ef4444",
+            success: "#10b981",
+            warning: "#f59e0b"
+        };
+
+        const color = colors[type] || colors.info;
+        const icon = type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️";
+
+        container.innerHTML = `
+            <div style="color: ${color}; padding: 12px; text-align: center; font-weight: 500; background: ${color}20; border: 1px solid ${color}50; border-radius: 8px; margin: 10px 0;">
+                ${icon} ${msg}
+            </div>
+        `;
+
+        if (type === "success" || type === "error") {
+            setTimeout(() => setMessage(""), 5000);
+        }
+    }
+
+    // ========== API CALLS AVEC GESTION D'ERREURS ==========
+    async function apiCall(method, path, body = null) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+
+        try {
+            const fullPath = path.startsWith("/api/") ? path : `/api${path.startsWith("/") ? path : "/" + path}`;
+            console.log(`📡 ${method} ${fullPath}`);
+
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal
+            };
+
+            if (body && method !== 'GET') {
+                options.body = JSON.stringify(body);
+            }
+
+            const res = await fetch(fullPath, options);
+            clearTimeout(timeoutId);
+
+            // Vérifier le content-type
+            const contentType = res.headers.get('content-type');
+            
+            if (!res.ok) {
+                let errorMsg = `HTTP ${res.status}`;
+                try {
+                    if (contentType && contentType.includes('application/json')) {
+                        const errorData = await res.json();
+                        errorMsg = errorData.error || errorData.message || errorMsg;
+                    } else {
+                        const errorText = await res.text();
+                        errorMsg = errorText.substring(0, 100);
+                    }
+                } catch (e) {
+                    // Ignorer les erreurs de parsing
+                }
+                throw new Error(errorMsg);
+            }
+
+            // Parser la réponse JSON
+            if (contentType && contentType.includes('application/json')) {
+                return await res.json();
+            } else {
+                const text = await res.text();
+                console.warn(`⚠️  Non-JSON response from ${fullPath}:`, text.substring(0, 100));
+                return { success: false, error: 'Invalid JSON response' };
+            }
+        } catch (err) {
+            clearTimeout(timeoutId);
+            
+            if (err.name === 'AbortError') {
+                console.error(`⏱️  Timeout ${method} ${path}`);
+                throw new Error('Requête expirée (timeout)');
+            }
+            
+            console.error(`❌ ${method} ${path}:`, err.message);
+            throw err;
+        }
+    }
+
+    const apiGET = (path) => apiCall('GET', path);
+    const apiPOST = (path, body) => apiCall('POST', path, body);
+    const apiDELETE = (path) => apiCall('DELETE', path);
+    const apiPUT = (path, body) => apiCall('PUT', path, body);
+
+    // ========== CHARGEMENT DONNÉES ==========
+    function normalizeArticle(a) {
+        if (!a || typeof a !== "object") return null;
+
+        return {
+            id: a.id || Math.random().toString(36).substr(2, 9),
+            title: a.title || "Sans titre",
+            link: a.link || "#",
+            date: a.date || a.pubDate || new Date().toISOString(),
+            themes: Array.isArray(a.themes) ? a.themes : [],
+            sentiment: a.sentiment || { score: 0, sentiment: 'neutral', confidence: 0 },
+            confidence: parseFloat(a.confidence || 0.5),
+            summary: a.summary || a.content || "",
+            feed: a.feed || "Inconnu"
+        };
+    }
+
+    async function loadArticles(forceRefresh = false) {
+        if (state.loading.articles && !forceRefresh) return state.articles;
+
+        state.loading.articles = true;
+        setMessage("Chargement des articles...", "info");
+
+        try {
+            const json = await apiGET("/articles?limit=200");
+
+            if (json && json.success && Array.isArray(json.articles)) {
+                state.articles = json.articles.map(normalizeArticle).filter(a => a !== null);
+                console.log(`✅ ${state.articles.length} articles chargés`);
+            } else {
+                console.warn('⚠️  Format de données inattendu:', json);
+                state.articles = [];
+            }
+
+            renderArticlesList();
+            computeThemesFromArticles();
+            updateAllCharts();
+            setMessage("", "info");
+
+            return state.articles;
+        } catch (err) {
+            console.error("❌ loadArticles error", err);
+            setMessage("Erreur chargement articles: " + err.message, "error");
+            state.articles = [];
+            return [];
+        } finally {
+            state.loading.articles = false;
+        }
+    }
+
+    async function loadThemes() {
+        if (state.loading.themes) return state.themes;
+
+        state.loading.themes = true;
+
+        try {
+            const data = await apiGET("/themes");
+
+            if (data && data.success && Array.isArray(data.themes)) {
+                state.themes = data.themes;
+                console.log(`✅ ${state.themes.length} thèmes chargés`);
+            } else if (Array.isArray(data)) {
+                state.themes = data;
+            } else {
+                state.themes = [];
+            }
+
+            return state.themes;
+        } catch (err) {
+            console.error("❌ loadThemes error", err);
+            state.themes = [];
+            return [];
+        } finally {
+            state.loading.themes = false;
+        }
+    }
+
+    async function loadFeeds() {
+        if (state.loading.feeds) return state.feeds;
+
+        state.loading.feeds = true;
+
+        try {
+            const data = await apiGET("/feeds/manager");
+
+            if (data && data.success && Array.isArray(data.feeds)) {
+                state.feeds = data.feeds;
+                console.log(`✅ ${state.feeds.length} flux chargés`);
+            } else if (Array.isArray(data)) {
+                state.feeds = data;
+            } else {
+                state.feeds = [];
+            }
+
+            return state.feeds;
+        } catch (err) {
+            console.error("❌ loadFeeds error", err);
+            state.feeds = [];
+            return [];
+        } finally {
+            state.loading.feeds = false;
+        }
+    }
+
+    // ========== RAFRAÎCHISSEMENT ==========
+    async function refreshArticles() {
+        const btn = qs("#refreshBtn");
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = "🔄 Actualisation...";
+        }
+
+        setMessage("🔄 Récupération des nouveaux articles RSS...", "info");
+
+        try {
+            const refreshResult = await apiPOST("/refresh");
+
+            if (!refreshResult || !refreshResult.success) {
+                throw new Error(refreshResult?.error || "Erreur inconnue");
+            }
+
+            setMessage(`✅ ${refreshResult.details?.articles_processed || 0} nouveaux articles récupérés`, "success");
+            
+            // Recharger les articles
+            await loadArticles(true);
+
+            // Lancer l'analyse thématique
+            setMessage("🎨 Analyse thématique en cours...", "info");
+            try {
+                const themeResult = await apiPOST("/themes/analyze");
+                if (themeResult && themeResult.success) {
+                    setMessage(`✅ ${themeResult.relations_created || 0} relations thématiques créées`, "success");
+                }
+            } catch (themeError) {
+                console.warn("⚠️  Analyse thématique échouée:", themeError);
+            }
+
+            await loadThemes();
+            computeThemesFromArticles();
+            updateAllCharts();
+
+            setMessage(`✅ Actualisation terminée avec succès`, "success");
+
+            return refreshResult;
+        } catch (error) {
+            console.error("❌ Erreur rafraîchissement:", error);
+            setMessage("❌ Erreur: " + error.message, "error");
+            throw error;
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = "🔄 Actualiser";
+            }
+        }
+    }
+
+    // ========== CALCUL DES THÈMES ==========
+    function computeThemesFromArticles() {
+        const themeCounts = {};
+
+        state.articles.forEach(article => {
+            if (article.themes && Array.isArray(article.themes)) {
+                article.themes.forEach(theme => {
+                    if (theme && typeof theme === 'string') {
+                        themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+                    }
+                });
+            }
+        });
+
+        state.themes = Object.keys(themeCounts).map(name => ({
+            name,
+            count: themeCounts[name],
+            color: getThemeColor(name)
+        })).sort((a, b) => b.count - a.count);
+
+        console.log(`✅ ${state.themes.length} thèmes calculés`);
+    }
+
+    function getThemeColor(themeName) {
+        const colors = [
+            "#ef4444", "#10b981", "#3b82f6", "#f59e0b", "#8b5cf6",
+            "#06b6d4", "#84cc16", "#f97316", "#6366f1", "#ec4899"
+        ];
+
+        let hash = 0;
+        for (let i = 0; i < themeName.length; i++) {
+            hash = themeName.charCodeAt(i) + ((hash << 5) - hash);
+        }
+
+        return colors[Math.abs(hash) % colors.length];
+    }
+
+    // ========== RENDU ARTICLES ==========
+    function renderArticlesList() {
+        const container = qs("#articlesList");
+        if (!container) return;
+
+        if (state.articles.length === 0) {
+            container.innerHTML = `
+                <div class="loading" style="text-align: center; padding: 60px 20px;">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">📰</div>
+                    <div style="font-size: 1.2rem; color: #64748b; margin-bottom: 20px;">Aucun article disponible</div>
+                    <p style="color: #94a3b8; margin-bottom: 30px;">Cliquez sur "Actualiser" pour récupérer les derniers articles RSS</p>
+                    <button onclick="window.app.refreshArticles()" class="btn btn-success" style="padding: 15px 30px; font-size: 1.1rem;">
+                        🔄 Charger des articles
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const articlesHtml = state.articles.slice(0, 100).map(article => {
+            const sentimentEmoji = {
+                'positive': '😊',
+                'neutral': '😐',
+                'negative': '😞'
+            };
+
+            const sentiment = article.sentiment || {};
+            const sentimentType = sentiment.sentiment || 'neutral';
+            const themes = article.themes || [];
+
+            return `
+                <div class="article-card">
+                    <h4><a href="${escapeHtml(article.link)}" target="_blank">${escapeHtml(article.title)}</a></h4>
+                    <div class="meta" style="display: flex; gap: 16px; font-size: 0.875rem; color: #64748b; margin-bottom: 10px;">
+                        <span>📅 ${formatDate(article.date)}</span>
+                        <span>${sentimentEmoji[sentimentType]} ${sentimentType} (${(sentiment.score || 0).toFixed(2)})</span>
+                        <span>🎯 Confiance: ${((article.confidence || 0) * 100).toFixed(1)}%</span>
+                    </div>
+                    <p>${escapeHtml((article.summary || '').substring(0, 250))}${article.summary?.length > 250 ? '...' : ''}</p>
+                    <div class="themes" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                        ${themes.length > 0
+                            ? themes.map(theme => `<span class="tag">${escapeHtml(theme)}</span>`).join("")
+                            : '<span style="font-size: 0.75rem; color: #94a3b8;">Aucun thème détecté</span>'
+                        }
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        container.innerHTML = `
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                <span style="font-weight: 600;">${state.articles.length} article(s) trouvé(s)</span>
+            </div>
+            ${articlesHtml}
+        `;
+    }
+
+    // ========== GRAPHIQUES ==========
+    function updateAllCharts() {
+        try {
+            createThemeChart();
+            createTimelineChart();
+            createSentimentChart();
+        } catch (error) {
+            console.error('❌ Error updating charts:', error);
+        }
+    }
+
+    function createThemeChart() {
+        const ctx = qs("#themeChart");
+        if (!ctx) return;
+
+        if (state.charts.themeChart) {
+            state.charts.themeChart.destroy();
+        }
+
+        const themeData = state.themes.filter(t => t.count > 0).slice(0, 10);
+
+        if (themeData.length === 0) {
+            ctx.parentElement.innerHTML = `
+                <h3>📊 Répartition par Thème</h3>
+                <div style="text-align: center; padding: 60px; color: #64748b;">Aucune donnée</div>
+            `;
+            return;
+        }
+
+        state.charts.themeChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: themeData.map(t => t.name),
+                datasets: [{
+                    data: themeData.map(t => t.count),
+                    backgroundColor: themeData.map(t => t.color)
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    function createTimelineChart() {
+        const ctx = qs("#timelineChart");
+        if (!ctx) return;
+
+        if (state.charts.timelineChart) {
+            state.charts.timelineChart.destroy();
+        }
+
+        const dates = Array.from(new Set(state.articles.map(a => a.date?.substring(0, 10)))).filter(d => d).sort().slice(-30);
+        
+        if (dates.length === 0) return;
+
+        const articlesByDate = dates.map(date => {
+            return state.articles.filter(a => a.date?.substring(0, 10) === date).length;
+        });
+
+        state.charts.timelineChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates.map(d => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })),
+                datasets: [{
+                    label: 'Articles publiés',
+                    data: articlesByDate,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    function createSentimentChart() {
+        const ctx = qs("#sentimentChart");
+        if (!ctx) return;
+
+        if (state.charts.sentimentChart) {
+            state.charts.sentimentChart.destroy();
+        }
+
+        const sentimentData = {
+            positive: state.articles.filter(a => a.sentiment?.sentiment === 'positive').length,
+            neutral: state.articles.filter(a => a.sentiment?.sentiment === 'neutral').length,
+            negative: state.articles.filter(a => a.sentiment?.sentiment === 'negative').length
+        };
+
+        state.charts.sentimentChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Positif', 'Neutre', 'Négatif'],
+                datasets: [{
+                    label: "Nombre d'articles",
+                    data: [sentimentData.positive, sentimentData.neutral, sentimentData.negative],
+                    backgroundColor: ['#10b981', '#6b7280', '#ef4444']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // ========== GESTION DES ONGLETS ==========
+    function showTab(tabName) {
+        qsa(".tab-content").forEach(div => div.style.display = "none");
+        qsa(".tab").forEach(tab => tab.classList.remove("active"));
+
+        const targetTab = qs(`#${tabName}Tab`);
+        const targetButton = qsa('.tab').find(tab => tab.getAttribute('onclick')?.includes(tabName));
+
+        if (targetTab) targetTab.style.display = "block";
+        if (targetButton) targetButton.classList.add("active");
+
+        console.log(`📂 Onglet activé: ${tabName}`);
+        loadTabData(tabName);
+    }
+
+    function loadTabData(tabName) {
+        switch (tabName) {
+            case "analysis":
+                updateAllCharts();
+                break;
+            case "themes":
+                loadThemesManager();
+                break;
+            case "feeds":
+                loadFeedsManager();
+                break;
+            case "metrics":
+                loadMetrics();
+                break;
+            case "articles":
+                if (state.articles.length === 0) loadArticles();
+                break;
+        }
+    }
+
+    // ========== GESTION DES THÈMES ==========
+    async function loadThemesManager() {
+        const container = qs("#themesManagerList");
+        if (!container) return;
+
+        try {
+            container.innerHTML = '<div class="loading">Chargement des thèmes...</div>';
+            await loadThemes();
+
+            if (state.themes.length > 0) {
+                container.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <div style="font-weight: 600;">Thèmes configurés</div>
+                        <button onclick="window.app.showAddThemeModal()" class="btn btn-success">➕ Ajouter</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+                        ${state.themes.map(theme => `
+                            <div class="theme-card" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                    <div style="width: 20px; height: 20px; border-radius: 50%; background: ${theme.color || '#6366f1'};"></div>
+                                    <h4 style="margin: 0; flex: 1;">${escapeHtml(theme.name)}</h4>
+                                    <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 12px; font-size: 0.8rem;">
+                                        ${theme.count || 0} articles
+                                    </span>
+                                </div>
+                                <div style="display: flex; gap: 8px; margin-top: 15px;">
+                                    <button onclick="window.app.deleteTheme('${theme.id || theme.name}')" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85rem;">
+                                        🗑️ Supprimer
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="loading" style="text-align: center; padding: 60px;">
+                        <div style="font-size: 3rem; margin-bottom: 20px;">🎨</div>
+                        <div style="font-size: 1.2rem; color: #64748b; margin-bottom: 20px;">Aucun thème configuré</div>
+                        <button onclick="window.app.showAddThemeModal()" class="btn btn-success" style="padding: 15px 20px;">
+                            ➕ Ajouter un thème
+                        </button>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('❌ Erreur chargement thèmes:', error);
+            container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement</div>';
+        }
+    }
+
+    function showAddThemeModal() {
+        const modalHtml = `
+            <div id="addThemeModal" class="modal" style="display: block;">
+                <div class="modal-content">
+                    <span class="close" onclick="window.app.closeModal('addThemeModal')">&times;</span>
+                    <h2>➕ Ajouter un Thème</h2>
+                    
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Nom du thème:</label>
+                        <input type="text" id="newThemeName" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mots-clés (un par ligne):</label>
+                        <textarea id="newThemeKeywords" style="width: 100%; height: 150px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Couleur:</label>
+                        <input type="color" id="newThemeColor" value="#6366f1" style="width: 100%; height: 40px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="window.app.createTheme()">✅ Créer</button>
+                        <button class="btn btn-secondary" onclick="window.app.closeModal('addThemeModal')">❌ Annuler</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const oldModal = qs('#addThemeModal');
+        if (oldModal) oldModal.remove();
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    async function createTheme() {
+        const name = qs('#newThemeName').value;
+        const keywordsText = qs('#newThemeKeywords').value;
+        const color = qs('#newThemeColor').value;
+
+        if (!name || name.trim().length === 0) {
+            alert('Veuillez entrer un nom de thème valide');
+            return;
+        }
+
+        const keywords = keywordsText.split('\n')
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+
+        if (keywords.length === 0) {
+            alert('Veuillez entrer au moins un mot-clé');
+            return;
+        }
+
+        setMessage("Création du thème...", "info");
+
+        try {
+            const data = await apiPOST("/themes", {
+                name,
+                keywords,
+                color,
+                description: ''
+            });
+
+            if (data.success) {
+                closeModal('addThemeModal');
+                await loadThemes();
+                loadThemesManager();
+                setMessage("✅ Thème créé avec succès !", "success");
+            } else {
+                throw new Error(data.error || "Erreur inconnue");
+            }
+        } catch (error) {
+            console.error('❌ Erreur création thème:', error);
+            setMessage('Erreur: ' + error.message, 'error');
+        }
+    }
+
+    async function deleteTheme(themeId) {
+        if (!confirm('Êtes-vous sûr de vouloir supprimer ce thème ?')) {
+            return;
+        }
+
+        setMessage("Suppression du thème...", "info");
+        try {
+            const data = await apiDELETE(`/themes/${themeId}`);
+            if (data.success) {
+                await loadThemes();
+                loadThemesManager();
+                setMessage("✅ Thème supprimé avec succès", "success");
+            } else {
+                throw new Error(data.error || "Erreur inconnue");
+            }
+        } catch (error) {
+            console.error('❌ Erreur suppression thème:', error);
+            setMessage('Erreur: ' + error.message, 'error');
+        }
+    }
+
+    // ========== GESTION DES FLUX ==========
+    async function loadFeedsManager() {
+        const container = qs("#feedsManagerList");
+        if (!container) return;
+
+        try {
+            container.innerHTML = '<div class="loading">Chargement des flux...</div>';
+            await loadFeeds();
+
+            if (state.feeds.length > 0) {
+                container.innerHTML = `
+                    <div style="margin-bottom: 15px;">
+                        <button onclick="window.app.showAddFeedModal()" class="btn btn-success">➕ Ajouter un flux</button>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: #f8fafc;">
+                                    <th style="padding: 12px; text-align: left;">URL</th>
+                                    <th style="padding: 12px; text-align: left;">Statut</th>
+                                    <th style="padding: 12px; text-align: left;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${state.feeds.map(feed => `
+                                    <tr>
+                                        <td style="padding: 12px;">
+                                            <div style="font-weight: 500;">${escapeHtml(feed.title || 'Sans titre')}</div>
+                                            <div style="font-size: 0.85rem; color: #64748b;">${escapeHtml(feed.url)}</div>
+                                        </td>
+                                        <td style="padding: 12px;">
+                                            <span style="padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; background: ${feed.is_active ? '#10b98120' : '#ef444420'}; color: ${feed.is_active ? '#10b981' : '#ef4444'};">
+                                                ${feed.is_active ? '✅ Actif' : '❌ Inactif'}
+                                            </span>
+                                        </td>
+                                        <td style="padding: 12px;">
+                                            <button onclick="window.app.toggleFeed(${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 5px;">
+                                                ${feed.is_active ? '❌ Désactiver' : '✅ Activer'}
+                                            </button>
+                                            <button onclick="window.app.deleteFeed(${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="loading" style="text-align: center; padding: 60px;">
+                        <div style="font-size: 3rem; margin-bottom: 20px;">📰</div>
+                        <div style="font-size: 1.2rem; color: #64748b; margin-bottom: 20px;">Aucun flux configuré</div>
+                        <button onclick="window.app.showAddFeedModal()" class="btn btn-success" style="padding: 15px 30px;">
+                            ➕ Ajouter un flux RSS
+                        </button>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('❌ Erreur chargement flux:', error);
+            container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement</div>';
+        }
+    }
+
+    function showAddFeedModal() {
+        const modalHtml = `
+            <div id="addFeedModal" class="modal" style="display: block;">
+                <div class="modal-content">
+                    <span class="close" onclick="window.app.closeModal('addFeedModal')">&times;</span>
+                    <h2>➕ Ajouter un flux RSS</h2>
+
+                    <div style="margin: 12px 0;">
+                        <label style="display:block; font-weight:600; margin-bottom:6px;">Titre (optionnel)</label>
+                        <input id="newFeedTitle" type="text" placeholder="Titre du flux" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px;">
+                    </div>
+
+                    <div style="margin: 12px 0;">
+                        <label style="display:block; font-weight:600; margin-bottom:6px;">URL du flux</label>
+                        <input id="newFeedURL" type="url" placeholder="https://exemple.com/rss.xml" style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px;">
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+                        <button class="btn btn-secondary" onclick="window.app.closeModal('addFeedModal')">❌ Annuler</button>
+                        <button class="btn btn-success" onclick="window.app.createFeed()">✅ Ajouter</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const oldModal = qs('#addFeedModal');
+        if (oldModal) oldModal.remove();
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    async function createFeed() {
+        const title = qs('#newFeedTitle').value.trim();
+        const url = qs('#newFeedURL').value.trim();
+
+        if (!url) {
+            alert('URL du flux requise');
+            return;
+        }
+
+        try {
+            new URL(url);
+        } catch (e) {
+            alert('URL invalide');
+            return;
+        }
+
+        setMessage("Création du flux...", "info");
+
+        try {
+            const res = await apiPOST('/feeds', { url, title: title || undefined, is_active: true });
+
+            if (res.success) {
+                closeModal('addFeedModal');
+                await loadFeeds();
+                await loadFeedsManager();
+                setMessage("✅ Flux ajouté avec succès", "success");
+            } else {
+                throw new Error(res.error || 'Erreur création flux');
+            }
+        } catch (error) {
+            console.error('❌ createFeed error:', error);
+            setMessage('Erreur: ' + error.message, 'error');
+        }
+    }
+
+    async function toggleFeed(id, isActive) {
+        try {
+            const response = await apiPUT(`/feeds/${id}`, { is_active: isActive });
+            if (response.success) {
+                await loadFeeds();
+                loadFeedsManager();
+                setMessage(`✅ Statut du flux mis à jour`, "success");
+            } else {
+                alert('Erreur: ' + response.error);
+            }
+        } catch (error) {
+            alert('Erreur: ' + error.message);
+        }
+    }
+
+    async function deleteFeed(id) {
+        if (!confirm('Êtes-vous sûr de vouloir supprimer ce flux ?')) return;
+        try {
+            const response = await apiDELETE(`/feeds/${id}`);
+            if (response.success) {
+                await loadFeeds();
+                loadFeedsManager();
+                setMessage('✅ Flux supprimé avec succès', "success");
+            } else {
+                alert('Erreur: ' + response.error);
+            }
+        } catch (error) {
+            alert('Erreur: ' + error.message);
+        }
+    }
+
+    // ========== MÉTRIQUES ==========
+    async function loadMetrics() {
+        try {
+            const stats = await apiGET("/stats");
+            if (stats.success) {
+                const s = stats.stats;
+                if (qs("#m_total")) qs("#m_total").textContent = s.articles || 0;
+                if (qs("#m_confidence")) qs("#m_confidence").textContent = "N/A";
+                if (qs("#m_posterior")) qs("#m_posterior").textContent = "N/A";
+                if (qs("#m_corro")) qs("#m_corro").textContent = "N/A";
+            }
+        } catch (error) {
+            console.error('❌ Erreur chargement métriques:', error);
+        }
+    }
+
+    // ========== UTILITAIRES ==========
+    function closeModal(modalId) {
+        const modal = qs(`#${modalId}`);
+        if (!modal) return;
+        modal.style.display = "none";
+        setTimeout(() => {
+            if (modal.parentNode) modal.parentNode.removeChild(modal);
+        }, 250);
+    }
+
+    async function exportArticlesToCSV() {
+        try {
+            setMessage("Génération du CSV...", "info");
+
+            if (state.articles.length === 0) {
+                alert("Aucun article à exporter");
+                return;
+            }
+
+            const headers = ["ID", "Titre", "Date", "Lien", "Thèmes", "Sentiment"];
+            const csvRows = [headers.join(",")];
+
+            state.articles.forEach(article => {
+                const row = [
+                    article.id,
+                    `"${(article.title || '').replace(/"/g, '""')}"`,
+                    `"${article.date || ''}"`,
+                    `"${article.link || ''}"`,
+                    `"${(article.themes || []).join('; ')}"`,
+                    article.sentiment?.sentiment || 'neutral'
+                ];
+                csvRows.push(row.join(","));
+            });
+
+            const csvString = csvRows.join("\n");
+            const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `articles-export-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setMessage("✅ Export CSV téléchargé", "success");
+        } catch (error) {
+            console.error("❌ Erreur export CSV:", error);
+            setMessage("Erreur: " + error.message, "error");
+        }
+    }
+
+    // ========== INITIALISATION ==========
+    async function init() {
+        console.log("🚀 Initialisation de l'application...");
+
+        // Activer l'onglet par défaut
+        showTab("articles");
+
+        // Charger les données initiales
+        try {
+            await Promise.all([
+                loadArticles(),
+                loadThemes(),
+                loadFeeds()
+            ]);
+
+            updateAllCharts();
+            loadMetrics();
+            
+            console.log("✅ Application initialisée");
+        } catch (error) {
+            console.error("❌ Erreur chargement initial:", error);
+            setMessage("Erreur d'initialisation. Veuillez recharger la page.", "error");
+        }
+    }
+
+    // ========== EXPOSITION PUBLIQUE ==========
+    return {
+        init,
+        showTab,
+        closeModal,
+        loadArticles,
+        loadThemes,
+        loadFeeds,
+        refreshArticles,
+        loadThemesManager,
+        showAddThemeModal,
+        createTheme,
+        deleteTheme,
+        loadFeedsManager,
+        showAddFeedModal,
+        createFeed,
+        toggleFeed,
+        deleteFeed,
+        loadMetrics,
+        exportArticlesToCSV,
+        updateAllCharts,
+        state
+    };
+})();
+
+// ========== INITIALISATION AU CHARGEMENT ==========
+document.addEventListener("DOMContentLoaded", function () {
+    console.log('📄 DOM chargé');
+    
+    if (window.app && typeof window.app.init === 'function') {
+        window.app.init();
+    } else {
+        console.error('❌ window.app non disponible');
+    }
+});
+
+// ========== EXPOSITION GLOBALE ==========
+window.showTab = window.app?.showTab;
+window.closeModal = window.app?.closeModal;
+
+console.log('✅ app.js chargé');

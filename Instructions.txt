@@ -1,0 +1,19 @@
+PREALABLES
+=============
+
+npm install
+npm install sqlite3  # Pour mode local
+npm run setup-local
+
+TEST LOCAL
+==============
+npm run local
+# Puis ouvrir http://localhost:3000
+
+
+TEST DE SANTE
+=================
+npm test
+
+
+README-DEPLOYEMENT.md pour serveur (Render ou local)

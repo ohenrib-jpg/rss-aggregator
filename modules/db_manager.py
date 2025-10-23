@@ -1,119 +1,123 @@
 # modules/db_manager.py
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2 import pool
 import logging
+import sqlite3
+from typing import List, Dict, Any
 
 logger = logging.getLogger("rss-aggregator")
-_POOL = None
 
 def get_database_url():
-    """Récupère l'URL depuis les variables d'environnement ou utilise l'URL Render"""
-    # Priorité à la variable d'environnement
-    db_url = os.getenv("DATABASE_URL")
-    
-    if not db_url:
-        # URL Render complète avec port
-        db_url = "postgresql://rssaggregator_postgresql_olivier_user:jexuBogPqTuplOcud708PuSuIVWBWwi0@dpg-d3nnodm3jp1c73c3302g-a:5432/rssaggregator_postgresql_olivier"
-    
-    if not db_url:
-        raise RuntimeError("DATABASE_URL non configurée")
-    
-    # S'assurer que l'URL a le format correct
-    if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql://", 1)
-    
-    logger.info(f"🔗 Utilisation URL DB: {db_url.split('@')[0]}@***")
-    return db_url
-
-def init_pool(minconn=1, maxconn=5):
-    global _POOL
-    if _POOL is not None:
-        return _POOL
-    
-    db_url = get_database_url()
-    
-    # Configuration optimisée pour Render
-    pool_config = {
-        'dsn': db_url,
-        'cursor_factory': RealDictCursor,
-        'minconn': minconn,
-        'maxconn': maxconn,
-        'sslmode': 'require'
-    }
-    
-    try:
-        _POOL = psycopg2.pool.SimpleConnectionPool(**pool_config)
-        logger.info("✅ Pool de connexions PostgreSQL créé")
-        return _POOL
-    except Exception as e:
-        logger.error(f"❌ Erreur création pool: {e}")
-        raise
+    """Retourne le chemin SQLite"""
+    sqlite_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rss_aggregator.db')
+    os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+    logger.info(f"🔗 Utilisation SQLite: {sqlite_path}")
+    return sqlite_path
 
 def get_connection():
-    if _POOL is None:
-        init_pool()
-    
-    try:
-        conn = _POOL.getconn()
-        return conn
-    except Exception as e:
-        logger.error(f"❌ Erreur obtention connexion: {e}")
-        raise
+    """Retourne une connexion SQLite"""
+    db_path = get_database_url()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def put_connection(conn):
-    if _POOL and conn:
-        try:
-            _POOL.putconn(conn)
-        except Exception as e:
-            logger.error(f"❌ Erreur libération connexion: {e}")
+    """Libère une connexion"""
+    if conn:
+        conn.close()
 
 def init_db():
-    """Initialise la structure de la base si nécessaire"""
+    """Initialise les tables Flask si nécessaire"""
     conn = None
     try:
         conn = get_connection()
-        cur = conn.cursor()
+        cursor = conn.cursor()
         
-        # Vérifier si la table analyses existe déjà
-        cur.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = 'analyses'
+        # Vérifier/créer la table analyses
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                source TEXT,
+                date TIMESTAMP,
+                summary TEXT,
+                confidence REAL,
+                corroboration_count INTEGER,
+                corroboration_strength REAL,
+                bayesian_posterior REAL,
+                raw TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        table_exists = cur.fetchone()['exists']
         
-        if not table_exists:
-            logger.info("🔄 Création de la table analyses...")
-            cur.execute("""
-                CREATE TABLE analyses (
-                    id SERIAL PRIMARY KEY,
-                    title TEXT,
-                    source TEXT,
-                    date TIMESTAMP,
-                    summary TEXT,
-                    confidence DOUBLE PRECISION,
-                    corroboration_count INT,
-                    corroboration_strength DOUBLE PRECISION,
-                    bayesian_posterior DOUBLE PRECISION,
-                    raw JSONB,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            conn.commit()
-            logger.info("✅ Table analyses créée")
-        else:
-            logger.info("✅ Table analyses existe déjà")
+        # Créer un index pour les performances
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_date ON analyses(date)")
         
-        cur.close()
+        conn.commit()
+        cursor.close()
+        logger.info("✅ Base Flask initialisée")
         
     except Exception as e:
-        logger.error(f"❌ Erreur initialisation DB: {e}")
+        logger.error(f"❌ Erreur initialisation DB Flask: {e}")
         if conn:
             conn.rollback()
         raise
+    finally:
+        if conn:
+            put_connection(conn)
+
+def sync_with_node_data():
+    """Synchronise les données avec la structure Node.js"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Vérifier si la table articles existe (structure Node.js)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='articles'")
+        if cursor.fetchone():
+            # Synchroniser les données
+            cursor.execute("""
+                INSERT OR IGNORE INTO analyses (title, source, date, summary, confidence, raw)
+                SELECT 
+                    title,
+                    feed_url as source,
+                    pub_date as date,
+                    content as summary,
+                    COALESCE(sentiment_confidence, 0.5) as confidence,
+                    json_object(
+                        'id', id,
+                        'title', title, 
+                        'link', link,
+                        'content', content,
+                        'pub_date', pub_date,
+                        'feed_url', feed_url,
+                        'sentiment', json_object(
+                            'score', COALESCE(sentiment_score, 0),
+                            'sentiment', COALESCE(sentiment_type, 'neutral'),
+                            'confidence', COALESCE(sentiment_confidence, 0.5)
+                        ),
+                        'themes', (
+                            SELECT json_group_array(t.name)
+                            FROM theme_analyses ta
+                            JOIN themes t ON ta.theme_id = t.id
+                            WHERE ta.article_id = articles.id
+                        )
+                    ) as raw
+                FROM articles
+                WHERE id NOT IN (SELECT id FROM analyses WHERE id IS NOT NULL)
+            """)
+            
+            count = cursor.rowcount
+            if count > 0:
+                logger.info(f"🔄 {count} articles synchronisés depuis Node.js")
+            
+        conn.commit()
+        cursor.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur synchronisation: {e}")
+        if conn:
+            conn.rollback()
     finally:
         if conn:
             put_connection(conn)

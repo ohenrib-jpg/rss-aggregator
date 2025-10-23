@@ -6,12 +6,16 @@ Version optimisée pour architecture hybride
 """
 
 import os
+os.environ['DATABASE_URL'] = ''
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+
+from modules.email_sender import email_sender
+from modules.scheduler import report_scheduler
 
 # Modules internes
 from modules.db_manager import init_db, get_database_url, get_connection, put_connection
@@ -480,6 +484,124 @@ def api_learning_stats():
     except Exception as e:
         logger.exception("Erreur api_learning_stats")
         return json_error("learning stats error: " + str(e))
+
+# ========== ROUTE COURRIEL FONC. =========
+@app.route('/api/email/config', methods=['POST'])
+def api_email_config():
+    """Sauvegarde la configuration email"""
+    try:
+        config = request.get_json()
+        success = email_sender.save_config(config)
+        
+        if success:
+            return jsonify({"success": True, "message": "Configuration sauvegardée"})
+        else:
+            return jsonify({"success": False, "error": "Erreur sauvegarde"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/email/test', methods=['POST'])
+def api_email_test():
+    """Teste la configuration email"""
+    try:
+        success, message = email_sender.test_connection()
+        return jsonify({"success": success, "message": message})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/email/start-scheduler', methods=['POST'])
+def api_start_scheduler():
+    """Démarre le planificateur"""
+    try:
+        report_scheduler.start_scheduler()
+        return jsonify({"success": True, "message": "Planificateur démarré"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/email/send-test-report', methods=['POST'])
+def api_send_test_report():
+    """Envoie un rapport de test"""
+    try:
+        report_data = report_scheduler.generate_detailed_report()
+        success, message = email_sender.send_analysis_report(report_data, "Rapport de Test")
+        return jsonify({"success": success, "message": message})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+# ==========Sys d'alerte active ===========
+from modules.alert_system import alert_system
+
+# Routes pour les alertes
+@app.route('/api/alerts', methods=['GET'])
+def api_get_alerts():
+    """Récupère toutes les alertes"""
+    try:
+        return jsonify({
+            "success": True,
+            "alerts": alert_system.alerts,
+            "stats": alert_system.get_alert_stats()
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/alerts', methods=['POST'])
+def api_create_alert():
+    """Crée une nouvelle alerte"""
+    try:
+        alert_data = request.get_json()
+        success = alert_system.create_alert(alert_data)
+        
+        if success:
+            return jsonify({"success": True, "message": "Alerte créée"})
+        else:
+            return jsonify({"success": False, "error": "Erreur création alerte"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/alerts/<alert_id>', methods=['DELETE'])
+def api_delete_alert(alert_id):
+    """Supprime une alerte"""
+    try:
+        success = alert_system.delete_alert(alert_id)
+        return jsonify({"success": success, "message": "Alerte supprimée"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/alerts/<alert_id>', methods=['PUT'])
+def api_update_alert(alert_id):
+    """Met à jour une alerte"""
+    try:
+        updates = request.get_json()
+        success = alert_system.update_alert(alert_id, updates)
+        return jsonify({"success": success, "message": "Alerte mise à jour"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/alerts/triggered', methods=['GET'])
+def api_get_triggered_alerts():
+    """Récupère l'historique des alertes déclenchées"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        return jsonify({
+            "success": True,
+            "alerts": alert_system.get_recent_alerts(limit)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/alerts/check', methods=['POST'])
+def api_check_article_alerts():
+    """Vérifie les alertes pour un article (pour tests)"""
+    try:
+        article = request.get_json()
+        triggered = alert_system.check_article(article)
+        return jsonify({
+            "success": True,
+            "triggered_alerts": triggered,
+            "message": f"{len(triggered)} alerte(s) déclenchée(s)"
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 # ========== GESTION DES ERREURS ==========
 

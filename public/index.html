@@ -4,69 +4,300 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agrégateur RSS Intelligent</title>
-    
+
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.6; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
-        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
         /* Header */
-        .header { background: white; padding: 20px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .header h1 { color: #1e40af; font-size: 2.5rem; margin-bottom: 10px; }
-        
+        .header {
+            background: white;
+            padding: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+            .header h1 {
+                color: #1e40af;
+                font-size: 2.5rem;
+                margin-bottom: 10px;
+            }
+
         /* Navigation */
-        .tabs { display: flex; background: white; border-radius: 12px; padding: 5px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .tab { flex: 1; padding: 15px 20px; border: none; background: transparent; cursor: pointer; border-radius: 8px; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; }
-        .tab:hover { background: #f1f5f9; }
-        .tab.active { background: #3b82f6; color: white; }
-        
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 12px;
+            padding: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+            .tab:hover {
+                background: #f1f5f9;
+            }
+
+            .tab.active {
+                background: #3b82f6;
+                color: white;
+            }
+
         /* Contenu */
-        .tab-content { display: none; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .tab-content.active { display: block; }
-        
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+            .tab-content.active {
+                display: block;
+            }
+
         /* Boutons */
-        .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
-        .btn-success { background: #10b981; color: white; }
-        .btn-success:hover { background: #059669; }
-        .btn-info { background: #3b82f6; color: white; }
-        .btn-info:hover { background: #2563eb; }
-        .btn-secondary { background: #6b7280; color: white; }
-        .btn-secondary:hover { background: #4b5563; }
-        .btn-warning { background: #f59e0b; color: white; }
-        .btn-warning:hover { background: #d97706; }
-        .btn-danger { background: #ef4444; color: white; }
-        .btn-danger:hover { background: #dc2626; }
-        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+            .btn-success:hover {
+                background: #059669;
+            }
+
+        .btn-info {
+            background: #3b82f6;
+            color: white;
+        }
+
+            .btn-info:hover {
+                background: #2563eb;
+            }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+            .btn-secondary:hover {
+                background: #4b5563;
+            }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+            .btn-warning:hover {
+                background: #d97706;
+            }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+            .btn-danger:hover {
+                background: #dc2626;
+            }
+
         /* Cartes */
-        .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .full-width { width: 100%; }
-        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .full-width {
+            width: 100%;
+        }
+
         /* Messages */
-        #messageContainer { margin-bottom: 20px; }
-        
+        #messageContainer {
+            margin-bottom: 20px;
+        }
+
         /* Loading */
-        .loading { text-align: center; padding: 40px 20px; color: #64748b; }
-        
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
         /* Panneau de contrôle */
-        .control-panel { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; }
-        
+        .control-panel {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
         /* Articles */
-        .article-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px; background: white; transition: all 0.3s ease; }
-        .article-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
-        
+        .article-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+            .article-card:hover {
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                transform: translateY(-2px);
+            }
+
         /* Graphiques */
-        .chart-container { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
         /* Modals */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
-        .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
-        .close { float: right; font-size: 28px; cursor: pointer; color: #64748b; }
-        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            float: right;
+            font-size: 28px;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        /* Styles pour les alertes */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+            .switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+            .slider:before {
+                position: absolute;
+                content: "";
+                height: 16px;
+                width: 16px;
+                left: 4px;
+                bottom: 4px;
+                background-color: white;
+                transition: .4s;
+                border-radius: 50%;
+            }
+
+        input:checked + .slider {
+            background-color: #10b981;
+        }
+
+            input:checked + .slider:before {
+                transform: translateX(26px);
+            }
+
         @media (max-width: 768px) {
-            .tabs { flex-direction: column; }
-            .tab { margin-bottom: 5px; }
-            .control-buttons { flex-direction: column; }
-            .btn { width: 100%; justify-content: center; margin-bottom: 10px; }
+            .tabs {
+                flex-direction: column;
+            }
+
+            .tab {
+                margin-bottom: 5px;
+            }
+
+            .control-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+                margin-bottom: 10px;
+            }
         }
     </style>
 </head>
@@ -106,6 +337,7 @@
             <button class="tab" onclick="appCall('showTab', 'themes')">🎨 Thèmes</button>
             <button class="tab" onclick="appCall('showTab', 'feeds')">📡 Flux RSS</button>
             <button class="tab" onclick="appCall('showTab', 'metrics')">📊 Métriques</button>
+            <button class="tab" onclick="appCall('showTab', 'alerts')">🔔 Alertes</button>
             <button class="tab" onclick="appCall('showTab', 'settings')">⚙️ Paramètres</button>
         </nav>
 
@@ -127,35 +359,26 @@
             <div class="card">
                 <h2 style="margin-bottom: 20px; color: #1e40af;">📈 Analyse des Données</h2>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                <div class="charts-grid">
                     <div class="chart-container">
                         <h3>📊 Répartition par Thème</h3>
-                        <canvas id="themeChart" height="300"></canvas>
+                        <canvas id="themeChart"></canvas>
                     </div>
                     <div class="chart-container">
                         <h3>😊 Analyse des Sentiments</h3>
-                        <canvas id="sentimentChart" height="300"></canvas>
+                        <canvas id="sentimentChart"></canvas>
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+                <div class="charts-grid-full">
                     <div class="chart-container">
                         <h3>📈 Évolution Temporelle</h3>
-                        
-                        <!-- Contrôles de zoom (insérer avant <canvas id="timelineChart">) -->
-                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-                            <button class="btn btn-secondary" onclick="zoomTimelineChart(1.5)" title="Zoom avant">🔍+</button>
-                            <button class="btn btn-secondary" onclick="zoomTimelineChart(0.66)" title="Zoom arrière">🔍−</button>
-                            <button class="btn btn-secondary" onclick="resetTimelineZoom()" title="Réinitialiser zoom">↺ Réinit</button>
-                                  <canvas id="timelineChart" height="300"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h3>🚀 Évolution des Thèmes</h3>
-                        <canvas id="themeEvolutionChart" height="300"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h3>📅 Évolution du Sentiment</h3>
-                        <canvas id="sentimentEvolutionChart" height="300"></canvas>
+                        <div class="chart-controls">
+                            <button class="control-btn" onclick="appCall('zoomTimelineChart', 1.5)">🔍 Zoom +</button>
+                            <button class="control-btn" onclick="appCall('zoomTimelineChart', 0.66)">🔍 Zoom -</button>
+                            <button class="control-btn" onclick="appCall('resetTimelineZoom')">↺ Réinitialiser</button>
+                        </div>
+                        <canvas id="timelineChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -226,6 +449,74 @@
             </div>
         </div>
 
+        <!-- Onglet Alertes -->
+        <div id="alertsTab" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #1e40af;">🔔 Gestion des Alertes</h2>
+
+                <!-- Statistiques en temps réel -->
+                <div id="alertsStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                    <div class="loading">Chargement des stats...</div>
+                </div>
+
+                <!-- Création d'alerte -->
+                <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin-bottom: 25px;">
+                    <h3>➕ Créer une Nouvelle Alerte</h3>
+                    <div style="display: grid; gap: 15px; margin-top: 15px;">
+                        <input type="text" id="newAlertName" placeholder="Nom de l'alerte (ex: Crise Ukraine)" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px;">
+
+                        <textarea id="newAlertKeywords" placeholder="Mots-clés (un par ligne)
+Ex:
+Ukraine
+conflit
+Zelensky
+guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; height: 120px; font-family: monospace;"></textarea>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Sévérité:</label>
+                                <select id="newAlertSeverity" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                    <option value="low">🟢 Faible</option>
+                                    <option value="medium">🟡 Moyen</option>
+                                    <option value="high">🔴 Élevé</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Cooldown:</label>
+                                <select id="newAlertCooldown" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                    <option value="0">Aucun</option>
+                                    <option value="900">15 minutes</option>
+                                    <option value="1800" selected>30 minutes</option>
+                                    <option value="3600">1 heure</option>
+                                    <option value="7200">2 heures</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success" onclick="appCall('createAlert')" style="padding: 12px 20px;">
+                            ✅ Créer l'Alerte
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Liste des alertes -->
+                <div>
+                    <h3>📋 Alertes Configurées</h3>
+                    <div id="alertsList" class="loading">
+                        Chargement des alertes...
+                    </div>
+                </div>
+
+                <!-- Historique des alertes déclenchées -->
+                <div style="margin-top: 30px;">
+                    <h3>📈 Historique des Alertes</h3>
+                    <div id="triggeredAlerts" class="loading">
+                        Chargement de l'historique...
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Onglet Paramètres -->
         <div id="settingsTab" class="tab-content">
             <div class="settings-container">
@@ -233,24 +524,89 @@
                 <div class="card full-width" style="margin-bottom: 20px;">
                     <h3>🤖 Configuration de l'IA</h3>
 
-                    <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                    <!-- Section IA Locale -->
+                    <div style="margin: 20px 0; padding: 15px; background: #f0f9ff; border-radius: 8px;">
+                        <h4 style="margin-bottom: 15px;">💻 IA Locale (Llama.cpp/GGUF)</h4>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">URL du serveur:</label>
+                                <input type="text" id="localAIUrl" placeholder="http://localhost:8080"
+                                       style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle:</label>
+                                <select id="localAIModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                    <option value="llama2">Llama 2 7B</option>
+                                    <option value="llama2-13b">Llama 2 13B</option>
+                                    <option value="mistral">Mistral 7B</option>
+                                    <option value="mixtral">Mixtral 8x7B</option>
+                                    <option value="phi2">Phi-2</option>
+                                    <option value="custom">Modèle personnalisé</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Prompt système (optionnel):</label>
+                            <textarea id="localAISystemPrompt" placeholder="Vous êtes un assistant spécialisé dans l'analyse d'actualités..."
+                                      style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="localAIEnabled" checked>
+                                <span>Activer l'IA locale</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="localAIAutoStart">
+                                <span>Démarrage automatique</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Section IA Distante (OpenAI) -->
+                    <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 8px;">
                         <h4 style="margin-bottom: 15px;">🌐 IA Distante (OpenAI)</h4>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Clé API OpenAI:</label>
-                            <input type="password" id="openaiKey" placeholder="sk-..." style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <input type="password" id="openaiKey" placeholder="sk-..."
+                                   style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                         </div>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Modèle:</label>
                             <select id="openaiModel" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                                 <option value="gpt-4">GPT-4</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
                             </select>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="openaiEnabled">
+                            <span>Activer OpenAI (fallback)</span>
+                        </label>
+                    </div>
+
+                    <!-- Priorité d'IA -->
+                    <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                        <h4 style="margin-bottom: 10px;">⚡ Priorité d'exécution</h4>
+                        <div style="display: flex; gap: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="radio" name="aiPriority" value="local" checked>
+                                <span>IA Locale d'abord</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="radio" name="aiPriority" value="openai">
+                                <span>OpenAI d'abord</span>
+                            </label>
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 10px;">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="btn btn-success" onclick="appCall('saveAIConfig')">💾 Sauvegarder</button>
-                        <button class="btn btn-secondary" onclick="appCall('testAIConnection')">🔌 Tester</button>
+                        <button class="btn btn-info" onclick="appCall('testLocalAIConnection')">🔌 Tester IA Locale</button>
+                        <button class="btn btn-secondary" onclick="appCall('testOpenAIConnection')">🌐 Tester OpenAI</button>
+                        <button class="btn btn-warning" onclick="appCall('startLocalAIServer')">🚀 Démarrer Serveur IA</button>
                     </div>
                 </div>
 
@@ -335,7 +691,7 @@
             </div>
         </div>
 
-        <!-- Modal Ajout Thème — insérer avant le bouton flottant Rapport IA ou avant </div> de la "container" -->
+        <!-- Modal Ajout Thème -->
         <div id="addThemeModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <span class="close" onclick="appCall('closeModal', 'addThemeModal')">&times;</span>
@@ -374,10 +730,13 @@
     <!-- CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- Configuration IA -->
+    <script src="/ai-config.js"></script>
+
     <!-- Configuration -->
     <script>
         window.__API_BASE__ = 'http://localhost:3000';
-        
+
         // Fonction sécurisée pour appeler l'app
         function appCall(functionName, ...args) {
             if (window.app && window.app[functionName]) {
@@ -394,9 +753,9 @@
 
     <!-- Initialisation -->
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('📄 DOM chargé');
-            
+
             const initApp = setInterval(() => {
                 if (window.app && typeof window.app.init === 'function') {
                     clearInterval(initApp);
@@ -415,4 +774,3 @@
     </script>
 </body>
 </html>
-
