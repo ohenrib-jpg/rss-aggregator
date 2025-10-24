@@ -34,7 +34,7 @@ contact : ohenri.b@gmail.com
 ```bash
 npm install
 
-## EVO8NEXTGEN Updates
+## EVO8NEXTLEVEL Updates
 - Corroboration module (rapidfuzz)
 - Bayesian fusion and improved confidence calculation
 - Frontend adjusted to use `confidence` and display `bayesian_posterior`
