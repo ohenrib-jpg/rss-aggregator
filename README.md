@@ -7,6 +7,7 @@ contact : ohenri.b@gmail.com
 
 ### Analyse de Base
 - 📊 Agrégation de flux RSS multiples
+- 📊 Endev => comparaison de "l'inconscient mediatique" avec "l'inconscient populaire"
 - 🎨 Thèmes personnalisables avec couleurs
 - 📈 Analyse de tendances temporelles
 - 😊 Analyse de sentiment automatique
@@ -25,6 +26,7 @@ contact : ohenri.b@gmail.com
 - Node.js 16+
 - Python 3.8+
 - Clé API (OpenAI ou équivalent)
+- voir requirements.txt
 
 ### Installation des dépendances
 
@@ -32,9 +34,8 @@ contact : ohenri.b@gmail.com
 ```bash
 npm install
 
-## NEXTGEN Updates
-- Parquet storage for analyses (data/analyses/*.parquet)
+## EVO8NEXTGEN Updates
 - Corroboration module (rapidfuzz)
 - Bayesian fusion and improved confidence calculation
 - Frontend adjusted to use `confidence` and display `bayesian_posterior`
-- Tests added in `tests/`
+- Tests added in `scripts/`
