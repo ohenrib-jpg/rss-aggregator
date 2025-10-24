@@ -1,6 +1,7 @@
 # Agrégateur RSS Thématique avec IA
 
 Système complet d'analyse de flux RSS avec intégration IA pour la correction des scores de sentiment et génération de rapports.
+contact : ohenri.b@gmail.com
 
 ## 🚀 Fonctionnalités
 
