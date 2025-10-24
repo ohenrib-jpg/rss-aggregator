@@ -19,24 +19,6 @@
     "created": "2025-10-23T18:42:01.737781"
   },
   {
-    "id": "election_france",
-    "name": "🗳️ Élection France",
-    "keywords": [
-      "élection",
-      "présidentielle",
-      "vote",
-      "scrutin",
-      "candidat"
-    ],
-    "severity": "medium",
-    "actions": [
-      "notification"
-    ],
-    "enabled": true,
-    "cooldown": 1800,
-    "created": "2025-10-23T18:42:01.737781"
-  },
-  {
     "id": "crise_economique",
     "name": "💸 Crise Économique",
     "keywords": [

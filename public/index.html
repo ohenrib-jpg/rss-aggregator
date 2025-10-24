@@ -645,8 +645,7 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
                         <button class="btn btn-success" onclick="appCall('saveEmailConfig')">💾 Sauvegarder</button>
                         <button class="btn btn-secondary" onclick="appCall('testEmailConfig')">📧 Tester</button>
                     </div>
-                </div>
-
+                </div> <!-- ← Ferme la div de Configuration Email -->
                 <!-- Configuration Interface -->
                 <div class="card full-width">
                     <h3>🎨 Paramètres d'Interface</h3>
@@ -655,26 +654,30 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
                         <div style="margin-bottom: 20px;">
                             <label style="display: block; margin-bottom: 10px; font-weight: 600;">Thème visuel:</label>
                             <div style="display: flex; gap: 15px;">
-                                <label style="padding: 15px; border: 2px solid #3b82f6; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
-                                    <input type="radio" name="theme" value="light" checked style="display: none;">
-                                    <div style="font-size: 2rem;">☀️</div>
-                                    <div style="font-weight: 600; margin-top: 5px;">Clair</div>
-                                </label>
-                                <label style="padding: 15px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
-                                    <input type="radio" name="theme" value="dark" style="display: none;">
-                                    <div style="font-size: 2rem;">🌙</div>
-                                    <div style="font-weight: 600; margin-top: 5px;">Sombre</div>
-                                </label>
+                                <div style="padding: 15px; border: 2px solid #3b82f6; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
+                                    <label style="cursor: pointer; display: block;">
+                                        <input type="radio" name="theme" value="light" checked style="display: none;">
+                                        <div style="font-size: 2rem;">☀️</div>
+                                        <div style="font-weight: 600; margin-top: 5px;">Clair</div>
+                                    </label>
+                                </div>
+                                <div style="padding: 15px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
+                                    <label style="cursor: pointer; display: block;">
+                                        <input type="radio" name="theme" value="dark" style="display: none;">
+                                        <div style="font-size: 2rem;">🌙</div>
+                                        <div style="font-weight: 600; margin-top: 5px;">Sombre</div>
+                                    </label>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </div> <!-- ← AJOUTEZ CETTE BALISE FERMANTE -->
 
                     <div style="display: flex; gap: 10px;">
                         <button class="btn btn-success" onclick="appCall('saveUIConfig')">💾 Sauvegarder</button>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div> 
+        </div> 
 
         <!-- Modal Ajout Flux RSS -->
         <div id="addFeedModal" class="modal">
@@ -721,56 +724,56 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
 
         <!-- Bouton flottant Rapport IA -->
         <div style="position: fixed; bottom: 30px; right: 30px; z-index: 1000;">
-            <button class="btn btn-info" onclick="appCall('generateAIAnalysisReport')" style="padding: 16px 20px; border-radius: 50px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); font-size: 1.1rem;">
-                🧠 Rapport IA
+            <button class="btn btn-info" onclick="appCall('generateEnhancedAIAnalysisReport')"
+                    style="padding: 16px 20px; border-radius: 50px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); font-size: 1.1rem;">
+                🧠 Rapport IA Avancé
             </button>
         </div>
-    </div>
 
-    <!-- CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Configuration IA -->
-    <script src="/ai-config.js"></script>
+        <!-- Configuration IA -->
+        <script src="/ai-config.js"></script>
 
-    <!-- Configuration -->
-    <script>
-        window.__API_BASE__ = 'http://localhost:3000';
+        <!-- Configuration -->
+        <script>
+            window.__API_BASE__ = 'http://localhost:3000';
 
-        // Fonction sécurisée pour appeler l'app
-        function appCall(functionName, ...args) {
-            if (window.app && window.app[functionName]) {
-                return window.app[functionName](...args);
-            } else {
-                console.warn('App non disponible:', functionName);
-                return false;
+            // Fonction sécurisée pour appeler l'app
+            function appCall(functionName, ...args) {
+                if (window.app && window.app[functionName]) {
+                    return window.app[functionName](...args);
+                } else {
+                    console.warn('App non disponible:', functionName);
+                    return false;
+                }
             }
-        }
-    </script>
+        </script>
 
-    <!-- Application -->
-    <script src="/app.js"></script>
+        <!-- Application -->
+        <script src="/app.js"></script>
 
-    <!-- Initialisation -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            console.log('📄 DOM chargé');
+        <!-- Initialisation -->
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                console.log('📄 DOM chargé');
 
-            const initApp = setInterval(() => {
-                if (window.app && typeof window.app.init === 'function') {
+                const initApp = setInterval(() => {
+                    if (window.app && typeof window.app.init === 'function') {
+                        clearInterval(initApp);
+                        console.log('✅ Initialisation de l app');
+                        window.app.init();
+                    }
+                }, 100);
+
+                setTimeout(() => {
                     clearInterval(initApp);
-                    console.log('✅ Initialisation de l app');
-                    window.app.init();
-                }
-            }, 100);
-
-            setTimeout(() => {
-                clearInterval(initApp);
-                if (!window.app) {
-                    console.error('❌ App non chargée après 5s');
-                }
-            }, 5000);
-        });
-    </script>
+                    if (!window.app) {
+                        console.error('❌ App non chargée après 5s');
+                    }
+                }, 5000);
+            });
+        </script>
 </body>
 </html>

@@ -39,7 +39,7 @@ const config = {
   // Services externes
   services: {
     flask: {
-      enabled: !!process.env.FLASK_API_URL,
+      enabled: !!process.env.FLASK_API_URL || true,
       url: process.env.FLASK_API_URL || 'http://localhost:5000',
       timeout: IS_RENDER ? 25000 : 10000
     },

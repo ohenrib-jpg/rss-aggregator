@@ -1,4 +1,4 @@
-// public/app.js - VERSION COMPLÈTEMENT CORRIGÉE
+// public/app.js - VERSION COMPLÈTEMENT RECOMPOSÉE
 
 // Configuration API
 const API_BASE = window.location.origin;
@@ -24,7 +24,6 @@ window.app = (function () {
             timelineChart: null,
             sentimentChart: null
         },
-        // Configuration IA par défaut
         aiConfig: {
             localAI: {
                 enabled: true,
@@ -96,7 +95,6 @@ window.app = (function () {
             setTimeout(() => setMessage(""), 5000);
         }
     }
-
     // ========== API CALLS ==========
     async function apiCall(method, path, body = null) {
         const controller = new AbortController();
@@ -123,7 +121,7 @@ window.app = (function () {
                 let errorMsg = `HTTP ${res.status}`;
                 try {
                     const errorText = await res.text();
-                    errorMsg = errorText.substring(0, 100);
+                    errorMsg = errorText.substring(0, 100); // ← CHANGEMENT ICI
                 } catch (e) {
                     // Ignorer les erreurs de parsing
                 }
@@ -177,6 +175,9 @@ window.app = (function () {
                 break;
             case "metrics":
                 loadMetrics();
+                loadMetrics();
+                loadSentimentOverview();    
+                loadLearningStats();    
                 break;
             case "alerts":
                 loadAlertsManager();
@@ -195,7 +196,7 @@ window.app = (function () {
         if (!a || typeof a !== "object") return null;
 
         return {
-            id: a.id || Math.random().toString(36).substr(2, 9),
+            id: a.id || Math.random().toString(36).substring(2, 11), // ← CHANGEMENT ICI
             title: a.title || "Sans titre",
             link: a.link || "#",
             date: a.date || a.pubDate || new Date().toISOString(),
@@ -221,15 +222,8 @@ window.app = (function () {
                 state.articles = json.articles.map(normalizeArticle).filter(a => a !== null);
                 console.log(`✅ ${state.articles.length} articles chargés`);
 
-                // Debug: vérifier le contenu des articles
                 if (state.articles.length > 0) {
                     console.log('📊 Premier article:', state.articles[0]);
-                    console.log('🎯 Thèmes disponibles:', [...new Set(state.articles.flatMap(a => a.themes || []))]);
-                    console.log('😊 Sentiments:', {
-                        positive: state.articles.filter(a => a.sentiment?.sentiment === 'positive').length,
-                        neutral: state.articles.filter(a => a.sentiment?.sentiment === 'neutral').length,
-                        negative: state.articles.filter(a => a.sentiment?.sentiment === 'negative').length
-                    });
                 }
             } else {
                 console.warn('⚠️  Format de données inattendu:', json);
@@ -358,7 +352,7 @@ window.app = (function () {
                         <span>${sentimentEmoji[sentimentType]} ${sentimentType} (${(sentiment.score || 0).toFixed(2)})</span>
                         <span>🎯 Confiance: ${((article.confidence || 0) * 100).toFixed(1)}%</span>
                     </div>
-                    <p>${escapeHtml((article.summary || '').substring(0, 250))}${article.summary?.length > 250 ? '...' : ''}</p>
+                    <p>${escapeHtml((article.summary || '').substring(0, 250))}${article.summary && article.summary.length > 250 ? '...' : ''}</p>
                     <div class="themes" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
                         ${themes.length > 0
                     ? themes.map(theme => `<span class="tag">${escapeHtml(theme)}</span>`).join("")
@@ -427,7 +421,7 @@ window.app = (function () {
                                     </div>
                                 </div>
                                 <div style="display: flex; gap: 8px; margin-top: 15px;">
-                                    <button onclick="appCall('deleteTheme', '${theme.id || theme.name}')" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85rem;">
+                                    <button onclick="appCall('deleteTheme', '${theme.id}')" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85rem;">
                                         🗑️ Supprimer
                                     </button>
                                 </div>
@@ -596,10 +590,10 @@ window.app = (function () {
                                         </td>
                                     </tr>
                                 `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
+                            </tbody>
+                        </table>
+                    </div>
+                `;
             } else {
                 container.innerHTML = `
                     <div class="loading" style="text-align: center; padding: 60px;">
@@ -657,20 +651,15 @@ window.app = (function () {
             return;
         }
 
-        // Validation plus permissive pour les URLs RSS
         try {
-            // Essayer de parser l'URL
             const urlObj = new URL(url);
-            // Vérifier que c'est bien HTTP/HTTPS
             if (!['http:', 'https:'].includes(urlObj.protocol)) {
                 alert('URL invalide: doit commencer par http:// ou https://');
                 return;
             }
         } catch (e) {
-            // Si l'URL n'est pas valide, on peut quand même tenter l'ajout
-            // car certains flux RSS peuvent avoir des URLs non standard
             console.warn('URL non standard détectée:', url);
-            if (!confirm('L\'URL ne semble pas standard. Voulez-vous quand même l\'ajouter ?')) {
+            if (!confirm("L'URL ne semble pas standard. Voulez-vous quand même l'ajouter ?")) {
                 return;
             }
         }
@@ -678,9 +667,9 @@ window.app = (function () {
         setMessage("Création du flux...", "info");
 
         try {
-            const res = await apiPOST('api/feeds', {
+            const res = await apiPOST('/feeds', {
                 url,
-                title: title || url, // Utiliser l'URL comme titre par défaut
+                title: title || url,
                 is_active: true
             });
 
@@ -700,7 +689,7 @@ window.app = (function () {
 
     async function toggleFeed(id, isActive) {
         try {
-            const response = await apiPUT(`api/feeds/${id}`, { is_active: isActive });
+            const response = await apiPUT(`/feeds/${id}`, { is_active: isActive });
             if (response.success) {
                 await loadFeeds();
                 loadFeedsManager();
@@ -716,7 +705,7 @@ window.app = (function () {
     async function deleteFeed(id) {
         if (!confirm('Êtes-vous sûr de vouloir supprimer ce flux ?')) return;
         try {
-            const response = await apiDELETE(`api/feeds/${id}`);
+            const response = await apiDELETE(`/feeds/${id}`);
             if (response.success) {
                 await loadFeeds();
                 loadFeedsManager();
@@ -729,36 +718,18 @@ window.app = (function () {
         }
     }
 
-    // ========== MÉTRIQUES ==========
-    async function loadMetrics() {
-        try {
-            const stats = await apiGET("/stats");
-            if (stats.success) {
-                const s = stats.stats;
-                if (qs("#m_total")) qs("#m_total").textContent = s.articles || 0;
-                if (qs("#m_confidence")) qs("#m_confidence").textContent = "N/A";
-                if (qs("#m_posterior")) qs("#m_posterior").textContent = "N/A";
-                if (qs("#m_corro")) qs("#m_corro").textContent = "N/A";
-            }
-        } catch (error) {
-            console.error('❌ Erreur chargement métriques:', error);
-        }
-    }
-
-    // ========== FONCTIONS POUR LES GRAPHIQUES ==========
-
+    // ========== GRAPHIQUES ==========
     function createThemeChart() {
-        const ctx = qs("#themeChart");
-        if (!ctx) {
+        const container = qs("#themeChart");
+        if (!container) {
             console.log('❌ Canvas themeChart non trouvé');
             return;
         }
 
-        // Nettoyer le canvas
-        ctx.width = ctx.width;
-
+        // Détruire l'ancien graphique
         if (state.charts.themeChart) {
             state.charts.themeChart.destroy();
+            state.charts.themeChart = null;
         }
 
         // Calculer les données des thèmes
@@ -775,7 +746,7 @@ window.app = (function () {
             .slice(0, 10);
 
         if (themeData.length === 0) {
-            ctx.parentElement.innerHTML = `
+            container.parentElement.innerHTML = `
                 <h3>📊 Répartition par Thème</h3>
                 <div style="text-align: center; padding: 60px; color: #64748b;">
                     Aucune donnée de thème disponible
@@ -785,14 +756,13 @@ window.app = (function () {
             return;
         }
 
-        // Couleurs par défaut
         const colors = [
             '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
             '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#ec4899'
         ];
 
         try {
-            state.charts.themeChart = new Chart(ctx, {
+            state.charts.themeChart = new Chart(container, {
                 type: 'doughnut',
                 data: {
                     labels: themeData.map(t => t.name),
@@ -805,13 +775,15 @@ window.app = (function () {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
                     plugins: {
                         legend: {
                             position: 'bottom',
                             labels: {
-                                padding: 20,
-                                usePointStyle: true
+                                padding: 15,
+                                usePointStyle: true,
+                                font: { size: 11 }
                             }
                         },
                         tooltip: {
@@ -836,20 +808,17 @@ window.app = (function () {
     }
 
     function createTimelineChart() {
-        const ctx = qs("#timelineChart");
-        if (!ctx) {
+        const container = qs("#timelineChart");
+        if (!container) {
             console.log('❌ Canvas timelineChart non trouvé');
             return;
         }
 
-        // Nettoyer le canvas
-        ctx.width = ctx.width;
-
         if (state.charts.timelineChart) {
             state.charts.timelineChart.destroy();
+            state.charts.timelineChart = null;
         }
 
-        // Préparer les données de timeline
         const last30Days = [];
         for (let i = 29; i >= 0; i--) {
             const date = new Date();
@@ -879,7 +848,7 @@ window.app = (function () {
         const counts = last30Days.map(date => articlesByDate[date]);
 
         if (counts.every(count => count === 0)) {
-            ctx.parentElement.innerHTML = `
+            container.parentElement.innerHTML = `
                 <h3>📈 Évolution Temporelle</h3>
                 <div style="text-align: center; padding: 60px; color: #64748b;">
                     Aucune donnée temporelle disponible
@@ -890,7 +859,7 @@ window.app = (function () {
         }
 
         try {
-            state.charts.timelineChart = new Chart(ctx, {
+            state.charts.timelineChart = new Chart(container, {
                 type: 'line',
                 data: {
                     labels: dates,
@@ -905,13 +874,14 @@ window.app = (function () {
                         pointBackgroundColor: '#3b82f6',
                         pointBorderColor: '#ffffff',
                         pointBorderWidth: 2,
-                        pointRadius: 5,
-                        pointHoverRadius: 7
+                        pointRadius: 4,
+                        pointHoverRadius: 6
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.5,
                     plugins: {
                         legend: {
                             display: false
@@ -928,7 +898,8 @@ window.app = (function () {
                             },
                             ticks: {
                                 maxRotation: 45,
-                                minRotation: 45
+                                minRotation: 45,
+                                font: { size: 10 }
                             }
                         },
                         y: {
@@ -941,11 +912,6 @@ window.app = (function () {
                                 color: 'rgba(0, 0, 0, 0.1)'
                             }
                         }
-                    },
-                    interaction: {
-                        mode: 'nearest',
-                        axis: 'x',
-                        intersect: false
                     }
                 }
             });
@@ -956,20 +922,17 @@ window.app = (function () {
     }
 
     function createSentimentChart() {
-        const ctx = qs("#sentimentChart");
-        if (!ctx) {
+        const container = qs("#sentimentChart");
+        if (!container) {
             console.log('❌ Canvas sentimentChart non trouvé');
             return;
         }
 
-        // Nettoyer le canvas
-        ctx.width = ctx.width;
-
         if (state.charts.sentimentChart) {
             state.charts.sentimentChart.destroy();
+            state.charts.sentimentChart = null;
         }
 
-        // Calculer les données de sentiment
         const sentimentData = {
             positive: 0,
             neutral: 0,
@@ -984,7 +947,7 @@ window.app = (function () {
         const totalArticles = state.articles.length;
 
         if (totalArticles === 0) {
-            ctx.parentElement.innerHTML = `
+            container.parentElement.innerHTML = `
                 <h3>😊 Analyse des Sentiments</h3>
                 <div style="text-align: center; padding: 60px; color: #64748b;">
                     Aucune donnée de sentiment disponible
@@ -995,7 +958,7 @@ window.app = (function () {
         }
 
         try {
-            state.charts.sentimentChart = new Chart(ctx, {
+            state.charts.sentimentChart = new Chart(container, {
                 type: 'bar',
                 data: {
                     labels: ['Positif 😊', 'Neutre 😐', 'Négatif 😞'],
@@ -1011,7 +974,8 @@ window.app = (function () {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,
                     plugins: {
                         legend: {
                             display: false
@@ -1042,10 +1006,6 @@ window.app = (function () {
                                 display: false
                             }
                         }
-                    },
-                    animation: {
-                        duration: 1000,
-                        easing: 'easeOutQuart'
                     }
                 }
             });
@@ -1057,27 +1017,29 @@ window.app = (function () {
 
     function updateAllCharts() {
         console.log('📊 Mise à jour de tous les graphiques...');
-        try {
+
+        // Attendre que les données soient chargées
+        if (state.articles.length === 0) {
+            console.log('⚠️ Aucun article, chargement en cours...');
+            loadArticles().then(() => {
+                createThemeChart();
+                createTimelineChart();
+                createSentimentChart();
+            });
+        } else {
             createThemeChart();
             createTimelineChart();
             createSentimentChart();
-            console.log('✅ Tous les graphiques mis à jour');
-        } catch (error) {
-            console.error('❌ Erreur mise à jour graphiques:', error);
         }
-    }
 
-    // ========== FONCTIONS DE ZOOM POUR LES GRAPHIQUES ==========
+        console.log('✅ Graphiques mis à jour');
+    }
 
     function zoomTimelineChart(factor) {
         console.log(`🔍 Zoom timeline: ${factor}`);
-
         if (state.charts.timelineChart) {
             const chart = state.charts.timelineChart;
-
-            // Implémentation basique du zoom
             try {
-                // Ajuster l'échelle des axes
                 const yAxis = chart.scales.y;
                 if (yAxis) {
                     const currentMax = yAxis.max;
@@ -1085,37 +1047,168 @@ window.app = (function () {
                     chart.options.scales.y.max = newMax;
                     chart.update('none');
                 }
-
                 setMessage(`🔍 Zoom ${factor > 1 ? 'appliqué' : 'réduit'}`, "info");
             } catch (error) {
                 console.warn('Zoom non supporté:', error);
-                setMessage("ℹ️ Fonction de zoom à implémenter", "info");
             }
-        } else {
-            setMessage("📊 Aucun graphique à zoomer", "warning");
         }
     }
 
     function resetTimelineZoom() {
         console.log("↺ Reset zoom timeline");
-
         if (state.charts.timelineChart) {
             const chart = state.charts.timelineChart;
-
             try {
-                // Réinitialiser les options de zoom
                 if (chart.options.scales.y.max) {
                     delete chart.options.scales.y.max;
                 }
                 chart.update();
-
                 setMessage("↺ Zoom réinitialisé", "success");
             } catch (error) {
                 console.warn('Reset zoom non supporté:', error);
-                setMessage("ℹ️ Graphique actualisé", "info");
             }
-        } else {
-            setMessage("📊 Aucun graphique à réinitialiser", "warning");
+        }
+    }
+
+    // ========== MÉTRIQUES ==========
+    async function loadMetrics() {
+        console.log('📊 loadMetrics() appelée');
+        try {
+            const response = await apiGET("/metrics");
+            console.log('📈 Données métriques reçues:', response);
+
+            if (response && response.summary) {  
+                const summary = response.summary;
+                console.log('📋 Résumé détaillé:', summary);
+
+                // CORRECTION: Utiliser les valeurs directement depuis le summary
+                if (qs("#m_total")) qs("#m_total").textContent = summary.total_articles || 0;
+                if (qs("#m_confidence")) qs("#m_confidence").textContent = `${((summary.avg_confidence || 0) * 100).toFixed(1)}%`;
+                if (qs("#m_posterior")) qs("#m_posterior").textContent = `${((summary.avg_posterior || 0) * 100).toFixed(1)}%`;
+                if (qs("#m_corro")) qs("#m_corro").textContent = `${((summary.avg_corroboration || 0) * 100).toFixed(1)}%`;
+
+                // Charger les thèmes populaires
+                if (response.top_themes && response.top_themes.length > 0) {
+                    const themesHtml = response.top_themes.map(theme => {
+                        const themeName = theme.name;
+                        const themeCount = theme.total;  // ← CORRECTION: 'total' au lieu de 'count'
+
+                        return `<li style="margin-bottom: 8px; padding: 8px; background: #f8fafc; border-radius: 6px;">
+            <strong>${themeName}</strong>: ${themeCount} articles
+        </li>`;
+                    }).join('');
+
+                    if (qs("#topThemes")) qs("#topThemes").innerHTML = themesHtml;
+                }
+            } else {
+                console.warn('⚠️ Format de réponse inattendu');
+            }
+        } catch (error) {
+            console.error('❌ Erreur loadMetrics:', error);
+        }
+    }
+
+    // ==========Aperçu des Sentiments =======
+    async function loadSentimentOverview() {
+        console.log('😊 loadSentimentOverview() appelée');
+        try {
+            const response = await apiGET("/sentiment/detailed");
+            console.log('📊 Données sentiment reçues:', response);
+
+            const container = qs("#sentimentOverview");
+            if (!container) return;
+
+            if (response && response.stats) {  // ← CHANGEMENT: response.stats au lieu de response.success
+                const stats = response.stats;
+                const total = stats.positive + stats.neutral + stats.negative;
+
+                const html = `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+                    <div style="background: #f0fdf4; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 2rem;">😊</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #10b981;">${stats.positive}</div>
+                        <div>Positifs</div>
+                        <div style="font-size: 0.8rem; color: #64748b;">${total > 0 ? Math.round((stats.positive / total) * 100) : 0}%</div>
+                    </div>
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 2rem;">😐</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #6b7280;">${stats.neutral}</div>
+                        <div>Neutres</div>
+                        <div style="font-size: 0.8rem; color: #64748b;">${total > 0 ? Math.round((stats.neutral / total) * 100) : 0}%</div>
+                    </div>
+                    <div style="background: #fef2f2; padding: 20px; border-radius: 12px;">
+                        <div style="font-size: 2rem;">😞</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #ef4444;">${stats.negative}</div>
+                        <div>Négatifs</div>
+                        <div style="font-size: 0.8rem; color: #64748b;">${total > 0 ? Math.round((stats.negative / total) * 100) : 0}%</div>
+                    </div>
+                </div>
+                ${stats.average_score ? `<div style="margin-top: 15px; text-align: center; color: #64748b;">Score moyen: ${stats.average_score.toFixed(2)}</div>` : ''}
+            `;
+
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div class="loading">Aucune donnée de sentiment disponible</div>';
+            }
+        } catch (error) {
+            console.error('❌ Erreur loadSentimentOverview:', error);
+            const container = qs("#sentimentOverview");
+            if (container) container.innerHTML = '<div style="color: #ef4444;">Erreur de chargement</div>';
+        }
+    }
+
+    // ========= =Statistiques d'Apprentissage =================
+
+    async function loadLearningStats() {
+        console.log('🧠 loadLearningStats() appelée');
+        try {
+            const response = await apiGET("/learning/stats");
+            console.log('📚 Données apprentissage reçues:', response);
+
+            const container = qs("#learningStats");
+            if (!container) return;
+
+            if (response) {  // ← CHANGEMENT: juste response au lieu de response.success
+                const stats = response;
+                const html = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div style="text-align: center; padding: 20px; background: #f0f9ff; border-radius: 8px;">
+                        <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${stats.total_articles_processed || 0}</div>
+                        <div style="color: #64748b;">Articles traités</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #f0fdf4; border-radius: 8px;">
+                        <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${((stats.sentiment_accuracy || 0) * 100).toFixed(1)}%</div>
+                        <div style="color: #64748b;">Précision sentiment</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #fef3c7; border-radius: 8px;">
+                        <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${((stats.theme_detection_accuracy || 0) * 100).toFixed(1)}%</div>
+                        <div style="color: #64748b;">Précision thèmes</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #fef2f2; border-radius: 8px;">
+                        <div style="font-size: 2rem; font-weight: bold; color: #ef4444;">${stats.avg_processing_time || 0}s</div>
+                        <div style="color: #64748b;">Temps traitement</div>
+                    </div>
+                </div>
+                ${stats.modules_active ? `
+                <div style="margin-top: 20px;">
+                    <h4>Modules actifs:</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        ${stats.modules_active.map(module =>
+                    `<span style="background: #3b82f6; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.8rem;">${module}</span>`
+                ).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            `;
+
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div class="loading">Aucune donnée d\'apprentissage disponible</div>';
+            }
+        } catch (error) {
+            console.error('❌ Erreur loadLearningStats:', error);
+            const container = qs("#learningStats");
+            if (container) container.innerHTML = '<div style="color: #ef4444;">Erreur de chargement</div>';
         }
     }
 
@@ -1168,7 +1261,7 @@ window.app = (function () {
                                     </div>
                                 </div>
                                 
-                                <div style="display: flex; flex-wrap; wrap; gap: 5px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
                                     ${(alert.keywords || []).map(keyword => `
                                         <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 15px; font-size: 0.8rem; color: #475569;">
                                             ${escapeHtml(keyword)}
@@ -1261,7 +1354,7 @@ window.app = (function () {
                                         </a>
                                     </div>
                                     <div style="display: flex; gap: 10px; font-size: 0.8rem; color: #64748b;">
-                                        <span>🕒 ${formatDate(alert.triggered_at)}</span>
+                                        <span>🕐 ${formatDate(alert.triggered_at)}</span>
                                         <span>🔍 ${(alert.matched_keywords || []).slice(0, 3).join(', ')}</span>
                                     </div>
                                 </div>
@@ -1272,7 +1365,7 @@ window.app = (function () {
                 } else {
                     container.innerHTML = `
                     <div style="text-align: center; padding: 30px; color: #64748b;">
-                        <div style="font-size: 2rem; margin-bottom: 10px;">📭</div>
+                        <div style="font-size: 2rem; margin-bottom: 10px;">🔭</div>
                         <div>Aucune alerte déclenchée pour le moment</div>
                     </div>
                 `;
@@ -1316,11 +1409,9 @@ window.app = (function () {
             });
 
             if (response.success) {
-                // Réinitialiser le formulaire
                 qs('#newAlertName').value = '';
                 qs('#newAlertKeywords').value = '';
 
-                // Recharger les listes
                 await loadAlertsManager();
                 setMessage("✅ Alerte créée avec succès", "success");
             } else {
@@ -1370,7 +1461,6 @@ window.app = (function () {
         }
     }
 
-    // Fonctions utilitaires pour les alertes
     function getSeverityColor(severity) {
         const colors = {
             'low': '#10b981',
@@ -1401,19 +1491,16 @@ window.app = (function () {
         try {
             const config = state.aiConfig;
 
-            // IA Locale
             if (qs('#localAIEnabled')) qs('#localAIEnabled').checked = config.localAI.enabled;
             if (qs('#localAIUrl')) qs('#localAIUrl').value = config.localAI.url;
             if (qs('#localAIModel')) qs('#localAIModel').value = config.localAI.model;
             if (qs('#localAISystemPrompt')) qs('#localAISystemPrompt').value = config.localAI.systemPrompt;
             if (qs('#localAIAutoStart')) qs('#localAIAutoStart').checked = config.localAI.autoStart;
 
-            // OpenAI
             if (qs('#openaiEnabled')) qs('#openaiEnabled').checked = config.openAI.enabled;
             if (qs('#openaiKey')) qs('#openaiKey').value = config.openAI.apiKey;
             if (qs('#openaiModel')) qs('#openaiModel').value = config.openAI.model;
 
-            // Priorité
             const priorityRadio = qs(`input[name="aiPriority"][value="${config.priority}"]`);
             if (priorityRadio) priorityRadio.checked = true;
 
@@ -1453,9 +1540,7 @@ window.app = (function () {
 
     async function testLocalAIConnection() {
         setMessage("🔌 Test de connexion IA locale...", "info");
-
         try {
-            // Simulation de test
             await new Promise(resolve => setTimeout(resolve, 2000));
             setMessage("✅ Connexion IA locale fonctionnelle", "success");
         } catch (error) {
@@ -1465,9 +1550,7 @@ window.app = (function () {
 
     async function testOpenAIConnection() {
         setMessage("🌐 Test de connexion OpenAI...", "info");
-
         try {
-            // Simulation de test
             await new Promise(resolve => setTimeout(resolve, 2000));
             setMessage("✅ Connexion OpenAI fonctionnelle", "success");
         } catch (error) {
@@ -1477,9 +1560,7 @@ window.app = (function () {
 
     async function startLocalAIServer() {
         setMessage("🚀 Démarrage du serveur IA local...", "info");
-
         try {
-            // Simulation de démarrage
             setTimeout(() => {
                 setMessage("✅ Serveur IA local prêt (vérifiez que llama.cpp est lancé)", "success");
             }, 2000);
@@ -1488,14 +1569,13 @@ window.app = (function () {
         }
     }
 
-    // ========== FONCTIONS DE RAPPORT IA ==========
+    // ========== RAPPORTS & EXPORTS ==========
     async function generateAIAnalysisReport() {
         setMessage("🧠 Génération du rapport IA en cours...", "info");
         try {
             const response = await apiGET("/metrics");
 
             if (response && response.summary) {
-                // Ouvrir le rapport dans une nouvelle fenêtre
                 const reportWindow = window.open('', '_blank');
                 reportWindow.document.write(`
                     <html>
@@ -1504,16 +1584,66 @@ window.app = (function () {
                             <style>
                                 body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f8fafc; }
                                 .container { max-width: 1000px; margin: 0 auto; }
+                                .metric-card { background: white; border-radius: 12px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+                                .chart-container { background: white; border-radius: 12px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
                             </style>
                         </head>
                         <body>
                             <div class="container">
                                 <h1>🧠 Rapport d'Analyse IA</h1>
                                 <p>Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
-                                <div style="background: white; border-radius: 12px; padding: 25px; margin: 20px 0;">
+                                
+                                <div class="metric-card">
                                     <h3>📊 Métriques principales</h3>
-                                    <p>Articles analysés: ${response.summary.total_articles || 0}</p>
-                                    <p>Confiance moyenne: ${((response.summary.avg_confidence || 0) * 100).toFixed(1)}%</p>
+                                    <p><strong>Articles analysés:</strong> ${response.summary.total_articles || 0}</p>
+                                    <p><strong>Confiance moyenne:</strong> ${((response.summary.avg_confidence || 0) * 100).toFixed(1)}%</p>
+                                    <p><strong>Postérieur bayésien moyen:</strong> ${((response.summary.avg_posterior || 0) * 100).toFixed(1)}%</p>
+                                    <p><strong>Corroboration moyenne:</strong> ${((response.summary.avg_corroboration || 0) * 100).toFixed(1)}%</p>
+                                </div>
+
+                                ${response.theme_evolution && response.theme_evolution.length > 0 ? `
+                                <div class="chart-container">
+                                    <h3>📈 Évolution des thèmes</h3>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                        ${response.theme_evolution.slice(0, 5).map(theme => `
+                                            <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                                                <div style="font-weight: bold; color: #1e40af;">${theme.name}</div>
+                                                <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">${theme.count}</div>
+                                                <div style="color: #64748b; font-size: 0.9rem;">articles</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                ` : ''}
+
+                                ${response.top_themes && response.top_themes.length > 0 ? `
+                                <div class="chart-container">
+                                    <h3>🏆 Thèmes les plus populaires</h3>
+                                    <div style="display: grid; gap: 10px;">
+                                        ${response.top_themes.slice(0, 8).map((theme, index) => `
+                                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f1f5f9; border-radius: 6px;">
+                                                <div style="display: flex; align-items: center; gap: 10px;">
+                                                    <span style="background: #3b82f6; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">
+                                                        ${index + 1}
+                                                    </span>
+                                                    <span style="font-weight: 500;">${theme.name}</span>
+                                                </div>
+                                                <span style="background: #3b82f6; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.8rem;">
+                                                    ${theme.count} articles
+                                                </span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                ` : ''}
+
+                                <div class="metric-card">
+                                    <h3>📋 Résumé de l'analyse</h3>
+                                    <p>Ce rapport a été généré automatiquement par le système d'analyse IA.</p>
+                                    <p>Les données sont basées sur l'analyse sémantique des articles RSS collectés.</p>
+                                    <p style="color: #64748b; font-size: 0.9rem; margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                                        Généré par RSS Aggregator Intelligent - ${new Date().toLocaleString('fr-FR')}
+                                    </p>
                                 </div>
                             </div>
                         </body>
@@ -1530,7 +1660,6 @@ window.app = (function () {
         }
     }
 
-    // ========== FONCTIONS D'EXPORT ==========
     async function exportToJSON() {
         try {
             setMessage("Génération du JSON...", "info");
@@ -1582,7 +1711,7 @@ window.app = (function () {
                 return;
             }
 
-            const headers = ["ID", "Titre", "Date", "Lien", "Thèmes", "Sentiment"];
+            const headers = ["ID", "Titre", "Date", "Lien", "Thèmes", "Sentiment", "Score", "Confiance"];
             const csvRows = [headers.join(",")];
 
             state.articles.forEach(article => {
@@ -1592,7 +1721,9 @@ window.app = (function () {
                     `"${article.date || ''}"`,
                     `"${article.link || ''}"`,
                     `"${(article.themes || []).join('; ')}"`,
-                    article.sentiment?.sentiment || 'neutral'
+                    article.sentiment?.sentiment || 'neutral',
+                    article.sentiment?.score || 0,
+                    article.confidence || 0
                 ];
                 csvRows.push(row.join(","));
             });
@@ -1614,7 +1745,320 @@ window.app = (function () {
         }
     }
 
-    // ========== FONCTIONS EMAIL ==========
+    // ========== RAPPORT IA ENRICHIE ==========
+    async function generateEnhancedAIAnalysisReport() {
+        setMessage("🧠 Génération du rapport IA avancé...", "info");
+
+        try {
+            // Récupérer toutes les données disponibles
+            console.log('📊 Collecte des données pour le rapport...');
+
+            const [metrics, sentiment, learning, geopolitical] = await Promise.all([
+                apiGET("/metrics"),
+                apiGET("/sentiment/detailed"),
+                apiGET("/learning/stats"),
+                apiGET("/geopolitical/report")
+            ]);
+
+            console.log('✅ Données collectées pour le rapport');
+
+            // Vérifier que nous avons des données
+            if (!metrics || !sentiment) {
+                throw new Error("Données insuffisantes pour générer le rapport");
+            }
+
+            // Générer le rapport enrichi
+            const reportWindow = window.open('', '_blank');
+            const reportDate = new Date().toLocaleDateString('fr-FR', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            reportWindow.document.write(`
+            <html>
+                <head>
+                    <title>Rapport IA Avancé - Analyse Géopolitique</title>
+                    <style>
+                        body { 
+                            font-family: 'Segoe UI', system-ui, sans-serif; 
+                            margin: 0; 
+                            padding: 30px; 
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            min-height: 100vh;
+                        }
+                        .container { 
+                            max-width: 1200px; 
+                            margin: 0 auto; 
+                            background: white;
+                            border-radius: 20px;
+                            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+                            overflow: hidden;
+                        }
+                        .header {
+                            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+                            color: white;
+                            padding: 40px;
+                            text-align: center;
+                        }
+                        .header h1 {
+                            margin: 0;
+                            font-size: 2.5rem;
+                            font-weight: 700;
+                        }
+                        .header p {
+                            margin: 10px 0 0 0;
+                            opacity: 0.9;
+                            font-size: 1.1rem;
+                        }
+                        .content {
+                            padding: 40px;
+                        }
+                        .section {
+                            margin-bottom: 40px;
+                            padding: 30px;
+                            background: #f8fafc;
+                            border-radius: 16px;
+                            border-left: 5px solid #3b82f6;
+                        }
+                        .section h2 {
+                            color: #1e40af;
+                            margin-top: 0;
+                            font-size: 1.5rem;
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                        }
+                        .metrics-grid {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                            gap: 20px;
+                            margin: 20px 0;
+                        }
+                        .metric-card {
+                            background: white;
+                            padding: 25px;
+                            border-radius: 12px;
+                            text-align: center;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                            border: 1px solid #e2e8f0;
+                            transition: transform 0.2s ease;
+                        }
+                        .metric-card:hover {
+                            transform: translateY(-5px);
+                        }
+                        .metric-value {
+                            font-size: 2.5rem;
+                            font-weight: bold;
+                            margin: 10px 0;
+                        }
+                        .metric-label {
+                            color: #64748b;
+                            font-size: 0.9rem;
+                        }
+                        .themes-grid {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                            gap: 15px;
+                            margin: 20px 0;
+                        }
+                        .theme-item {
+                            background: white;
+                            padding: 20px;
+                            border-radius: 12px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                        }
+                        .crisis-zones {
+                            display: grid;
+                            gap: 15px;
+                        }
+                        .crisis-item {
+                            background: white;
+                            padding: 20px;
+                            border-radius: 12px;
+                            border-left: 4px solid;
+                        }
+                        .risk-high { border-left-color: #ef4444; }
+                        .risk-medium { border-left-color: #f59e0b; }
+                        .risk-low { border-left-color: #10b981; }
+                        .footer {
+                            text-align: center;
+                            padding: 30px;
+                            background: #f1f5f9;
+                            color: #64748b;
+                            border-top: 1px solid #e2e8f0;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>🧠 Rapport d'Analyse IA Avancé</h1>
+                            <p>Analyse géopolitique et tendances médiatiques</p>
+                            <p>Généré le ${reportDate}</p>
+                        </div>
+                        
+                        <div class="content">
+                            <!-- Section Métriques Principales -->
+                            <div class="section">
+                                <h2>📊 Métriques Globales</h2>
+                                <div class="metrics-grid">
+                                    <div class="metric-card">
+                                        <div class="metric-value">${metrics.summary?.total_articles || 0}</div>
+                                        <div class="metric-label">Articles Analysés</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-value">${((metrics.summary?.avg_confidence || 0) * 100).toFixed(1)}%</div>
+                                        <div class="metric-label">Confiance Moyenne</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-value">${((metrics.summary?.avg_posterior || 0) * 100).toFixed(1)}%</div>
+                                        <div class="metric-label">Postérieur Bayesien</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-value">${((metrics.summary?.avg_corroboration || 0) * 100).toFixed(1)}%</div>
+                                        <div class="metric-label">Corroboration</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section Analyse des Sentiments -->
+                            <div class="section">
+                                <h2>😊 Analyse des Sentiments</h2>
+                                ${sentiment.stats ? `
+                                <div class="metrics-grid">
+                                    <div class="metric-card" style="border-left: 4px solid #10b981;">
+                                        <div class="metric-value" style="color: #10b981;">${sentiment.stats.positive || 0}</div>
+                                        <div class="metric-label">Articles Positifs</div>
+                                    </div>
+                                    <div class="metric-card" style="border-left: 4px solid #6b7280;">
+                                        <div class="metric-value" style="color: #6b7280;">${sentiment.stats.neutral || 0}</div>
+                                        <div class="metric-label">Articles Neutres</div>
+                                    </div>
+                                    <div class="metric-card" style="border-left: 4px solid #ef4444;">
+                                        <div class="metric-value" style="color: #ef4444;">${sentiment.stats.negative || 0}</div>
+                                        <div class="metric-label">Articles Négatifs</div>
+                                    </div>
+                                </div>
+                                ` : '<p>Aucune donnée de sentiment disponible</p>'}
+                            </div>
+
+                            <!-- Section Thèmes Principaux -->
+                            <div class="section">
+                                <h2>🏆 Thèmes les Plus Populaires</h2>
+                                ${metrics.top_themes && metrics.top_themes.length > 0 ? `
+                                <div class="themes-grid">
+                                    ${metrics.top_themes.slice(0, 8).map(theme => `
+                                        <div class="theme-item">
+                                            <div>
+                                                <strong>${theme.name}</strong>
+                                                <div style="color: #64748b; font-size: 0.9rem; margin-top: 5px;">
+                                                    ${theme.total} articles analysés
+                                                </div>
+                                            </div>
+                                            <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">
+                                                ${Math.round((theme.total / metrics.summary.total_articles) * 100)}%
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                ` : '<p>Aucun thème détecté</p>'}
+                            </div>
+
+                            <!-- Section Géopolitique -->
+                            <div class="section">
+                                <h2>🌍 Analyse Géopolitique</h2>
+                                ${geopolitical.report ? `
+                                    <div style="background: white; padding: 20px; border-radius: 12px; margin: 20px 0;">
+                                        <h3 style="color: #1e40af; margin-top: 0;">Résumé Global</h3>
+                                        <p>Pays analysés: <strong>${geopolitical.report.summary?.totalCountries || 0}</strong></p>
+                                        <p>Zones à haut risque: <strong style="color: #ef4444;">${geopolitical.report.summary?.highRiskZones || 0}</strong></p>
+                                        <p>Zones à risque moyen: <strong style="color: #f59e0b;">${geopolitical.report.summary?.mediumRiskZones || 0}</strong></p>
+                                    </div>
+                                    ${geopolitical.report.crisisZones && geopolitical.report.crisisZones.length > 0 ? `
+                                    <div class="crisis-zones">
+                                        <h3 style="color: #1e40af;">Zones de Crise Actives</h3>
+                                        ${geopolitical.report.crisisZones.slice(0, 5).map(zone => `
+                                            <div class="crisis-item risk-${zone.riskLevel || 'medium'}">
+                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div>
+                                                        <strong>${zone.country}</strong>
+                                                        <div style="color: #64748b; font-size: 0.9rem; margin-top: 5px;">
+                                                            ${zone.mentions} mentions • Sentiment: ${zone.sentiment || 'N/A'}
+                                                        </div>
+                                                    </div>
+                                                    <span style="background: ${zone.riskLevel === 'high' ? '#ef4444' : zone.riskLevel === 'medium' ? '#f59e0b' : '#10b981'}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem;">
+                                                        Risque ${zone.riskLevel === 'high' ? 'Élevé' : zone.riskLevel === 'medium' ? 'Moyen' : 'Faible'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    ` : '<p>Aucune zone de crise détectée</p>'}
+                                ` : '<p>Aucune donnée géopolitique disponible</p>'}
+                            </div>
+
+                            <!-- Section Apprentissage IA -->
+                            <div class="section">
+                                <h2>🤖 Statistiques d'Apprentissage IA</h2>
+                                ${learning ? `
+                                <div class="metrics-grid">
+                                    <div class="metric-card">
+                                        <div class="metric-value">${learning.total_articles_processed || 0}</div>
+                                        <div class="metric-label">Articles Traités</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-value">${((learning.sentiment_accuracy || 0) * 100).toFixed(1)}%</div>
+                                        <div class="metric-label">Précision Sentiment</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-value">${((learning.theme_detection_accuracy || 0) * 100).toFixed(1)}%</div>
+                                        <div class="metric-label">Précision Thèmes</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-value">${learning.avg_processing_time || 0}s</div>
+                                        <div class="metric-label">Temps Traitement</div>
+                                    </div>
+                                </div>
+                                ${learning.modules_active ? `
+                                <div style="margin-top: 20px;">
+                                    <h3 style="color: #1e40af;">Modules Actifs</h3>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                                        ${learning.modules_active.map(module =>
+                `<span style="background: #3b82f6; color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem;">${module}</span>`
+            ).join('')}
+                                    </div>
+                                </div>
+                                ` : ''}
+                                ` : '<p>Aucune donnée d\'apprentissage disponible</p>'}
+                            </div>
+                        </div>
+
+                        <div class="footer">
+                            <p>Rapport généré automatiquement par le système d'analyse IA</p>
+                            <p>RSS Aggregator Intelligent • ${new Date().getFullYear()}</p>
+                        </div>
+                    </div>
+                </body>
+            </html>
+        `);
+
+            reportWindow.document.close();
+            setMessage("✅ Rapport IA avancé généré avec succès", "success");
+
+        } catch (error) {
+            console.error("❌ Erreur génération rapport avancé:", error);
+            setMessage("❌ Erreur génération rapport: " + error.message, "error");
+        }
+    }
+
+    // ========== FONCTIONS UTILITAIRES ==========
     async function saveEmailConfig() {
         setMessage("✅ Configuration email sauvegardée", "success");
     }
@@ -1629,7 +2073,6 @@ window.app = (function () {
         setMessage(`✅ Thème ${theme} sauvegardé`, "success");
     }
 
-    // ========== FONCTIONS UTILITAIRES ==========
     function closeModal(modalId) {
         const modal = qs(`#${modalId}`);
         if (modal) modal.style.display = "none";
@@ -1639,7 +2082,6 @@ window.app = (function () {
     async function init() {
         console.log("🚀 Initialisation de l'application...");
 
-        // Charger la configuration IA sauvegardée
         try {
             const savedConfig = localStorage.getItem('rssAggregatorAIConfig');
             if (savedConfig) {
@@ -1649,10 +2091,8 @@ window.app = (function () {
             console.warn("❌ Erreur chargement config IA sauvegardée:", error);
         }
 
-        // Activer l'onglet par défaut
         showTab("articles");
 
-        // Charger les données initiales
         try {
             await loadArticles();
             await loadThemes();
@@ -1666,61 +2106,45 @@ window.app = (function () {
 
     // ========== EXPOSITION PUBLIQUE ==========
     return {
-        // Initialisation et navigation
         init,
         showTab,
         closeModal,
-
-        // Articles
         loadArticles,
         refreshArticles,
         renderArticlesList,
-
-        // Thèmes
         loadThemes,
         loadThemesManager,
         showAddThemeModal,
+        generateEnhancedAIAnalysisReport,
         createTheme,
         deleteTheme,
-
-        // Flux RSS
         loadFeeds,
         loadFeedsManager,
         showAddFeedModal,
         createFeed,
         toggleFeed,
         deleteFeed,
-
-        // Métriques et graphiques
         loadMetrics,
+        loadSentimentOverview, 
+        loadLearningStats,        
         updateAllCharts,
         zoomTimelineChart,
         resetTimelineZoom,
-
-        // Alertes
         loadAlertsManager,
         createAlert,
         toggleAlert,
         deleteAlert,
-
-        // Configuration IA
         loadAIConfigToForm,
         saveAIConfig,
         testLocalAIConnection,
         testOpenAIConnection,
         startLocalAIServer,
-
-        // Rapports et exports
         generateAIAnalysisReport,
         exportToJSON,
         exportArticlesToCSV,
-
-        // Configuration
         saveEmailConfig,
         testEmailConfig,
         saveUIConfig,
-
-        // État
         state
     };
 })();
@@ -1746,4 +2170,4 @@ function appCall(functionName, ...args) {
     }
 }
 
-console.log('✅ app.js chargé et complètement corrigé');
+console.log('✅ app.js chargé et complètement recomposé');
