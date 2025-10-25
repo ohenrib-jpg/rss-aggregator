@@ -10,10 +10,7 @@ Système complet d'analyse de flux RSS avec intégration IA pour la correction d
 - 📈 Analyse de tendances temporelles
 - 😊 Analyse de sentiment automatique
 - 🔍 Détection d'ironie et de contexte
-- 📊 Comparaison des ecarts entre "l'inconscient mediatique" et "l'inconscient populaire"
-
-- #### EN DEV.
-- Corrélations Pearson => fonction installee et activee (MAJ25/10)
+- 📊 Comparaison des ecarts entre "l'inconscient mediatique" et "l'inconscient populaire" 
 
 ### Module IA Avancé
 - 🤖 Correction automatique des scores de sentiment

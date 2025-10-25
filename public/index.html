@@ -280,6 +280,34 @@
                 transform: translateX(26px);
             }
 
+        /* Styles pour les corrélations */
+        .correlation-strength {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .strength-forte {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .strength-moyenne {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .strength-faible {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .strength-negligeable {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
         @media (max-width: 768px) {
             .tabs {
                 flex-direction: column;
@@ -370,16 +398,55 @@
                     </div>
                 </div>
 
-                <div class="charts-grid-full">
-                    <div class="chart-container">
-                        <h3>📈 Évolution Temporelle</h3>
-                        <div class="chart-controls">
-                            <button class="control-btn" onclick="appCall('zoomTimelineChart', 1.5)">🔍 Zoom +</button>
-                            <button class="control-btn" onclick="appCall('zoomTimelineChart', 0.66)">🔍 Zoom -</button>
-                            <button class="control-btn" onclick="appCall('resetTimelineZoom')">↺ Réinitialiser</button>
+                <!-- Section Corrélations Pearson -->
+                <div class="analysis-section">
+                    <h3>📈 Analyse des Corrélations Pearson</h3>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div>
+                            <h4>🔍 Corrélation Mot-clé / Sentiment</h4>
+                            <p style="color: #64748b; font-size: 0.9rem;">
+                                Analyse la relation entre un mot-clé et le sentiment des articles
+                            </p>
+                            <button onclick="appCall('analyzeKeywordCorrelation')"
+                                    class="btn btn-info" style="margin-top: 10px;">
+                                🎯 Analyser un mot-clé
+                            </button>
                         </div>
-                        <canvas id="timelineChart"></canvas>
+
+                        <div>
+                            <h4>🔗 Corrélations entre Thèmes</h4>
+                            <p style="color: #64748b; font-size: 0.9rem;">
+                                Découvre quels thèmes sont souvent mentionnés ensemble
+                            </p>
+                            <button onclick="appCall('loadThemeCorrelations')"
+                                    class="btn btn-info" style="margin-top: 10px;">
+                                🔄 Analyser les thèmes
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- CONTENEUR pour résultats mot-clé -->
+                    <div id="pearsonResults">
+                        <!-- Les résultats Pearson s'afficheront ici -->
+                    </div>
+
+                    <!-- CONTENEUR pour résultats thèmes -->
+                    <div id="themeCorrelations">
+                        <!-- Les corrélations thèmes s'afficheront ici -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="charts-grid-full">
+                <div class="chart-container">
+                    <h3>📈 Évolution Temporelle</h3>
+                    <div class="chart-controls">
+                        <button class="control-btn" onclick="appCall('zoomTimelineChart', 1.5)">🔍 Zoom +</button>
+                        <button class="control-btn" onclick="appCall('zoomTimelineChart', 0.66)">🔍 Zoom -</button>
+                        <button class="control-btn" onclick="appCall('resetTimelineZoom')">↺ Réinitialiser</button>
+                    </div>
+                    <canvas id="timelineChart"></canvas>
                 </div>
             </div>
         </div>
@@ -645,7 +712,8 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
                         <button class="btn btn-success" onclick="appCall('saveEmailConfig')">💾 Sauvegarder</button>
                         <button class="btn btn-secondary" onclick="appCall('testEmailConfig')">📧 Tester</button>
                     </div>
-                </div> <!-- ← Ferme la div de Configuration Email -->
+                </div>
+
                 <!-- Configuration Interface -->
                 <div class="card full-width">
                     <h3>🎨 Paramètres d'Interface</h3>
@@ -654,30 +722,33 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
                         <div style="margin-bottom: 20px;">
                             <label style="display: block; margin-bottom: 10px; font-weight: 600;">Thème visuel:</label>
                             <div style="display: flex; gap: 15px;">
+                                <!-- Option Thème Clair -->
                                 <div style="padding: 15px; border: 2px solid #3b82f6; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
                                     <label style="cursor: pointer; display: block;">
                                         <input type="radio" name="theme" value="light" checked style="display: none;">
-                                        <div style="font-size: 2rem;">☀️</div>
-                                        <div style="font-weight: 600; margin-top: 5px;">Clair</div>
+                                        <span style="font-size: 2rem; display: block;">☀️</span>
+                                        <span style="font-weight: 600; margin-top: 5px; display: block;">Clair</span>
                                     </label>
                                 </div>
+
+                                <!-- Option Thème Sombre -->
                                 <div style="padding: 15px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; flex: 1; text-align: center;">
                                     <label style="cursor: pointer; display: block;">
                                         <input type="radio" name="theme" value="dark" style="display: none;">
-                                        <div style="font-size: 2rem;">🌙</div>
-                                        <div style="font-weight: 600; margin-top: 5px;">Sombre</div>
+                                        <span style="font-size: 2rem; display: block;">🌙</span>
+                                        <span style="font-weight: 600; margin-top: 5px; display: block;">Sombre</span>
                                     </label>
                                 </div>
                             </div>
                         </div>
-                    </div> <!-- ← AJOUTEZ CETTE BALISE FERMANTE -->
+                    </div>
 
                     <div style="display: flex; gap: 10px;">
                         <button class="btn btn-success" onclick="appCall('saveUIConfig')">💾 Sauvegarder</button>
                     </div>
                 </div>
-            </div> 
-        </div> 
+            </div>
+        </div>
 
         <!-- Modal Ajout Flux RSS -->
         <div id="addFeedModal" class="modal">
@@ -688,14 +759,14 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
                     <input type="text" id="newFeedUrl" placeholder="https://example.com/rss" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="appCall('showAddFeedModal')">✅ Ajouter</button>
+                    <button class="btn btn-success" onclick="appCall('addNewFeed')">✅ Ajouter</button>
                     <button class="btn btn-secondary" onclick="appCall('closeModal', 'addFeedModal')">❌ Annuler</button>
                 </div>
             </div>
         </div>
 
         <!-- Modal Ajout Thème -->
-        <div id="addThemeModal" class="modal" style="display: none;">
+        <div id="addThemeModal" class="modal">
             <div class="modal-content">
                 <span class="close" onclick="appCall('closeModal', 'addThemeModal')">&times;</span>
                 <h2>➕ Ajouter un Thème</h2>
@@ -722,6 +793,32 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
             </div>
         </div>
 
+        <!-- Modal Analyse Mot-clé -->
+        <div id="keywordAnalysisModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="appCall('closeModal', 'keywordAnalysisModal')">&times;</span>
+                <h2>🎯 Analyse de Corrélation Mot-clé</h2>
+
+                <div style="margin: 20px 0;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                        Entrez un mot-clé à analyser:
+                    </label>
+                    <input type="text" id="keywordInput"
+                           placeholder="ex: Ukraine, inflation, IA..."
+                           style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem;">
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn btn-success" onclick="appCall('performKeywordAnalysis')">
+                        🧠 Analyser la corrélation
+                    </button>
+                    <button class="btn btn-secondary" onclick="appCall('closeModal', 'keywordAnalysisModal')">
+                        ❌ Annuler
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Bouton flottant Rapport IA -->
         <div style="position: fixed; bottom: 30px; right: 30px; z-index: 1000;">
             <button class="btn btn-info" onclick="appCall('generateEnhancedAIAnalysisReport')"
@@ -729,51 +826,65 @@ guerre" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; hei
                 🧠 Rapport IA Avancé
             </button>
         </div>
+    </div>
 
-        <!-- CDN -->
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-        <!-- Configuration IA -->
-        <script src="/ai-config.js"></script>
+    <!-- Configuration -->
+    <script>
+        window.__API_BASE__ = 'http://localhost:3000';
 
-        <!-- Configuration -->
-        <script>
-            window.__API_BASE__ = 'http://localhost:3000';
-
-            // Fonction sécurisée pour appeler l'app
-            function appCall(functionName, ...args) {
-                if (window.app && window.app[functionName]) {
-                    return window.app[functionName](...args);
-                } else {
-                    console.warn('App non disponible:', functionName);
-                    return false;
-                }
+        // Fonction sécurisée pour appeler l'app
+        function appCall(functionName, ...args) {
+            if (window.app && window.app[functionName]) {
+                return window.app[functionName](...args);
+            } else {
+                console.warn(`Fonction ${functionName} non disponible`);
+                showMessage(`Fonction ${functionName} non disponible`, 'warning');
+                return false;
             }
-        </script>
+        }
 
-        <!-- Application -->
-        <script src="/app.js"></script>
+        // Fonction pour afficher les messages
+        function showMessage(message, type = 'info') {
+            const messageContainer = document.getElementById('messageContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.cssText = `
+                    padding: 12px 16px;
+                    margin-bottom: 12px;
+                    border-radius: 8px;
+                    font-weight: 500;
+                    ${type === 'error' ? 'background: #fee2e2; color: #dc2626; border: 1px solid #fecaca;' : ''}
+                    ${type === 'success' ? 'background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0;' : ''}
+                    ${type === 'warning' ? 'background: #fef3c7; color: #92400e; border: 1px solid #fde68a;' : ''}
+                    ${type === 'info' ? 'background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd;' : ''}
+                `;
+            messageDiv.textContent = message;
+            messageContainer.appendChild(messageDiv);
 
-        <!-- Initialisation -->
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                console.log('📄 DOM chargé');
+            // Auto-suppression après 5 secondes
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 5000);
+        }
 
-                const initApp = setInterval(() => {
-                    if (window.app && typeof window.app.init === 'function') {
-                        clearInterval(initApp);
-                        console.log('✅ Initialisation de l app');
-                        window.app.init();
-                    }
-                }, 100);
+        // Initialisation au chargement
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('🚀 Agrégateur RSS Intelligent initialisé');
+            showMessage('Application chargée avec succès', 'success');
 
-                setTimeout(() => {
-                    clearInterval(initApp);
-                    if (!window.app) {
-                        console.error('❌ App non chargée après 5s');
-                    }
-                }, 5000);
-            });
-        </script>
+            // Charger les données initiales
+            if (window.app && window.app.loadInitialData) {
+                setTimeout(() => window.app.loadInitialData(), 1000);
+            }
+        });
+    </script>
+
+    <!-- Application -->
+    <script src="/app.js"></script>
 </body>
 </html>

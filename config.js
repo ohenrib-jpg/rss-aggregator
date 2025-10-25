@@ -46,7 +46,7 @@ const config = {
     
     bayesian: {
       enabled: !!process.env.BAYESIAN_SERVICE_URL,
-      url: process.env.BAYESIAN_SERVICE_URL || 'http://localhost:5001',
+      url: process.env.BAYESIAN_SERVICE_URL || 'http://localhost:5000',
       token: process.env.BAYES_TRIGGER_TOKEN || 'dev_token_local',
       timeout: IS_RENDER ? 45000 : 25000
     }

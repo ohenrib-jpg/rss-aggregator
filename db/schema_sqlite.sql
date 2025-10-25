@@ -1,4 +1,4 @@
--- Schéma SQLite optimisé
+-- Schéma SQLite optimisé - CORRIGÉ
 CREATE TABLE IF NOT EXISTS feeds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     url TEXT UNIQUE NOT NULL,
@@ -9,19 +9,21 @@ CREATE TABLE IF NOT EXISTS feeds (
 );
 
 CREATE TABLE IF NOT EXISTS articles (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     content TEXT,
-    link VARCHAR(500) UNIQUE NOT NULL,
-    pub_date TIMESTAMP,
-    feed_url VARCHAR(500) REFERENCES feeds(url) ON DELETE SET NULL,
-    sentiment_score FLOAT DEFAULT 0,
-    sentiment_type VARCHAR(20) DEFAULT 'neutral',
-    sentiment_confidence FLOAT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW(),
+    link TEXT UNIQUE NOT NULL,
+    pub_date TEXT,
+    feed_url TEXT,
+    sentiment_score REAL DEFAULT 0,
+    sentiment_type TEXT DEFAULT 'neutral',
+    sentiment_confidence REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
     confidence_score REAL DEFAULT 0.5,
-    importance_score REAL DEFAULT 0.5
+    importance_score REAL DEFAULT 0.5,
+    FOREIGN KEY (feed_url) REFERENCES feeds(url) ON DELETE SET NULL
 );
+
 CREATE TABLE IF NOT EXISTS themes (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -73,3 +75,11 @@ CREATE TABLE IF NOT EXISTS bayes_priors (
     updated_at TEXT DEFAULT (datetime('now')),
     PRIMARY KEY (entity_type, entity_id)
 );
+
+-- Index pour performances
+CREATE INDEX IF NOT EXISTS idx_articles_link ON articles(link);
+CREATE INDEX IF NOT EXISTS idx_articles_pub_date ON articles(pub_date);
+CREATE INDEX IF NOT EXISTS idx_articles_feed_url ON articles(feed_url);
+CREATE INDEX IF NOT EXISTS idx_feeds_url ON feeds(url);
+CREATE INDEX IF NOT EXISTS idx_theme_analyses_article ON theme_analyses(article_id);
+CREATE INDEX IF NOT EXISTS idx_theme_analyses_theme ON theme_analyses(theme_id);

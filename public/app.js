@@ -14,6 +14,11 @@ window.app = (function () {
         themes: [],
         feeds: [],
         summary: {},
+        correlationData: {
+            keywordSentiments: {},
+            themeRelations: {},
+            temporalPatterns: {}
+        },
         loading: {
             articles: false,
             themes: false,
@@ -215,7 +220,7 @@ window.app = (function () {
         setMessage("Chargement des articles...", "info");
 
         try {
-            const json = await apiGET("/articles?limit=200");
+            const json = await apiGET("/articles?limit=200&include_themes=true");
             console.log('📄 Données articles reçues:', json);
 
             if (json && json.success && Array.isArray(json.articles)) {
@@ -923,55 +928,55 @@ window.app = (function () {
 
     function createSentimentChart() {
         const container = qs("#sentimentChart");
-        if (!container) {
-            console.log('❌ Canvas sentimentChart non trouvé');
-            return;
-        }
+        if (!container) return;
 
+        // CORRECTION : Détruire l'ancien graphique
         if (state.charts.sentimentChart) {
             state.charts.sentimentChart.destroy();
             state.charts.sentimentChart = null;
         }
 
+        // CORRECTION : Nouveau comptage avec l'échelle fine
         const sentimentData = {
-            positive: 0,
-            neutral: 0,
-            negative: 0
+            'positive_strong': 0,
+            'positive_weak': 0,
+            'neutral': 0,
+            'negative_weak': 0,
+            'negative_strong': 0
         };
 
         state.articles.forEach(article => {
             const sentiment = article.sentiment?.sentiment || 'neutral';
-            sentimentData[sentiment]++;
+            // CORRECTION : Accepter les 5 niveaux
+            if (sentimentData.hasOwnProperty(sentiment)) {
+                sentimentData[sentiment]++;
+            } else {
+                // Fallback pour anciens articles
+                if (sentiment === 'positive') sentimentData.positive_weak++;
+                else if (sentiment === 'negative') sentimentData.negative_weak++;
+                else sentimentData.neutral++;
+            }
         });
 
-        const totalArticles = state.articles.length;
-
-        if (totalArticles === 0) {
-            container.parentElement.innerHTML = `
-                <h3>😊 Analyse des Sentiments</h3>
-                <div style="text-align: center; padding: 60px; color: #64748b;">
-                    Aucune donnée de sentiment disponible
-                    <br><small>Les sentiments apparaîtront après analyse des articles</small>
-                </div>
-            `;
-            return;
-        }
+        // CORRECTION : Données pour les 5 catégories
+        const chartData = {
+            labels: ['Positif Fort 😊', 'Positif Faible 🙂', 'Neutre 😐', 'Négatif Faible 🙁', 'Négatif Fort 😞'],
+            datasets: [{
+                data: [
+                    sentimentData.positive_strong,
+                    sentimentData.positive_weak,
+                    sentimentData.neutral,
+                    sentimentData.negative_weak,
+                    sentimentData.negative_strong
+                ],
+                backgroundColor: ['#10b981', '#34d399', '#6b7280', '#f59e0b', '#ef4444']
+            }]
+        };
 
         try {
             state.charts.sentimentChart = new Chart(container, {
                 type: 'bar',
-                data: {
-                    labels: ['Positif 😊', 'Neutre 😐', 'Négatif 😞'],
-                    datasets: [{
-                        label: "Nombre d'articles",
-                        data: [sentimentData.positive, sentimentData.neutral, sentimentData.negative],
-                        backgroundColor: ['#10b981', '#6b7280', '#ef4444'],
-                        borderColor: ['#0f9668', '#4b5563', '#dc2626'],
-                        borderWidth: 2,
-                        borderRadius: 8,
-                        borderSkipped: false
-                    }]
-                },
+                data: chartData,
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
@@ -984,6 +989,7 @@ window.app = (function () {
                             callbacks: {
                                 label: function (context) {
                                     const value = context.raw;
+                                    const totalArticles = state.articles.length;
                                     const percentage = Math.round((value / totalArticles) * 100);
                                     return `${value} articles (${percentage}%)`;
                                 }
@@ -1009,12 +1015,11 @@ window.app = (function () {
                     }
                 }
             });
-            console.log('✅ Graphique sentiment créé');
+            console.log('✅ Graphique sentiment créé (échelle fine)');
         } catch (error) {
             console.error('❌ Erreur création graphique sentiment:', error);
         }
     }
-
     function updateAllCharts() {
         console.log('📊 Mise à jour de tous les graphiques...');
 
@@ -1232,46 +1237,47 @@ window.app = (function () {
                 if (alerts.length > 0) {
                     container.innerHTML = `
                     <div style="display: grid; gap: 15px;">
-                        ${alerts.map(alert => `
-                            <div class="alert-item" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                    <div style="flex: 1;">
-                                        <h4 style="margin: 0; color: #1e293b;">${escapeHtml(alert.name)}</h4>
-                                        <div style="display: flex; gap: 10px; margin-top: 8px; font-size: 0.85rem;">
-                                            <span style="background: ${getSeverityColor(alert.severity)}; color: white; padding: 4px 8px; border-radius: 12px;">
-                                                ${getSeverityText(alert.severity)}
-                                            </span>
-                                            <span style="color: #64748b;">
-                                                ${alert.keywords?.length || 0} mot(s)-clé(s)
-                                            </span>
-                                            <span style="color: #64748b;">
-                                                Cooldown: ${formatCooldown(alert.cooldown)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; gap: 8px; align-items: center;">
-                                        <label class="switch">
-                                            <input type="checkbox" ${alert.enabled ? 'checked' : ''} 
-                                                   onchange="appCall('toggleAlert', '${alert.id}', this.checked)">
-                                            <span class="slider"></span>
-                                        </label>
-                                        <button class="btn btn-danger" onclick="appCall('deleteAlert', '${alert.id}')" style="padding: 6px 12px;">
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
-                                    ${(alert.keywords || []).map(keyword => `
-                                        <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 15px; font-size: 0.8rem; color: #475569;">
-                                            ${escapeHtml(keyword)}
-                                        </span>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `).join('')}
+                    ${alerts.map(alert => `
+                      <div class="alert-item" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                          <div style="flex: 1;">
+                              <h4 style="margin: 0; color: #1e293b;">${escapeHtml(alert.name)}</h4>
+                                  <div style="display: flex; gap: 10px; margin-top: 8px; font-size: 0.85rem;">
+                            <span style="background: ${getSeverityColor(alert.severity)}; color: white; padding: 4px 8px; border-radius: 12px;">
+                                       ${getSeverityText(alert.severity)}
+                            </span>
+                                 <span style="color: #64748b;">
+                                ${alert.keywords?.length || 0} mot(s)-clé(s)
+                            </span>
+                            <span style="color: #64748b;">
+                                Cooldown: ${formatCooldown(alert.cooldown)}
+                            </span>
+                        </div>
                     </div>
-                `;
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <label class="switch">
+                            <input type="checkbox" ${alert.enabled ? 'checked' : ''} 
+                                   onchange="appCall('toggleAlert', '${alert.id}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <button class="btn btn-danger" onclick="appCall('deleteAlert', '${alert.id}')" style="padding: 6px 12px;">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- LES DIV DOIVENT ÊTRE EN DEHORS DES LABEL -->
+                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                    ${(alert.keywords || []).map(keyword => `
+                        <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 15px; font-size: 0.8rem; color: #475569;">
+                            ${escapeHtml(keyword)}
+                        </span>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('')}
+    </div>
+`;
                 } else {
                     container.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: #64748b;">
@@ -2058,6 +2064,139 @@ window.app = (function () {
         }
     }
 
+    // ========== FONCTIONS CORRÉLATION PEARSON ==========
+
+    async function analyzeKeywordCorrelation() {
+        const keyword = prompt('Entrez un mot-clé à analyser:');
+        if (!keyword) return;
+
+        setMessage(`🔍 Analyse de corrélation pour "${keyword}"...`, 'info');
+
+        try {
+            const response = await apiGET(`/api/analysis/correlations/keyword-sentiment?keyword=${encodeURIComponent(keyword)}`);
+
+            if (response.success) {
+                const analysis = response.analysis;
+
+                // ✅ AJOUTER L'AFFICHAGE DANS L'INTERFACE
+                const resultsContainer = qs('#pearsonResults');
+                if (resultsContainer) {
+                    const correlationColor = analysis.correlation > 0.3 ? '#10b981' :
+                        analysis.correlation < -0.3 ? '#ef4444' : '#f59e0b';
+
+                    resultsContainer.innerHTML = `
+                    <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid ${correlationColor}; margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; color: #1e293b;">📊 Résultat de l'analyse : "${keyword}"</h4>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                            <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                                <div style="font-size: 2rem; font-weight: bold; color: ${correlationColor};">
+                                    ${analysis.correlation}
+                                </div>
+                                <div style="color: #64748b; font-size: 0.9rem;">Coefficient Pearson</div>
+                            </div>
+                            
+                            <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">
+                                    ${analysis.sampleSize}
+                                </div>
+                                <div style="color: #64748b; font-size: 0.9rem;">Articles analysés</div>
+                            </div>
+                            
+                            <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #8b5cf6;">
+                                    ${analysis.strength.replace('_', ' ')}
+                                </div>
+                                <div style="color: #64748b; font-size: 0.9rem;">Force de corrélation</div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                            <strong>📝 Interprétation :</strong>
+                            <p style="margin: 8px 0 0 0; color: #475569;">${analysis.interpretation}</p>
+                        </div>
+                        
+                        <div style="margin-top: 15px; font-size: 0.8rem; color: #64748b;">
+                            <strong>🧮 Méthodologie :</strong> 
+                            Corrélation de Pearson entre la fréquence du mot-clé "${keyword}" et le score de sentiment des articles.
+                            Une valeur proche de +1 indique une forte relation positive, -1 une forte relation négative.
+                        </div>
+                    </div>
+                `;
+                }
+
+                // Garder aussi le message traditionnel
+                let message = `📊 Corrélation "${keyword}" ↔ Sentiment: ${analysis.correlation}\n`;
+                message += `📈 Force: ${analysis.strength}\n`;
+                message += `📝 ${analysis.interpretation}\n`;
+                message += `📋 Échantillon: ${analysis.sampleSize} articles`;
+
+                setMessage(message, analysis.correlation > 0.3 ? 'success' : 'info');
+
+                console.log('🔍 Analyse Pearson:', analysis);
+            }
+        } catch (error) {
+            console.error('❌ Erreur analyse corrélation:', error);
+            setMessage('Erreur analyse corrélation: ' + error.message, 'error');
+        }
+    }
+
+    async function loadThemeCorrelations() {
+        setMessage('🔗 Analyse des corrélations entre thèmes...', 'info');
+
+        try {
+            const response = await apiGET('/api/analysis/correlations/themes?limit=150');
+
+            if (response.success && response.correlations.length > 0) {
+                const container = qs('#themeCorrelations');
+                if (!container) return;
+
+                const topCorrelations = response.correlations.slice(0, 10);
+
+                container.innerHTML = `
+                <div style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h3 style="margin-top: 0;">🔗 Corrélations entre Thèmes</h3>
+                    <div style="font-size: 0.9rem; color: #64748b; margin-bottom: 15px;">
+                        ${response.metadata.significantCorrelations} corrélations significatives trouvées sur ${response.metadata.themesCount} thèmes analysés
+                    </div>
+                    <div style="display: grid; gap: 10px;">
+                        ${topCorrelations.map(corr => `
+                            <div style="padding: 12px; background: #f8fafc; border-radius: 8px; border-left: 4px solid ${corr.correlation > 0 ? '#10b981' : '#ef4444'
+                    };">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <strong>${corr.theme1}</strong> ↔ <strong>${corr.theme2}</strong>
+                                    </div>
+                                    <div style="font-weight: bold; color: ${corr.correlation > 0 ? '#10b981' : '#ef4444'
+                    };">
+                                        ${corr.correlation}
+                                    </div>
+                                </div>
+                                <div style="font-size: 0.8rem; color: #64748b; margin-top: 5px;">
+                                    ${corr.interpretation}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+                setMessage(`✅ ${response.correlations.length} corrélations entre thèmes analysées`, 'success');
+            } else {
+                qs('#themeCorrelations').innerHTML = `
+                <div style="background: white; padding: 20px; border-radius: 12px; text-align: center; color: #64748b;">
+                    <div style="font-size: 3rem; margin-bottom: 10px;">📊</div>
+                    <p>Aucune corrélation significative trouvée entre les thèmes</p>
+                    <p style="font-size: 0.9rem;">Les corrélations apparaissent quand des thèmes sont fréquemment mentionnés ensemble</p>
+                </div>
+            `;
+            }
+        } catch (error) {
+            console.error('❌ Erreur chargement corrélations thèmes:', error);
+            setMessage('Erreur analyse corrélations: ' + error.message, 'error');
+        }
+    }
+
     // ========== FONCTIONS UTILITAIRES ==========
     async function saveEmailConfig() {
         setMessage("✅ Configuration email sauvegardée", "success");
@@ -2119,6 +2258,8 @@ window.app = (function () {
         createTheme,
         deleteTheme,
         loadFeeds,
+        analyzeKeywordCorrelation,
+        loadThemeCorrelations,
         loadFeedsManager,
         showAddFeedModal,
         createFeed,

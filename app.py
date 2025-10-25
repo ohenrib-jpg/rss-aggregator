@@ -23,6 +23,20 @@ from modules.storage_manager import save_analysis_batch, load_recent_analyses, s
 from modules.corroboration import find_corroborations
 from modules.analysis_utils import enrich_analysis, simple_bayesian_fusion, compute_confidence_from_features
 from modules.metrics import compute_metrics
+from functools import wraps
+
+def require_database(f):
+    """Décorateur qui bloque l'accès si la DB n'est pas prête"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not DB_CONFIGURED:
+            return jsonify({
+                "error": "Service temporarily unavailable",
+                "message": "Database is initializing, please try again in a few moments",
+                "status": "database_configuring"
+            }), 503
+        return f(*args, **kwargs)
+    return decorated_function
 
 # --- Configuration ---
 logging.basicConfig(
@@ -56,12 +70,21 @@ except Exception as e:
     logger.exception("❌ Erreur init_db: %s", e)
 
 # ------- Helpers -------
+# ------- Helpers -------
 def json_ok(payload: Dict[str, Any], status=200):
+    """Retourne une réponse JSON standardisée avec success: true"""
+    if isinstance(payload, dict) and 'success' not in payload:
+        payload['success'] = True
     return jsonify(payload), status
 
 def json_error(msg: str, code: int = 500):
+    """Retourne une erreur JSON standardisée avec success: false"""
     logger.error(f"Error response: {msg}")
-    return jsonify({"success": False, "error": str(msg)}), code
+    return jsonify({
+        "success": False, 
+        "error": str(msg),
+        "code": code
+    }), code
 
 def normalize_article_row(row: Dict[str, Any]) -> Dict[str, Any]:
     """Normalise un article pour le frontend"""
@@ -92,6 +115,29 @@ def normalize_article_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 # ========== ROUTES API PRINCIPALES ==========
+
+# Route health
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Route de santé minimaliste pour vérification service"""
+    try:
+        # Vérification basique de la base de données
+        db_status = "ready" if DB_CONFIGURED else "configuring"
+        
+        return jsonify({
+            "status": "healthy",
+            "service": "Flask Analysis API", 
+            "database": db_status,
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }), 503
 
 @app.route("/", methods=["GET"])
 def root():
@@ -209,6 +255,139 @@ def api_analyze():
         logger.exception("Erreur api_analyze")
         return json_error("analyse échouée: " + str(e))
 
+@app.route("/api/analyze/sentiment", methods=["POST"])
+def api_analyze_sentiment():
+    """
+    Analyse de sentiment simple d'un texte
+    Version simplifiée pour analyse rapide
+    """
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        text = payload.get("text", "")
+        title = payload.get("title", "")
+        
+        if not text and not title:
+            return json_error("Aucun texte à analyser", 400)
+        
+        # Combiner titre et texte pour l'analyse
+        content = f"{title} {text}".strip()
+        
+        logger.info(f"😊 Analyse sentiment: {content[:80]}...")
+        
+        # Utiliser le module d'enrichissement pour l'analyse de sentiment
+        analysis_data = {
+            "title": title,
+            "content": text,
+            "summary": text[:200] if text else title
+        }
+        
+        enriched = enrich_analysis(analysis_data)
+        
+        # Extraire le sentiment
+        sentiment_result = enriched.get("sentiment", {"score": 0, "sentiment": "neutral"})
+        
+        # Calculer la confiance
+        confidence = compute_confidence_from_features({
+            "text_length": len(content),
+            "has_title": bool(title),
+            "language": "fr"
+        })
+        
+        result = {
+            "success": True,
+            "sentiment": sentiment_result,
+            "confidence": confidence,
+            "text_preview": content[:100] + "..." if len(content) > 100 else content,
+            "analysis": {
+                "text_length": len(content),
+                "words_count": len(content.split()),
+                "language": "auto"
+            }
+        }
+        
+        logger.info(f"✅ Sentiment analysé: {sentiment_result.get('sentiment')} (score: {sentiment_result.get('score'):.2f})")
+        
+        return json_ok(result)
+        
+    except Exception as e:
+        logger.exception("Erreur api_analyze_sentiment")
+        return json_error("analyse de sentiment échouée: " + str(e))
+
+@app.route("/api/analyze/themes", methods=["POST"])
+def api_analyze_themes():
+    """
+    Analyse thématique d'un texte
+    Détection des thèmes et catégories principaux
+    """
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        text = payload.get("text", "")
+        title = payload.get("title", "")
+        
+        if not text and not title:
+            return json_error("Aucun texte à analyser", 400)
+        
+        content = f"{title} {text}".strip()
+        
+        logger.info(f"🏷️ Analyse thèmes: {content[:80]}...")
+        
+        # Utiliser le module d'enrichissement pour la détection de thèmes
+        analysis_data = {
+            "title": title,
+            "content": text,
+            "summary": text[:200] if text else title
+        }
+        
+        enriched = enrich_analysis(analysis_data)
+        
+        # Extraire les thèmes
+        themes = enriched.get("themes", [])
+        primary_theme = themes[0] if themes else "Général"
+        
+        # Calculer la distribution des thèmes
+        theme_distribution = []
+        if themes:
+            # Simuler une distribution de confiance (à adapter selon votre implémentation)
+            base_confidence = 0.8
+            for i, theme in enumerate(themes):
+                confidence = base_confidence * (0.8 ** i)  # Décroissance exponentielle
+                theme_distribution.append({
+                    "theme": theme,
+                    "confidence": round(confidence, 3),
+                    "weight": len(theme.split())  # Poids basé sur la complexité du thème
+                })
+        
+        # Trier par confiance décroissante
+        theme_distribution.sort(key=lambda x: x["confidence"], reverse=True)
+        
+        result = {
+            "success": True,
+            "themes": themes,
+            "primary_theme": primary_theme,
+            "theme_distribution": theme_distribution,
+            "analysis": {
+                "text_length": len(content),
+                "words_count": len(content.split()),
+                "themes_count": len(themes),
+                "coverage": min(1.0, len(themes) * 0.1)  # Métrique de couverture thématique
+            },
+            "confidence": enriched.get("confidence", 0.5)
+        }
+        
+        logger.info(f"✅ Thèmes détectés: {len(themes)} thèmes, principal: {primary_theme}")
+        
+        return json_ok(result)
+        
+    except Exception as e:
+        logger.exception("Erreur api_analyze_themes")
+        return json_error("analyse thématique échouée: " + str(e))
+
 # ========== ROUTES MÉTRIQUES ==========
 
 @app.route("/api/metrics", methods=["GET"])
@@ -220,6 +399,10 @@ def api_metrics():
         
         metrics_data = compute_metrics(days=days)
         
+        # S'assurer que success: true est présent
+        if isinstance(metrics_data, dict) and 'success' not in metrics_data:
+            metrics_data['success'] = True
+            
         return json_ok(metrics_data)
     except Exception as e:
         logger.exception("Erreur api_metrics")
@@ -291,6 +474,7 @@ def api_sentiment_stats():
     except Exception as e:
         logger.exception("Erreur api_sentiment_stats")
         return json_error("sentiment stats error: " + str(e))
+
 
 # ========== ROUTES GÉOPOLITIQUE ==========
 
@@ -527,6 +711,7 @@ def api_send_test_report():
         return jsonify({"success": success, "message": message})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
 
 # ==========Sys d'alerte active ===========
 from modules.alert_system import alert_system
