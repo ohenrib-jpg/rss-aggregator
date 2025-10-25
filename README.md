@@ -1,6 +1,7 @@
 # Agrégateur RSS Thématique avec IA v.5.*
 
 Système complet d'analyse de flux RSS avec intégration IA pour la correction des scores de sentiment et génération de rapports.
+Merci a DeepSeek pour son aide ;-)
 
 ## 🚀 Fonctionnalités
 
