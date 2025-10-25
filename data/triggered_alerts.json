@@ -1,0 +1,39 @@
+[
+  {
+    "alert_id": "crise_ukraine",
+    "alert_name": "🚨 Crise Ukraine",
+    "article_id": "test_001",
+    "article_title": "Nouvelle escalade du conflit en Ukraine après les récentes attaques",
+    "article_link": "https://example.com/test",
+    "severity": "high",
+    "triggered_at": "2025-10-23T18:42:01.747628",
+    "matched_keywords": [
+      "ukraine",
+      "zelensky"
+    ]
+  },
+  {
+    "alert_id": "crise_ukraine",
+    "alert_name": "🚨 Crise Ukraine",
+    "article_id": 75,
+    "article_title": "EN DIRECT, guerre en Ukraine : « Le dialogue est toujours préférable à la confrontation et encore plus à la guerre », déclare Vladimir Poutine, après le report de sa rencontre avec Donald Trump",
+    "article_link": "https://www.lemonde.fr/international/live/2025/10/23/en-direct-guerre-en-ukraine-le-dialogue-est-toujours-preferable-a-la-confrontation-et-encore-plus-a-la-guerre-declare-vladimir-poutine-apres-le-report-de-sa-rencontre-avec-donald-trump_6648095_3210.html",
+    "severity": "high",
+    "triggered_at": "2025-10-23T19:16:36.845019",
+    "matched_keywords": [
+      "ukraine"
+    ]
+  },
+  {
+    "alert_id": "election_france",
+    "alert_name": "🗳️ Élection France",
+    "article_id": 98,
+    "article_title": "Côte d'Ivoire : J-3 pour 9 millions d'électeurs, dernier jour de campagne présidentielle",
+    "article_link": "https://www.france24.com/fr/vid%C3%A9o/20251023-c%C3%B4te-d-ivoire-j-3-pour-9-millions-d-%C3%A9lecteurs-dernier-jour-de-campagne-pr%C3%A9sidentielle",
+    "severity": "medium",
+    "triggered_at": "2025-10-23T19:16:38.329048",
+    "matched_keywords": [
+      "présidentielle"
+    ]
+  }
+]
