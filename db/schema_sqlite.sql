@@ -9,18 +9,19 @@ CREATE TABLE IF NOT EXISTS feeds (
 );
 
 CREATE TABLE IF NOT EXISTS articles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     title TEXT NOT NULL,
     content TEXT,
-    link TEXT UNIQUE NOT NULL,
-    pub_date TEXT,
-    feed_url TEXT,
-    sentiment_score REAL DEFAULT 0,
-    sentiment_type TEXT DEFAULT 'neutral',
-    sentiment_confidence REAL DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now'))
+    link VARCHAR(500) UNIQUE NOT NULL,
+    pub_date TIMESTAMP,
+    feed_url VARCHAR(500) REFERENCES feeds(url) ON DELETE SET NULL,
+    sentiment_score FLOAT DEFAULT 0,
+    sentiment_type VARCHAR(20) DEFAULT 'neutral',
+    sentiment_confidence FLOAT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    confidence_score REAL DEFAULT 0.5,
+    importance_score REAL DEFAULT 0.5
 );
-
 CREATE TABLE IF NOT EXISTS themes (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,

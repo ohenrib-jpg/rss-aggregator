@@ -1,24 +1,5 @@
 [
   {
-    "id": "crise_ukraine",
-    "name": "🚨 Crise Ukraine",
-    "keywords": [
-      "Ukraine",
-      "Kiev",
-      "Zelensky",
-      "conflit ukrainien",
-      "guerre Ukraine"
-    ],
-    "severity": "high",
-    "actions": [
-      "notification",
-      "highlight"
-    ],
-    "enabled": true,
-    "cooldown": 3600,
-    "created": "2025-10-23T18:42:01.737781"
-  },
-  {
     "id": "crise_economique",
     "name": "💸 Crise Économique",
     "keywords": [

@@ -21,9 +21,10 @@ CREATE TABLE IF NOT EXISTS articles (
     sentiment_score FLOAT DEFAULT 0,
     sentiment_type VARCHAR(20) DEFAULT 'neutral',
     sentiment_confidence FLOAT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    confidence_score REAL DEFAULT 0.5,
+    importance_score REAL DEFAULT 0.5
 );
-
 -- Table des thèmes
 CREATE TABLE IF NOT EXISTS themes (
     id VARCHAR(100) PRIMARY KEY,

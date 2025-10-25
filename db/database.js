@@ -111,7 +111,8 @@ async function createTablesManually(client) {
       created_at TIMESTAMP DEFAULT NOW()
     )`,
     
-    `CREATE TABLE IF NOT EXISTS articles (
+      // Dans db/database.js - fonction createTablesManually()
+      `CREATE TABLE IF NOT EXISTS articles (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       content TEXT,
@@ -120,6 +121,9 @@ async function createTablesManually(client) {
       feed_url VARCHAR(500),
       sentiment_score FLOAT DEFAULT 0,
       sentiment_type VARCHAR(20) DEFAULT 'neutral',
+      sentiment_confidence FLOAT DEFAULT 0,
+      confidence_score REAL DEFAULT 0.5,
+      importance_score REAL DEFAULT 0.5,
       created_at TIMESTAMP DEFAULT NOW()
     )`,
     

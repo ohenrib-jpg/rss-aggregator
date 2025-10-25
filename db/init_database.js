@@ -43,7 +43,12 @@ class DatabaseInitializer {
 
       // 6. Vérifier l'intégrité
       console.log('🔍 Step 6: Verifying database integrity...');
-      await this.verifyIntegrity();
+        await this.verifyIntegrity();
+
+      // 7. Migrer les colonnes de scoring si nécessaire
+      console.log('📈 Step 7: Migrating score columns...');
+        const { migrateAddScoreColumns } = require('./migrate_add_scores');
+        await migrateAddScoreColumns();
 
       this.initialized = true;
       

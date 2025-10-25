@@ -14,13 +14,14 @@ CREATE TABLE IF NOT EXISTS articles (
     content TEXT,
     link VARCHAR(500) UNIQUE NOT NULL,
     pub_date TIMESTAMP,
-    feed_url VARCHAR(500),
+    feed_url VARCHAR(500) REFERENCES feeds(url) ON DELETE SET NULL,
     sentiment_score FLOAT DEFAULT 0,
     sentiment_type VARCHAR(20) DEFAULT 'neutral',
     sentiment_confidence FLOAT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    confidence_score REAL DEFAULT 0.5,
+    importance_score REAL DEFAULT 0.5
 );
-
 -- Tables bayésiennes pour PostgreSQL
 CREATE TABLE IF NOT EXISTS bayes_evidence (
     id SERIAL PRIMARY KEY,

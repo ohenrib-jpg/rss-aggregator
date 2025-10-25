@@ -372,6 +372,112 @@ app.get('/api/articles', async (req, res) => {
     }
 });
 
+// ========== SYSTÈME DE SCORING DES ARTICLES ==========
+
+function calculateRecencyScore(pubDate) {
+    const now = new Date();
+    const articleDate = new Date(pubDate);
+    const hoursDiff = (now - articleDate) / (1000 * 60 * 60);
+
+    if (hoursDiff < 6) return 0.95;    // 6 heures
+    if (hoursDiff < 24) return 0.85;   // 1 jour
+    if (hoursDiff < 72) return 0.65;   // 3 jours
+    if (hoursDiff < 168) return 0.45;  // 1 semaine
+    return 0.25;                       // Plus ancien
+}
+
+function calculateContentScore(content, title) {
+    if (!content) return 0.3;
+
+    const contentLength = content.length;
+    const titleLength = title?.length || 0;
+
+    // Score basé sur la longueur
+    let lengthScore = 0;
+    if (contentLength > 1000) lengthScore = 0.9;
+    else if (contentLength > 500) lengthScore = 0.7;
+    else if (contentLength > 200) lengthScore = 0.5;
+    else lengthScore = 0.3;
+
+    // Bonus pour titre informatif
+    const titleScore = titleLength > 30 ? 0.8 : 0.5;
+
+    return (lengthScore * 0.7 + titleScore * 0.3);
+}
+
+function analyzeSentimentBasic(text) {
+    if (!text) return { score: 0, sentiment: 'neutral', confidence: 0.5 };
+
+    const positiveWords = ['bon', 'excellent', 'positif', 'succès', 'progress', 'hausse', 'gain', 'victoire'];
+    const negativeWords = ['mauvais', 'négatif', 'échec', 'problème', 'crise', 'chute', 'perte', 'conflit'];
+
+    const words = text.toLowerCase().split(/\s+/);
+    let positiveCount = 0;
+    let negativeCount = 0;
+
+    words.forEach(word => {
+        if (positiveWords.some(pw => word.includes(pw))) positiveCount++;
+        if (negativeWords.some(nw => word.includes(nw))) negativeCount++;
+    });
+
+    const total = positiveCount + negativeCount;
+    if (total === 0) return { score: 0, sentiment: 'neutral', confidence: 0.3 };
+
+    const score = (positiveCount - negativeCount) / total;
+    let sentiment = 'neutral';
+    if (score > 0.3) sentiment = 'positive_strong';
+    else if (score > 0.1) sentiment = 'positive_weak';
+    else if (score < -0.3) sentiment = 'negative_strong';
+    else if (score < -0.1) sentiment = 'negative_weak';
+
+    return {
+        score: Math.max(Math.min(score, 1), -1),
+        sentiment: sentiment,
+        confidence: Math.min(total / 10, 0.8) // Confiance basée sur le nombre d'indices
+    };
+}
+
+function calculateArticleScore(article, feedUrl) {
+    const content = article.content || article.summary || '';
+    const title = article.title || 'Sans titre';
+
+    // Fiabilité de la source (exemple basique)
+    const sourceScores = {
+        'lemonde.fr': 0.9,
+        'france24.com': 0.8,
+        'bfmtv.com': 0.7
+    };
+
+    const domain = new URL(feedUrl).hostname;
+    const sourceScore = sourceScores[domain] || 0.5;
+
+    // Calcul des scores individuels
+    const recencyScore = calculateRecencyScore(article.pubDate || new Date());
+    const contentScore = calculateContentScore(content, title);
+    const sentiment = analyzeSentimentBasic(content + ' ' + title);
+
+    // Score composite pondéré
+    const confidence = (
+        contentScore * 0.4 +
+        recencyScore * 0.3 +
+        sourceScore * 0.2 +
+        sentiment.confidence * 0.1
+    );
+
+    const importance = (
+        contentScore * 0.3 +
+        recencyScore * 0.4 +
+        sourceScore * 0.2 +
+        Math.abs(sentiment.score) * 0.1 // L'émotion extrême peut indiquer l'importance
+    );
+
+    return {
+        confidence: Math.min(Math.max(confidence, 0.1), 0.95),
+        importance: Math.min(Math.max(importance, 0.1), 0.95),
+        sentiment: sentiment
+    };
+}
+
 app.post('/api/refresh', async (req, res) => {
     try {
         console.log('🔄 Manual refresh triggered...');
@@ -422,25 +528,26 @@ app.post('/api/refresh', async (req, res) => {
                             .trim()
                             .substring(0, 2000);
 
-                        const sentiment = {
-                            score: 0,
-                            sentiment: 'neutral',
-                            confidence: 0.5
-                        };
+                        const articleScore = calculateArticleScore(item, feedUrl);
+                        
 
-                        const result = await query(`
-                            INSERT INTO articles (title, content, link, pub_date, feed_url, sentiment_score, sentiment_type, sentiment_confidence)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        `, [
-                            item.title || 'Sans titre',
-                            content,
-                            item.link || `#${Date.now()}_${Math.random()}`,
-                            pubDate.toISOString(),
-                            feedUrl,
-                            sentiment.score,
-                            sentiment.sentiment,
-                            sentiment.confidence
-                        ]);
+                    const result = await query(`
+    INSERT INTO articles (title, content, link, pub_date, feed_url, 
+                         sentiment_score, sentiment_type, sentiment_confidence,
+                         confidence_score, importance_score)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, [
+                        item.title || 'Sans titre',
+                        content,
+                        item.link || `#${Date.now()}_${Math.random()}`,
+                        pubDate.toISOString(),
+                        feedUrl,
+                        articleScore.sentiment.score,
+                        articleScore.sentiment.sentiment,  
+                        articleScore.sentiment.confidence,
+                        articleScore.confidence,           
+                        articleScore.importance           
+                    ]);
 
                         if (result.rowCount !== 0 || result.lastID) {
                             articlesProcessed++;
@@ -884,6 +991,174 @@ app.get('/api/geopolitical/relations', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error /api/geopolitical/relations:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ========== ROUTES CORRÉLATION PEARSON ==========
+
+const PearsonCorrelation = require('./modules/pearson_correlation');
+
+app.get('/api/analysis/correlations/keyword-sentiment', async (req, res) => {
+    try {
+        const { keyword, limit = 100 } = req.query;
+
+        if (!keyword) {
+            return res.status(400).json({
+                success: false,
+                error: 'Paramètre "keyword" requis'
+            });
+        }
+
+        const result = await query(`
+            SELECT a.*, 
+                (SELECT json_group_array(DISTINCT t.name) 
+                 FROM theme_analyses ta 
+                 JOIN themes t ON ta.theme_id = t.id 
+                 WHERE ta.article_id = a.id) as themes_json
+            FROM articles a 
+            ORDER BY a.pub_date DESC 
+            LIMIT ?
+        `, [parseInt(limit)]);
+
+        const articles = result.rows.map(row => ({
+            id: row.id,
+            title: row.title,
+            content: row.content,
+            summary: row.content?.substring(0, 500), // Résumé pour analyse
+            sentiment: {
+                score: parseFloat(row.sentiment_score || 0),
+                sentiment: row.sentiment_type || 'neutral'
+            },
+            themes: row.themes_json ? JSON.parse(row.themes_json) : []
+        }));
+
+        const correlationResult = PearsonCorrelation.analyzeKeywordSentimentCorrelation(
+            articles,
+            keyword
+        );
+
+        res.json({
+            success: true,
+            analysis: correlationResult,
+            metadata: {
+                articlesAnalyzed: articles.length,
+                keyword: keyword,
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error /api/analysis/correlations/keyword-sentiment:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+app.get('/api/analysis/correlations/themes', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 200;
+
+        // Récupérer articles et thèmes
+        const [articlesResult, themesResult] = await Promise.all([
+            query(`
+                SELECT a.*, 
+                    (SELECT json_group_array(DISTINCT t.name) 
+                     FROM theme_analyses ta 
+                     JOIN themes t ON ta.theme_id = t.id 
+                     WHERE ta.article_id = a.id) as themes_json
+                FROM articles a 
+                ORDER BY a.pub_date DESC 
+                LIMIT ?
+            `, [limit]),
+            query('SELECT * FROM themes ORDER BY name')
+        ]);
+
+        const articles = articlesResult.rows.map(row => ({
+            id: row.id,
+            title: row.title,
+            themes: row.themes_json ? JSON.parse(row.themes_json) : []
+        }));
+
+        const themes = themesResult.rows;
+
+        const correlations = PearsonCorrelation.analyzeThemeCorrelations(articles, themes);
+
+        res.json({
+            success: true,
+            correlations: correlations,
+            metadata: {
+                articlesAnalyzed: articles.length,
+                themesCount: themes.length,
+                significantCorrelations: correlations.length,
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error /api/analysis/correlations/themes:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+app.get('/api/analysis/correlations/multiple-keywords', async (req, res) => {
+    try {
+        const { keywords, limit = 100 } = req.query;
+
+        if (!keywords) {
+            return res.status(400).json({
+                success: false,
+                error: 'Paramètre "keywords" requis (séparés par des virgules)'
+            });
+        }
+
+        const keywordList = keywords.split(',').map(k => k.trim()).filter(k => k);
+
+        const result = await query(`
+            SELECT a.*, 
+                (SELECT json_group_array(DISTINCT t.name) 
+                 FROM theme_analyses ta 
+                 JOIN themes t ON ta.theme_id = t.id 
+                 WHERE ta.article_id = a.id) as themes_json
+            FROM articles a 
+            ORDER BY a.pub_date DESC 
+            LIMIT ?
+        `, [parseInt(limit)]);
+
+        const articles = result.rows.map(row => ({
+            id: row.id,
+            title: row.title,
+            content: row.content,
+            sentiment: {
+                score: parseFloat(row.sentiment_score || 0)
+            },
+            themes: row.themes_json ? JSON.parse(row.themes_json) : []
+        }));
+
+        const results = keywordList.map(keyword =>
+            PearsonCorrelation.analyzeKeywordSentimentCorrelation(articles, keyword)
+        );
+
+        res.json({
+            success: true,
+            analyses: results,
+            metadata: {
+                articlesAnalyzed: articles.length,
+                keywordsAnalyzed: keywordList,
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error /api/analysis/correlations/multiple-keywords:', error);
         res.status(500).json({
             success: false,
             error: error.message

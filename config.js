@@ -41,24 +41,24 @@ const config = {
     flask: {
       enabled: !!process.env.FLASK_API_URL || true,
       url: process.env.FLASK_API_URL || 'http://localhost:5000',
-      timeout: IS_RENDER ? 25000 : 10000
+      timeout: IS_RENDER ? 45000 : 25000
     },
     
     bayesian: {
       enabled: !!process.env.BAYESIAN_SERVICE_URL,
       url: process.env.BAYESIAN_SERVICE_URL || 'http://localhost:5001',
       token: process.env.BAYES_TRIGGER_TOKEN || 'dev_token_local',
-      timeout: IS_RENDER ? 25000 : 10000
+      timeout: IS_RENDER ? 45000 : 25000
     }
   },
   
   // RSS Parser
   rss: {
-    timeout: IS_RENDER ? 15000 : 10000,
+    timeout: IS_RENDER ? 45000 : 25000,
     maxRedirects: 5,
-    maxFeedsPerRefresh: IS_RENDER ? 10 : 20,
-    maxArticlesPerFeed: IS_RENDER ? 20 : 50,
-    refreshInterval: IS_RENDER ? 3600000 : 300000 // 1h cloud, 5min local
+    maxFeedsPerRefresh: IS_RENDER ? 6 : 12,
+    maxArticlesPerFeed: IS_RENDER ? 12 : 25,
+    refreshInterval: IS_RENDER ? 7200000 : 900000 // 1h cloud, 5min local
   },
   
   // Email
