@@ -1,6 +1,7 @@
-# Agrégateur RSS Thématique avec IA v.5.*
+# Agrégateur RSS/Reseaux sociaux Thématique avec Deeplearning v2.0 et IA v.5.*
 
 Système complet d'analyse de flux RSS avec intégration IA pour la correction des scores de sentiment et génération de rapports.
+ET TOUJOURS UN GRAND MERCI A DEEPSEEK ET A SES CONCEPTEURS 
 
 ## 🚀 Fonctionnalités
 
@@ -10,7 +11,8 @@ Système complet d'analyse de flux RSS avec intégration IA pour la correction d
 - 📈 Analyse de tendances temporelles
 - 😊 Analyse de sentiment automatique
 - 🔍 Détection d'ironie et de contexte
-- 📊 Comparaison des ecarts entre "l'inconscient mediatique" et "l'inconscient populaire" 
+- 📊 Comparaison des ecarts entre "l'inconscient mediatique" et "l'inconscient populaire"
+- Analyse des Réseaux d'influence entre pays
 
 ### Module IA Avancé
 - 🤖 Correction automatique des scores de sentiment
@@ -37,4 +39,5 @@ npm install
 - Bayesian fusion and improved confidence calculation
 - Frontend adjusted to use `confidence` and display `bayesian_posterior`
 - Tests added in `Scripts/`
-Et repo toujours public : ohenri-jpg
+- All road are now factorized
+Et repo toujours public /Always public : ohenri-jpg
