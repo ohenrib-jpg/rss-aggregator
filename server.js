@@ -12,6 +12,8 @@ const path = require('path');
 const { config, displayConfig } = require('./config');
 const { getDatabaseManager, query } = require('./db/database_manager');
 const PearsonCorrelation = require('./modules/pearson_correlation');
+const AnomalyDetector = require('./modules/anomaly_detector');
+const anomalyDetector = new AnomalyDetector();
 
 const app = express();
 displayConfig();
@@ -628,7 +630,39 @@ function calculateArticleScore(article, feedUrl) {
     };
 }
 
-// ----------------------- REFRESH -----------------------
+// ====== Analyse automatique des nouveaux articles ==============
+
+async function analyzeNewArticlesForAnomalies(articles) {
+    try {
+        if (!articles || articles.length === 0) return;
+
+        console.log(`🔍 Analyse anomalies pour ${articles.length} nouveaux articles`);
+
+        // Analyse du volume
+        const volumeAnomalies = anomalyDetector.analyzeArticleVolume(articles);
+
+        // Analyse de sentiment
+        const sentimentAnomalies = anomalyDetector.analyzeSentimentAnomalies(articles);
+
+        // Log des anomalies détectées
+        if (volumeAnomalies.length > 0 || sentimentAnomalies.length > 0) {
+            console.log('🚨 Anomalies détectées:', {
+                volume: volumeAnomalies.length,
+                sentiment: sentimentAnomalies.length
+            });
+        }
+
+        return {
+            volume: volumeAnomalies,
+            sentiment: sentimentAnomalies
+        };
+
+    } catch (error) {
+        console.error('❌ Analyse automatique anomalies error:', error);
+    }
+}
+
+// ========================== REFRESH =============================
 app.post('/api/refresh', async (req, res, next) => {
     try {
         console.log('🔄 Manual refresh triggered...');
@@ -731,6 +765,27 @@ app.post('/api/refresh', async (req, res, next) => {
             }
         }
 
+            try {
+            const recentArticles = await query(`
+                SELECT * FROM articles 
+                ORDER BY pub_date DESC 
+                LIMIT 50
+            `);
+
+            if (recentArticles.rows && recentArticles.rows.length > 0) {
+                analyzeNewArticlesForAnomalies(recentArticles.rows).then(anomalyResults => {
+                    if (anomalyResults && (anomalyResults.volume.length > 0 || anomalyResults.sentiment.length > 0)) {
+                        console.log('🚨 Anomalies détectées:', {
+                            volume: anomalyResults.volume.length,
+                            sentiment: anomalyResults.sentiment.length
+                        });
+                    }
+                });
+            }
+        } catch (dbError) {
+            console.error('❌ Erreur analyse anomalies:', dbError);
+        }
+
         console.log(`✅ Refresh complete: ${articlesProcessed} articles, ${errors} errors`);
         res.json({
             success: true,
@@ -816,7 +871,7 @@ app.get('/api/stats', async (req, res, next) => {
     }
 });
 
-// ----------------------- Sentiment Detailed -----------------------
+// ================== DETAIL DES SENTIMENTS ==================
 app.get('/api/sentiment/detailed', async (req, res, next) => {
     try {
         console.log('😊 API Sentiment Detailed appelée');
@@ -852,7 +907,7 @@ app.get('/api/sentiment/detailed', async (req, res, next) => {
     }
 });
 
-// ----------------------- Analysis Timeline -----------------------
+// =============== Analyse de la timeline ====================
 app.get('/api/analysis/timeline', async (req, res, next) => {
     try {
         const days = parseInt(req.query.days) || 30;
@@ -875,7 +930,7 @@ app.get('/api/analysis/timeline', async (req, res, next) => {
     }
 });
 
-// ----------------------- Top Themes -----------------------
+// ====================== TOP THEMES ======================== 
 app.get('/api/analysis/top-themes', async (req, res, next) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
@@ -897,7 +952,7 @@ app.get('/api/analysis/top-themes', async (req, res, next) => {
     }
 });
 
-// ----------------------- Learning Stats -----------------------
+// ============ STATS D'APPRENTISSAGE =======================
 app.get('/api/learning/stats', async (req, res, next) => {
     try {
         console.log('🧠 API Learning Stats appelée');
@@ -926,7 +981,7 @@ app.get('/api/learning/stats', async (req, res, next) => {
     }
 });
 
-// ----------------------- Geopolitical Extra -----------------------
+// ================= FONCTION GEOPOL SUP ============================
 app.get('/api/geopolitical/crisis-zones', async (req, res, next) => {
     try {
         console.log('🔥 API Crisis Zones appelée');
@@ -1014,8 +1069,6 @@ app.get('/api/network/country/:country', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
-// 📍 AJOUTE CETTE ROUTE APRÈS les autres routes réseau dans server.js
 
 // Route de démonstration avec données de test
 app.get('/api/network/demo', async (req, res) => {
@@ -1468,7 +1521,139 @@ app.get('/api/network/country/:country', async (req, res) => {
 
 console.log('✅ Routes réseau d\'influence intégrées');
 
+// ============================ ROUTES ANOMALIES Z-SCORE ============================
+
+app.post('/api/anomalies/analyze', async (req, res) => {
+    try {
+        const { articles, relations } = req.body;
+
+        const anomalies = {
+            relations: [],
+            volume: [],
+            sentiment: [],
+            comprehensive: []
+        };
+
+        // Analyse des relations
+        if (relations && relations.length > 0) {
+            anomalies.relations = anomalyDetector.analyzeRelations(relations);
+        }
+
+        // Analyse du volume d'articles
+        if (articles && articles.length > 0) {
+            anomalies.volume = anomalyDetector.analyzeArticleVolume(articles);
+            anomalies.sentiment = anomalyDetector.analyzeSentimentAnomalies(articles);
+        }
+
+        // Analyse complète
+        anomalies.comprehensive = await anomalyDetector.comprehensiveAnalysis();
+
+        res.json({
+            success: true,
+            anomalies,
+            stats: anomalyDetector.getStats(),
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Analyse anomalies error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Récupère les anomalies récentes
+ */
+app.get('/api/anomalies/recent', async (req, res) => {
+    try {
+        const hours = parseInt(req.query.hours) || 24;
+        const anomalies = anomalyDetector.getRecentAnomalies(hours);
+
+        res.json({
+            success: true,
+            anomalies,
+            count: anomalies.length,
+            period: `${hours} hours`,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Recent anomalies error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Statistiques du détecteur d'anomalies
+ */
+app.get('/api/anomalies/stats', async (req, res) => {
+    try {
+        const stats = anomalyDetector.getStats();
+
+        res.json({
+            success: true,
+            stats,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Anomalies stats error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Configuration du détecteur
+ */
+app.post('/api/anomalies/config', async (req, res) => {
+    try {
+        const { zScoreThreshold, minDataPoints, historySize } = req.body;
+
+        if (zScoreThreshold !== undefined) {
+            anomalyDetector.config.zScoreThreshold = zScoreThreshold;
+        }
+        if (minDataPoints !== undefined) {
+            anomalyDetector.config.minDataPoints = minDataPoints;
+        }
+        if (historySize !== undefined) {
+            anomalyDetector.config.historySize = historySize;
+        }
+
+        res.json({
+            success: true,
+            message: 'Configuration mise à jour',
+            config: anomalyDetector.config
+        });
+
+    } catch (error) {
+        console.error('❌ Anomalies config error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Réinitialise l'historique
+ */
+app.post('/api/anomalies/reset', async (req, res) => {
+    try {
+        const { metricType } = req.body;
+        anomalyDetector.resetHistory(metricType);
+
+        res.json({
+            success: true,
+            message: metricType ? `Historique ${metricType} réinitialisé` : 'Historique complet réinitialisé'
+        });
+
+    } catch (error) {
+        console.error('❌ Anomalies reset error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+console.log('✅ Routes anomalies intégrées');
+
 // ----------------------- Error Handler -----------------------
+// Middleware d'erreur 500
 app.use((error, req, res, next) => {
     console.error('❌ Server Error:', error);
     res.status(500).json({
@@ -1478,6 +1663,7 @@ app.use((error, req, res, next) => {
     });
 });
 
+// Middleware 404 - DOIT ÊTRE LE TOUT DERNIER
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -1519,4 +1705,4 @@ async function startServer() {
     }
 }
 
-startServer();
+    startServer();
