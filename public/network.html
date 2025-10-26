@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Réseau d'Influence Géopolitique - GEOPOLIS</title>
+    <link rel="stylesheet" href="css/network.css">
+    <script src="lib/d3.v7.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- En-tête -->
+        <header class="header">
+            <h1>🌍 Réseau d'Influence Géopolitique</h1>
+            <div class="controls">
+                <button id="refreshBtn">🔄 Actualiser</button>
+                <button id="autoRefreshBtn">🔄 Auto-actualisation</button>
+                <select id="viewSelect">
+                    <option value="global">Vue Globale</option>
+                    <option value="community">Par Communautés</option>
+                    <option value="timeline">Évolution Temporelle</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Métriques en temps réel -->
+        <div class="metrics-bar">
+            <div class="metric">
+                <span class="label">Pays analysés</span>
+                <span class="value" id="countriesCount">0</span>
+            </div>
+            <div class="metric">
+                <span class="label">Relations</span>
+                <span class="value" id="relationsCount">0</span>
+            </div>
+            <div class="metric">
+                <span class="label">Coopération</span>
+                <span class="value" id="cooperationRatio">0%</span>
+            </div>
+            <div class="metric">
+                <span class="label">Dernière mise à jour</span>
+                <span class="value" id="lastUpdate">-</span>
+            </div>
+        </div>
+
+        <!-- Contenu principal -->
+        <div class="main-content">
+            <!-- Carte réseau -->
+            <div class="network-section">
+                <div class="section-header">
+                    <h2>Carte des Relations Internationales</h2>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color cooperative"></div>
+                            <span>Coopération</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color conflict"></div>
+                            <span>Conflit</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color neutral"></div>
+                            <span>Neutre</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="networkGraph" class="network-graph"></div>
+            </div>
+
+            <!-- Panneau latéral -->
+            <div class="sidebar">
+                <!-- Recherche -->
+                <div class="search-section">
+                    <input type="text" id="countrySearch" placeholder="🔍 Rechercher un pays...">
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+
+                <!-- Détails du pays sélectionné -->
+                <div class="country-details" id="countryDetails">
+                    <div class="placeholder">
+                        <p>👆 Sélectionnez un pays sur la carte pour voir ses relations</p>
+                    </div>
+                </div>
+
+                <!-- Relations récentes -->
+                <div class="recent-relations">
+                    <h3>📈 Relations Récentes</h3>
+                    <div id="recentRelationsList" class="relations-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>GEOPOLIS - Analyse Géopolitique en Temps Réel</p>
+            <div class="status">
+                <span id="connectionStatus">🟢 Connecté</span>
+                <span id="dataStatus">📊 Données à jour</span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="js/network.js"></script>
+</body>
+</html>

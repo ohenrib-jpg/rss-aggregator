@@ -1,7 +1,7 @@
-// ===========================================================
-// GEOPOLIS - server.js - VERSION COMPLÈTE CORRIGÉE
+// ===========================================================================
+// GEOPOLIS - server.js - VERSION COMPLÈTE CORRIGÉE AVEC PROXY FLASK FACTORISÉ
 // compatible SQLite / PostgreSQL
-// ===========================================================
+// ===========================================================================
 
 const express = require('express');
 const cors = require('cors');
@@ -134,6 +134,60 @@ app.use((req, res, next) => {
     next();
 });
 
+// ============================ PROXY FLASK FACTORISÉ ============================
+
+const FLASK_BASE_URL = process.env.FLASK_BASE_URL || "http://127.0.0.1:5000";
+
+// Fonction générique de proxy vers Flask
+function proxyFlaskRoute(method, path) {
+    app[method](path, async (req, res) => {
+        try {
+            const flaskUrl = `${FLASK_BASE_URL}${path.replace('/api', '')}`;
+            const options = {
+                method: method.toUpperCase(),
+                headers: { "Content-Type": "application/json" },
+            };
+            if (method !== "get" && req.body) options.body = JSON.stringify(req.body);
+
+            const response = await fetch(flaskUrl, options);
+            const contentType = response.headers.get("content-type") || "";
+
+            if (contentType.includes("application/json")) {
+                const data = await response.json();
+                res.status(response.status).json(data);
+            } else {
+                const text = await response.text();
+                res.status(response.status).send(text);
+            }
+        } catch (error) {
+            console.error(`❌ Proxy error for ${method.toUpperCase()} ${path}:`, error);
+            res.status(500).json({ error: `Flask proxy failed for ${path}` });
+        }
+    });
+}
+
+// 🧠 Liste des routes Flask à proxifier depuis Node.js
+const flaskRoutes = [
+    { method: "get", path: "/api/health" },
+    { method: "post", path: "/api/analyze" },
+    { method: "get", path: "/api/analyze/sentiment" },
+    { method: "get", path: "/api/analyze/themes" },
+    { method: "get", path: "/api/summaries" },
+    { method: "get", path: "/api/sentiment/stats" },
+    { method: "get", path: "/api/email/config" },
+    { method: "post", path: "/api/email/test" },
+    { method: "post", path: "/api/email/start-scheduler" },
+    { method: "post", path: "/api/email/send-test-report" },
+    { method: "get", path: "/api/alerts/:id" },
+];
+
+// Enregistrement automatique des routes proxy
+flaskRoutes.forEach(({ method, path }) => proxyFlaskRoute(method, path));
+
+console.log("✅ Flask proxy routes registered:", flaskRoutes.map(r => r.path));
+
+// ============================ FIN PROXY FLASK ============================
+
 // ----------------------- ROUTES PRINCIPALES -----------------------
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -143,8 +197,8 @@ app.get('/favicon.ico', (req, res) => {
     res.status(204).end();
 });
 
-// ----------------------- Health -----------------------
-app.get('/api/health', async (req, res, next) => {
+// ----------------------- Health (version Node.js) -----------------------
+app.get('/api/health/node', async (req, res, next) => {
     try {
         await query('SELECT 1');
         res.json({
@@ -377,7 +431,7 @@ app.post('/api/themes', async (req, res, next) => {
             throw new Error('Nom et mots-clés requis');
         }
         const keywordsJson = JSON.stringify(keywords);
-        const insertResult = await query('INSERT INTO themes (name, keywords, color, description) VALUES (?, ?, ?, ?)', 
+        const insertResult = await query('INSERT INTO themes (name, keywords, color, description) VALUES (?, ?, ?, ?)',
             [name, keywordsJson, color || '#6366f1', description || '']);
         const info = extractInsertInfo(insertResult);
         if (!info.rowCount && !info.lastID) throw new Error('Failed to create theme in database');
@@ -653,7 +707,7 @@ app.post('/api/refresh', async (req, res, next) => {
                                 console.log(`🎯 Article ${newArticleId}: ${detectedThemes.length} thème(s) détecté(s)`);
 
                                 for (const theme of detectedThemes) {
-                                    await query('INSERT OR IGNORE INTO theme_analyses (article_id, theme_id, confidence) VALUES (?, ?, ?)', 
+                                    await query('INSERT OR IGNORE INTO theme_analyses (article_id, theme_id, confidence) VALUES (?, ?, ?)',
                                         [newArticleId, theme.theme_id, theme.confidence]);
                                 }
                             } catch (themeError) {
@@ -707,7 +761,7 @@ app.post('/api/feeds', async (req, res, next) => {
         if (existing.rows && existing.rows.length > 0) return res.json({ success: true, message: 'Flux déjà présent' });
 
         const feed = await parser.parseURL(url);
-        const insertResult = await query('INSERT INTO feeds (url, title, is_active, created_at) VALUES (?, ?, 1, ?)', 
+        const insertResult = await query('INSERT INTO feeds (url, title, is_active, created_at) VALUES (?, ?, 1, ?)',
             [url, title || feed.title || 'Flux sans titre', new Date().toISOString()]);
         const info = extractInsertInfo(insertResult);
         if (!info.rowCount && !info.lastID) throw new Error('Failed to insert feed into database');
@@ -910,9 +964,9 @@ app.get('/api/geopolitical/relations', async (req, res, next) => {
         }
 
         const fallbackRelations = [
-            { country1: "USA", country2: "China", relation: "tense", score: -0.7, confidence: 0.82 },
-            { country1: "Russia", country2: "EU", relation: "conflict", score: -0.9, confidence: 0.91 },
-            { country1: "France", country2: "Germany", relation: "cooperative", score: 0.8, confidence: 0.87 }
+            { country1: "USA", country2: "China", relation: "tense", score: -0.7, confidence: 0.8 },
+            { country1: "France", country2: "Germany", relation: "cooperative", score: 0.8, confidence: 0.9 },
+            { country1: "Russia", country2: "Ukraine", relation: "conflict", score: -0.9, confidence: 0.95 }
         ];
 
         res.json({ success: true, relations: fallbackRelations });
@@ -921,321 +975,548 @@ app.get('/api/geopolitical/relations', async (req, res, next) => {
     }
 });
 
-// ----------------------- Correlations -----------------------
-app.get('/api/analysis/correlations/keyword-sentiment', async (req, res, next) => {
+
+
+app.get('/api/network/global', async (req, res) => {
     try {
-        const { keyword, limit = 100 } = req.query;
-        if (!keyword) return res.status(400).json({ success: false, error: 'Paramètre "keyword" requis' });
-
-        const result = await query(`
-            SELECT a.*, 
-                (SELECT json_group_array(DISTINCT t.name) 
-                 FROM theme_analyses ta 
-                 JOIN themes t ON ta.theme_id = t.id 
-                 WHERE ta.article_id = a.id) as themes_json
-            FROM articles a 
-            ORDER BY a.pub_date DESC 
-            LIMIT ?
-        `, [parseInt(limit)]);
-
-        const articles = (result.rows || []).map(row => ({
-            id: row.id,
-            title: row.title,
-            content: row.content,
-            summary: (row.content || '').substring(0, 500),
-            sentiment: { score: parseFloat(row.sentiment_score || 0), sentiment: row.sentiment_type || 'neutral' },
-            themes: row.themes_json ? JSON.parse(row.themes_json) : []
-        }));
-
-        const correlationResult = PearsonCorrelation.analyzeKeywordSentimentCorrelation(articles, keyword);
+        const network = Array.from(influenceEngine.relations.values());
+        const metrics = influenceEngine.getNetworkMetrics();
 
         res.json({
             success: true,
-            analysis: correlationResult,
-            metadata: { articlesAnalyzed: articles.length, keyword, timestamp: new Date().toISOString() }
+            network: network,
+            metrics: metrics,
+            timestamp: new Date().toISOString()
         });
     } catch (error) {
-        next(error);
+        console.error('❌ Network global error:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-app.get('/api/analysis/correlations/themes', async (req, res, next) => {
+app.get('/api/network/country/:country', async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 200;
+        const country = req.params.country.toLowerCase();
+        const relations = Array.from(influenceEngine.relations.values())
+            .filter(rel => rel.countries.includes(country));
 
-        const [articlesResult, themesResult] = await Promise.all([
-            query(`
-                SELECT a.*, 
-                    (SELECT json_group_array(DISTINCT t.name) 
-                     FROM theme_analyses ta 
-                     JOIN themes t ON ta.theme_id = t.id 
-                     WHERE ta.article_id = a.id) as themes_json
-                FROM articles a 
-                ORDER BY a.pub_date DESC 
-                LIMIT ?
-            `, [limit]),
-            query('SELECT * FROM themes ORDER BY name')
-        ]);
-
-        const articles = (articlesResult.rows || []).map(row => ({ 
-            id: row.id, 
-            title: row.title, 
-            themes: row.themes_json ? JSON.parse(row.themes_json) : [] 
-        }));
-        const themes = themesResult.rows || [];
-
-        const correlations = PearsonCorrelation.analyzeThemeCorrelations(articles, themes);
+        const influenceScore = influenceEngine.calculateInfluenceScore(country);
 
         res.json({
             success: true,
-            correlations,
-            metadata: {
-                articlesAnalyzed: articles.length,
-                themesCount: themes.length,
-                significantCorrelations: correlations.length,
-                timestamp: new Date().toISOString()
+            country: country,
+            relations: relations,
+            influenceScore: influenceScore,
+            relationCount: relations.length
+        });
+    } catch (error) {
+        console.error('❌ Network country error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 📍 AJOUTE CETTE ROUTE APRÈS les autres routes réseau dans server.js
+
+// Route de démonstration avec données de test
+app.get('/api/network/demo', async (req, res) => {
+    console.log('🌍 Chargement données démo réseau');
+
+    const demoData = {
+        success: true,
+        network: [
+            {
+                countries: ['france', 'germany'],
+                currentStrength: 0.85,
+                type: 'cooperative',
+                confidence: 0.92,
+                evidence: [
+                    {
+                        articleId: 1,
+                        excerpt: "Sommet franco-allemand historique à Paris",
+                        timestamp: new Date().toISOString()
+                    }
+                ],
+                evolution: [
+                    {
+                        timestamp: new Date(Date.now() - 86400000).toISOString(),
+                        strength: 0.8,
+                        source: "article_1"
+                    },
+                    {
+                        timestamp: new Date().toISOString(),
+                        strength: 0.85,
+                        source: "article_2"
+                    }
+                ],
+                lastUpdated: new Date().toISOString()
+            },
+            {
+                countries: ['france', 'russia'],
+                currentStrength: -0.65,
+                type: 'conflict',
+                confidence: 0.88,
+                evidence: [
+                    {
+                        articleId: 2,
+                        excerpt: "Tensions diplomatiques accrues entre Paris et Moscou",
+                        timestamp: new Date().toISOString()
+                    }
+                ],
+                evolution: [
+                    {
+                        timestamp: new Date(Date.now() - 172800000).toISOString(),
+                        strength: -0.5,
+                        source: "article_3"
+                    },
+                    {
+                        timestamp: new Date().toISOString(),
+                        strength: -0.65,
+                        source: "article_4"
+                    }
+                ],
+                lastUpdated: new Date().toISOString()
+            },
+            {
+                countries: ['usa', 'china'],
+                currentStrength: -0.45,
+                type: 'tense',
+                confidence: 0.78,
+                evidence: [
+                    {
+                        articleId: 3,
+                        excerpt: "Guerre commerciale USA-Chine s'intensifie",
+                        timestamp: new Date().toISOString()
+                    }
+                ],
+                evolution: [
+                    {
+                        timestamp: new Date(Date.now() - 259200000).toISOString(),
+                        strength: -0.3,
+                        source: "article_5"
+                    },
+                    {
+                        timestamp: new Date().toISOString(),
+                        strength: -0.45,
+                        source: "article_6"
+                    }
+                ],
+                lastUpdated: new Date().toISOString()
+            },
+            {
+                countries: ['germany', 'russia'],
+                currentStrength: -0.7,
+                type: 'conflict',
+                confidence: 0.85,
+                evidence: [
+                    {
+                        articleId: 4,
+                        excerpt: "Relations germano-russes au plus bas",
+                        timestamp: new Date().toISOString()
+                    }
+                ],
+                evolution: [
+                    {
+                        timestamp: new Date(Date.now() - 345600000).toISOString(),
+                        strength: -0.6,
+                        source: "article_7"
+                    },
+                    {
+                        timestamp: new Date().toISOString(),
+                        strength: -0.7,
+                        source: "article_8"
+                    }
+                ],
+                lastUpdated: new Date().toISOString()
+            },
+            {
+                countries: ['usa', 'germany'],
+                currentStrength: 0.6,
+                type: 'cooperative',
+                confidence: 0.8,
+                evidence: [
+                    {
+                        articleId: 5,
+                        excerpt: "Renforcement de l'alliance transatlantique",
+                        timestamp: new Date().toISOString()
+                    }
+                ],
+                evolution: [
+                    {
+                        timestamp: new Date(Date.now() - 432000000).toISOString(),
+                        strength: 0.55,
+                        source: "article_9"
+                    },
+                    {
+                        timestamp: new Date().toISOString(),
+                        strength: 0.6,
+                        source: "article_10"
+                    }
+                ],
+                lastUpdated: new Date().toISOString()
+            }
+        ],
+        metrics: {
+            totalCountries: 5,
+            totalRelations: 5,
+            avgStrength: 0.65,
+            cooperationRatio: 0.4,
+            lastAnalysis: new Date().toISOString()
+        }
+    };
+
+    res.json(demoData);
+});
+
+console.log('✅ Route démo réseau ajoutée');
+
+// 🔄 Intégration dans le flux existant des articles
+app.post('/api/articles/analyze-network', async (req, res) => {
+    try {
+        const { articleId } = req.body;
+
+        if (!articleId) {
+            return res.status(400).json({
+                success: false,
+                error: 'articleId requis'
+            });
+        }
+
+        // Récupérer l'article depuis la DB
+        const articleResult = await query('SELECT * FROM articles WHERE id = ?', [articleId]);
+        if (!articleResult.rows || articleResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Article non trouvé'
+            });
+        }
+
+        const article = articleResult.rows[0];
+        const relations = await influenceEngine.analyzeArticle(article);
+
+        res.json({
+            success: true,
+            relationsDetected: relations.length,
+            relations: relations,
+            article: {
+                id: article.id,
+                title: article.title,
+                countries: await influenceEngine.extractCountries(article)
             }
         });
     } catch (error) {
-        next(error);
+        console.error('❌ Analyze network error:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-app.get('/api/analysis/correlations/multiple-keywords', async (req, res, next) => {
+// 🔍 Analyse réseau pour tous les articles récents
+app.post('/api/network/analyze-recent', async (req, res) => {
     try {
-        const { keywords, limit = 100 } = req.query;
-        if (!keywords) return res.status(400).json({ success: false, error: 'Paramètre "keywords" requis (séparés par des virgules)' });
+        const limit = parseInt(req.body.limit) || 50;
 
-        const keywordList = keywords.split(',').map(k => k.trim()).filter(k => k);
+        const articlesResult = await query(
+            'SELECT * FROM articles ORDER BY pub_date DESC LIMIT ?',
+            [limit]
+        );
 
-        const result = await query(`
-            SELECT a.*, 
-                (SELECT json_group_array(DISTINCT t.name) 
-                 FROM theme_analyses ta 
-                 JOIN themes t ON ta.theme_id = t.id 
-                 WHERE ta.article_id = a.id) as themes_json
-            FROM articles a 
-            ORDER BY a.pub_date DESC 
-            LIMIT ?
-        `, [parseInt(limit)]);
+        if (!articlesResult.rows || articlesResult.rows.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Aucun article à analyser',
+                analyzed: 0
+            });
+        }
 
-        const articles = (result.rows || []).map(row => ({
-            id: row.id,
-            title: row.title,
-            content: row.content,
-            summary: (row.content || '').substring(0, 500),
-            sentiment: { score: parseFloat(row.sentiment_score || 0), sentiment: row.sentiment_type || 'neutral' },
-            themes: row.themes_json ? JSON.parse(row.themes_json) : []
-        }));
-
-        const correlations = PearsonCorrelation.analyzeMultipleKeywordsCorrelation(articles, keywordList);
-
-        res.json({
-            success: true,
-            correlations,
-            metadata: {
-                articlesAnalyzed: articles.length,
-                keywords: keywordList,
-                timestamp: new Date().toISOString()
-            }
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
-// ----------------------- Debug détaillé des routes -----------------------
-app.get('/api/debug/flask-routes', async (req, res) => {
-    try {
-        const flaskUrl = config.services?.flask?.url || 'http://localhost:5000';
-        const routesToTest = [
-            '/api/metrics',
-            '/api/geopolitical/report',
-            '/api/alerts',
-            '/api/sentiment/stats',
-            '/api/learning/stats'
-        ];
-
+        let totalRelations = 0;
         const results = [];
 
-        for (const route of routesToTest) {
+        for (const article of articlesResult.rows) {
             try {
-                const response = await axios.get(`${flaskUrl}${route}`, {
-                    timeout: 3000
-                });
+                const relations = await influenceEngine.analyzeArticle(article);
+                totalRelations += relations.length;
                 results.push({
-                    route,
-                    status: '✅ OK',
-                    statusCode: response.status,
-                    data: response.data?.success !== undefined ? response.data : 'response received'
+                    articleId: article.id,
+                    title: article.title,
+                    relations: relations.length
                 });
-            } catch (error) {
-                results.push({
-                    route,
-                    status: '❌ ERROR',
-                    error: error.message,
-                    code: error.code
-                });
+            } catch (articleError) {
+                console.warn(`⚠️ Erreur analyse article ${article.id}:`, articleError.message);
             }
         }
 
         res.json({
             success: true,
-            flaskUrl,
-            results
+            analyzed: articlesResult.rows.length,
+            totalRelations: totalRelations,
+            results: results,
+            metrics: influenceEngine.getNetworkMetrics()
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        console.error('❌ Analyze recent error:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ----------------------- Debug détaillé des réponses Flask -----------------------
-app.get('/api/debug/flask-responses', async (req, res) => {
-    try {
-        const flaskUrl = config.services?.flask?.url || 'http://localhost:5000';
-        const routesToTest = [
-            '/api/metrics',
-            '/api/geopolitical/report',
-            '/api/alerts',
-            '/api/sentiment/stats',
-            '/api/learning/stats',
-            '/api/geopolitical/crisis-zones',
-            '/api/geopolitical/relations'
-        ];
+// ========== INFLUENCE ENGINE INTÉGRÉ DIRECTEMENT ==========
 
-        const results = [];
+class InfluenceEngine {
+    constructor() {
+        this.relations = new Map();
+        this.countries = new Set();
+        console.log('✅ InfluenceEngine intégré avec succès');
+    }
 
-        for (const route of routesToTest) {
-            try {
-                const response = await axios.get(`${flaskUrl}${route}`, {
-                    timeout: 5000
+    async analyzeArticle(article) {
+        try {
+            const countries = await this.extractCountries(article);
+            const relations = this.detectBilateralRelations(countries, article);
+            this.updateNetwork(relations, article);
+            return relations;
+        } catch (error) {
+            console.error('Error analyzing article:', error);
+            return [];
+        }
+    }
+
+    async extractCountries(article) {
+        const text = (article.title || '') + ' ' + (article.content || '');
+        const countryList = ['france', 'usa', 'china', 'russia', 'germany', 'uk', 'japan', 'india', 'brazil', 'canada'];
+        const detected = [];
+
+        countryList.forEach(country => {
+            const regex = new RegExp(`\\b${country}\\b`, 'gi');
+            if (text.match(regex)) {
+                detected.push(country);
+            }
+        });
+
+        return detected;
+    }
+
+    detectBilateralRelations(countries, article) {
+        const relations = [];
+
+        for (let i = 0; i < countries.length; i++) {
+            for (let j = i + 1; j < countries.length; j++) {
+                const relation = this.analyzeCountryPair(countries[i], countries[j], article);
+                if (relation.strength !== 0) {
+                    relations.push(relation);
+                }
+            }
+        }
+
+        return relations;
+    }
+
+    analyzeCountryPair(countryA, countryB, article) {
+        const text = ((article.title || '') + ' ' + (article.content || '')).toLowerCase();
+
+        const positiveWords = ['accord', 'cooperation', 'partenariat', 'alliance', 'sommet', 'entente', 'dialogue'];
+        const negativeWords = ['conflit', 'tension', 'sanction', 'crise', 'hostilité', 'menace', 'protestation'];
+
+        let positiveCount = 0;
+        let negativeCount = 0;
+
+        positiveWords.forEach(word => {
+            const regex = new RegExp(`\\b${word}\\b`, 'gi');
+            const matches = text.match(regex);
+            if (matches) positiveCount += matches.length;
+        });
+
+        negativeWords.forEach(word => {
+            const regex = new RegExp(`\\b${word}\\b`, 'gi');
+            const matches = text.match(regex);
+            if (matches) negativeCount += matches.length;
+        });
+
+        const total = positiveCount + negativeCount;
+        let strength = 0;
+
+        if (total > 0) {
+            strength = (positiveCount - negativeCount) / total;
+            strength = Math.max(Math.min(strength, 1), -1);
+        }
+
+        let type = 'neutral';
+        if (strength > 0.3) type = 'cooperative';
+        else if (strength < -0.3) type = 'conflict';
+        else if (Math.abs(strength) > 0.1) type = 'tense';
+
+        return {
+            countries: [countryA, countryB],
+            strength: strength,
+            type: type,
+            confidence: Math.min((positiveCount + negativeCount) / 10, 0.9),
+            evidence: {
+                articleId: article.id,
+                excerpt: (article.title || '').substring(0, 50)
+            }
+        };
+    }
+
+    updateNetwork(newRelations, article) {
+        newRelations.forEach(relation => {
+            const key = relation.countries.sort().join('|');
+
+            if (!this.relations.has(key)) {
+                this.relations.set(key, {
+                    countries: relation.countries,
+                    currentStrength: relation.strength,
+                    type: relation.type,
+                    confidence: relation.confidence,
+                    evidence: [relation.evidence],
+                    evolution: [{
+                        timestamp: new Date(),
+                        strength: relation.strength
+                    }],
+                    lastUpdated: new Date()
                 });
-
-                // Analyse détaillée de la réponse
-                const hasSuccess = response.data && response.data.success !== undefined;
-                const successValue = hasSuccess ? response.data.success : 'MISSING';
-                const hasData = response.data && Object.keys(response.data).length > 0;
-
-                results.push({
-                    route,
-                    status: '✅ RESPONSE',
-                    statusCode: response.status,
-                    successField: successValue,
-                    hasSuccessField: hasSuccess,
-                    keys: Object.keys(response.data || {}),
-                    dataSample: JSON.stringify(response.data).substring(0, 200) + '...'
+            } else {
+                const existing = this.relations.get(key);
+                existing.currentStrength = (existing.currentStrength + relation.strength) / 2;
+                existing.evidence.push(relation.evidence);
+                existing.evolution.push({
+                    timestamp: new Date(),
+                    strength: existing.currentStrength
                 });
-            } catch (error) {
-                results.push({
-                    route,
-                    status: '❌ ERROR',
-                    error: error.message,
-                    code: error.code,
-                    response: error.response ? {
-                        status: error.response.status,
-                        data: error.response.data
-                    } : 'no response'
-                });
+                existing.lastUpdated = new Date();
             }
 
-            // Petit délai entre les requêtes
-            await new Promise(resolve => setTimeout(resolve, 100));
+            relation.countries.forEach(country => this.countries.add(country));
+        });
+    }
+
+    calculateInfluenceScore(country) {
+        const countryRelations = Array.from(this.relations.values())
+            .filter(rel => rel.countries.includes(country));
+
+        if (countryRelations.length === 0) return 0;
+
+        const totalStrength = countryRelations.reduce((sum, rel) => {
+            return sum + Math.abs(rel.currentStrength);
+        }, 0);
+
+        return totalStrength / countryRelations.length;
+    }
+
+    getNetworkMetrics() {
+        const relations = Array.from(this.relations.values());
+        const totalRelations = relations.length;
+
+        if (totalRelations === 0) {
+            return {
+                totalCountries: 0,
+                totalRelations: 0,
+                avgStrength: 0,
+                lastAnalysis: new Date()
+            };
         }
+
+        const avgStrength = relations.reduce((sum, rel) => sum + Math.abs(rel.currentStrength), 0) / totalRelations;
+
+        return {
+            totalCountries: this.countries.size,
+            totalRelations: totalRelations,
+            avgStrength: avgStrength,
+            lastAnalysis: new Date()
+        };
+    }
+}
+
+const influenceEngine = new InfluenceEngine();
+
+// ========== ROUTES RÉSEAU D'INFLUENCE ==========
+
+app.get('/api/network/global', async (req, res) => {
+    try {
+        const network = Array.from(influenceEngine.relations.values());
+        const metrics = influenceEngine.getNetworkMetrics();
 
         res.json({
             success: true,
-            flaskUrl,
-            totalTested: routesToTest.length,
-            results
+            network: network,
+            metrics: metrics,
+            timestamp: new Date().toISOString()
         });
-
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        console.error('❌ Network global error:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ----------------------- GESTIONNAIRE D'ERREURS -----------------------
-app.use((req, res, next) => {
+app.get('/api/network/country/:country', async (req, res) => {
+    try {
+        const country = req.params.country.toLowerCase();
+        const relations = Array.from(influenceEngine.relations.values())
+            .filter(rel => rel.countries.includes(country));
+
+        const influenceScore = influenceEngine.calculateInfluenceScore(country);
+
+        res.json({
+            success: true,
+            country: country,
+            relations: relations,
+            influenceScore: influenceScore,
+            relationCount: relations.length
+        });
+    } catch (error) {
+        console.error('❌ Network country error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+console.log('✅ Routes réseau d\'influence intégrées');
+
+// ----------------------- Error Handler -----------------------
+app.use((error, req, res, next) => {
+    console.error('❌ Server Error:', error);
+    res.status(500).json({
+        success: false,
+        error: error.message || 'Internal server error',
+        code: error.code || 'SERVER_ERROR'
+    });
+});
+
+app.use((req, res) => {
     res.status(404).json({
         success: false,
-        error: 'Route non trouvée',
-        path: req.path,
-        method: req.method
+        error: 'Route not found',
+        path: req.path
     });
 });
 
-app.use((error, req, res, next) => {
-    console.error('💥 Erreur serveur:', error);
+// ----------------------- Server Start -----------------------
+const PORT = process.env.PORT || 3000;
 
-    // Erreur de base de données
-    if (error.code?.startsWith('SQLITE_') || error.code?.startsWith('ECONN')) {
-        return res.status(503).json({
-            success: false,
-            error: 'Service de base de données temporairement indisponible',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+async function startServer() {
+    try {
+        console.log('🚀 Starting Geopolis Server...');
+
+        // Vérifier Flask
+        if (config.services?.flask?.enabled) {
+            await checkFlaskHealth();
+        }
+
+        // Attendre que la DB soit prête
+        while (!isDatabaseReady) {
+            console.log('⏳ Waiting for database...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        app.listen(PORT, () => {
+            console.log(`✅ Geopolis Server running on port ${PORT}`);
+            console.log(`📊 Dashboard: http://localhost:${PORT}`);
+            console.log(`🔍 API Health: http://localhost:${PORT}/api/health/node`);
+            console.log(`🌡️ Flask Health: http://localhost:${PORT}/api/health`);
+            console.log(`⚙️ Mode: ${config.isLocal ? 'local' : 'cloud'}`);
+            console.log(`🗄️ Database: ${config.database?.use || 'unknown'}`);
+            console.log(`🤖 Flask: ${config.services?.flask?.enabled ? 'enabled' : 'disabled'}`);
         });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
     }
+}
 
-    // Erreur de timeout
-    if (error.code === 'ECONNABORTED' || error.name === 'TimeoutError') {
-        return res.status(504).json({
-            success: false,
-            error: 'Timeout de la requête',
-            details: 'Le service a mis trop de temps à répondre'
-        });
-    }
-
-    // Erreur de validation
-    if (error.name === 'ValidationError' || error.status === 400) {
-        return res.status(400).json({
-            success: false,
-            error: 'Données invalides',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-
-    // Erreur générique
-    res.status(error.status || 500).json({
-        success: false,
-        error: 'Erreur interne du serveur',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-});
-
-// ----------------------- DÉMARRAGE SERVEUR -----------------------
-const PORT = config.port || 3000;
-
-// app.listen 
-const server = app.listen(PORT, () => {
-    console.log('\n' + '='.repeat(70));
-    console.log('✅ SERVEUR NODE.JS DÉMARRÉ AVEC SUCCÈS');
-    console.log('='.repeat(70));
-    console.log(`🌐 URL: http://localhost:${PORT}`);
-    console.log(`📊 Health: http://localhost:${PORT}/api/health`);
-    console.log(`🗄️ Database: ${String(config.database?.use || 'unknown').toUpperCase()}`);
-    console.log(`📡 Prêt à recevoir les requêtes!`);
-    console.log('='.repeat(70) + '\n');
-
-    // ✅ APPELER Flask APRÈS le démarrage complet
-    setTimeout(() => {
-        checkFlaskHealth().catch(() => { /* ignore */ });
-    }, 5000); // ← Délai de 2 secondes après le démarrage
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('🛑 Arrêt du serveur...');
-    server.close(() => {
-        console.log('✅ Serveur arrêté proprement');
-        process.exit(0);
-    });
-});
-
-module.exports = app;
+startServer();
