@@ -1,236 +1,291 @@
+// modules/anomaly_detector.js - VERSION COMPLÉTÉE
+
 class AnomalyDetector {
     constructor() {
-        this.history = new Map(); // Stocke l'historique des métriques par type
-        this.anomalies = [];
         this.config = {
-            zScoreThreshold: 2.5, // Seuil d'alerte
-            minDataPoints: 10,    // Minimum de points pour calcul fiable
-            historySize: 100,     // Taille max de l'historique
-            alertCooldown: 300000 // 5 minutes entre alertes similaires
+            zScoreThreshold: 2.5,
+            minDataPoints: 10,
+            historySize: 1000
         };
+
+        this.history = {
+            volume: [],
+            sentiment: [],
+            relations: []
+        };
+
+        this.anomalies = [];
         console.log('✅ AnomalyDetector initialisé');
     }
 
-    /**
-     * Calcule le Z-score pour une nouvelle valeur
-     * Zi = (Xi - μ) / σ
-     */
-    calculateZScore(newValue, values) {
-        if (values.length < this.config.minDataPoints) {
-            return 0; // Pas assez de données
-        }
+    analyzeArticleVolume(articles) {
+        try {
+            if (!articles || articles.length === 0) return [];
 
-        const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-        const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
-        const stdDev = Math.sqrt(variance);
+            const hourlyCounts = this.groupArticlesByHour(articles);
+            const volumes = Object.values(hourlyCounts);
 
-        if (stdDev === 0) return 0; // Évite division par zéro
+            if (volumes.length < this.config.minDataPoints) return [];
 
-        return (newValue - mean) / stdDev;
-    }
-
-    /**
-     * Détecte les anomalies pour une métrique
-     */
-    detectAnomaly(metricType, newValue, metadata = {}) {
-        if (!this.history.has(metricType)) {
-            this.history.set(metricType, []);
-        }
-
-        const history = this.history.get(metricType);
-        const zScore = this.calculateZScore(newValue, history);
-
-        // Ajoute la nouvelle valeur à l'historique
-        history.push(newValue);
-        
-        // Garde seulement les N dernières valeurs
-        if (history.length > this.config.historySize) {
-            history.shift();
-        }
-
-        // Vérifie si c'est une anomalie
-        const isAnomaly = Math.abs(zScore) > this.config.zScoreThreshold;
-        
-        if (isAnomaly) {
-            const anomaly = {
-                id: this.generateId(),
-                metricType,
-                value: newValue,
-                zScore: Math.abs(zScore),
-                direction: zScore > 0 ? 'high' : 'low',
-                timestamp: new Date(),
-                metadata
-            };
-
-            // Vérifie le cooldown pour éviter les doublons
-            if (!this.isDuplicateAnomaly(anomaly)) {
-                this.anomalies.unshift(anomaly);
-                console.log(`🚨 ANOMALIE DÉTECTÉE: ${metricType} - Z-score: ${zScore.toFixed(2)}`);
-                return anomaly;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Évite les alertes en double récentes
-     */
-    isDuplicateAnomaly(newAnomaly) {
-        const recent = Date.now() - this.config.alertCooldown;
-        return this.anomalies.some(anomaly => 
-            anomaly.metricType === newAnomaly.metricType &&
-            anomaly.direction === newAnomaly.direction &&
-            new Date(anomaly.timestamp).getTime() > recent
-        );
-    }
-
-    /**
-     * Détecte les anomalies dans les relations géopolitiques
-     */
-    analyzeRelations(relations) {
-        const anomalies = [];
-
-        relations.forEach(relation => {
-            // Anomalie de force de relation
-            const strengthAnomaly = this.detectAnomaly(
-                `relation_strength_${relation.countries.join('_')}`,
-                relation.currentStrength,
-                {
-                    countries: relation.countries,
-                    type: relation.type,
-                    confidence: relation.confidence
-                }
+            const mean = volumes.reduce((sum, vol) => sum + vol, 0) / volumes.length;
+            const stdDev = Math.sqrt(
+                volumes.reduce((sum, vol) => sum + Math.pow(vol - mean, 2), 0) / volumes.length
             );
 
-            if (strengthAnomaly) {
-                anomalies.push(strengthAnomaly);
-            }
+            const anomalies = [];
 
-            // Anomalie de confiance
-            const confidenceAnomaly = this.detectAnomaly(
-                `relation_confidence_${relation.countries.join('_')}`,
-                relation.confidence,
-                {
-                    countries: relation.countries,
-                    strength: relation.currentStrength
+            Object.entries(hourlyCounts).forEach(([hour, count]) => {
+                const zScore = stdDev > 0 ? Math.abs((count - mean) / stdDev) : 0;
+
+                if (zScore > this.config.zScoreThreshold) {
+                    anomalies.push({
+                        type: 'volume_spike',
+                        hour: hour,
+                        count: count,
+                        zScore: zScore,
+                        threshold: this.config.zScoreThreshold,
+                        timestamp: new Date().toISOString()
+                    });
                 }
-            );
+            });
 
-            if (confidenceAnomaly) {
-                anomalies.push(confidenceAnomaly);
+            // Mettre à jour l'historique
+            this.history.volume.push({
+                timestamp: new Date().toISOString(),
+                totalArticles: articles.length,
+                anomalies: anomalies.length
+            });
+
+            // Garder seulement les derniers éléments
+            if (this.history.volume.length > this.config.historySize) {
+                this.history.volume = this.history.volume.slice(-this.config.historySize);
             }
-        });
 
-        return anomalies;
+            return anomalies;
+
+        } catch (error) {
+            console.error('❌ Erreur analyse volume:', error);
+            return [];
+        }
     }
 
-    /**
-     * Détecte les anomalies dans le volume d'articles
-     */
-    analyzeArticleVolume(articles, timeWindow = 'hourly') {
-        const volume = articles.length;
-        const anomaly = this.detectAnomaly(
-            `article_volume_${timeWindow}`,
-            volume,
-            { timeWindow, articlesCount: volume }
-        );
-
-        return anomaly ? [anomaly] : [];
-    }
-
-    /**
-     * Détecte les anomalies de sentiment
-     */
     analyzeSentimentAnomalies(articles) {
-        const sentiments = articles.map(article => article.sentiment?.score || 0);
-        const avgSentiment = sentiments.reduce((sum, score) => sum + score, 0) / sentiments.length;
+        try {
+            if (!articles || articles.length === 0) return [];
 
-        const anomaly = this.detectAnomaly(
-            'average_sentiment',
-            avgSentiment,
-            { 
-                articlesAnalyzed: articles.length,
-                sentimentRange: `${Math.min(...sentiments)} to ${Math.max(...sentiments)}`
+            const sentiments = articles
+                .map(a => a.sentiment_score || 0)
+                .filter(score => score !== null && score !== undefined);
+
+            if (sentiments.length < this.config.minDataPoints) return [];
+
+            const mean = sentiments.reduce((sum, score) => sum + score, 0) / sentiments.length;
+            const stdDev = Math.sqrt(
+                sentiments.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / sentiments.length
+            );
+
+            const anomalies = [];
+
+            articles.forEach(article => {
+                const score = article.sentiment_score || 0;
+                const zScore = stdDev > 0 ? Math.abs((score - mean) / stdDev) : 0;
+
+                if (zScore > this.config.zScoreThreshold) {
+                    anomalies.push({
+                        type: 'sentiment_extreme',
+                        articleId: article.id,
+                        title: article.title?.substring(0, 50) || 'Sans titre',
+                        sentiment: score,
+                        zScore: zScore,
+                        threshold: this.config.zScoreThreshold,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+
+            // Mettre à jour l'historique
+            this.history.sentiment.push({
+                timestamp: new Date().toISOString(),
+                avgSentiment: mean,
+                anomalies: anomalies.length
+            });
+
+            if (this.history.sentiment.length > this.config.historySize) {
+                this.history.sentiment = this.history.sentiment.slice(-this.config.historySize);
             }
-        );
 
-        return anomaly ? [anomaly] : [];
+            return anomalies;
+
+        } catch (error) {
+            console.error('❌ Erreur analyse sentiment:', error);
+            return [];
+        }
     }
 
-    /**
-     * Analyse complète du système
-     */
+    // MÉTHODES MANQUANTES AJOUTÉES
+    analyzeRelations(relations) {
+        try {
+            if (!relations || relations.length === 0) return [];
+
+            const strengths = relations.map(r => r.strength || 0);
+            const mean = strengths.reduce((sum, s) => sum + s, 0) / strengths.length;
+            const stdDev = Math.sqrt(
+                strengths.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / strengths.length
+            );
+
+            const anomalies = [];
+
+            relations.forEach(relation => {
+                const strength = relation.strength || 0;
+                const zScore = stdDev > 0 ? Math.abs((strength - mean) / stdDev) : 0;
+
+                if (zScore > this.config.zScoreThreshold) {
+                    anomalies.push({
+                        type: 'relation_extreme',
+                        countries: relation.countries,
+                        strength: strength,
+                        zScore: zScore,
+                        threshold: this.config.zScoreThreshold,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+
+            // Mettre à jour l'historique
+            this.history.relations.push({
+                timestamp: new Date().toISOString(),
+                avgStrength: mean,
+                anomalies: anomalies.length
+            });
+
+            if (this.history.relations.length > this.config.historySize) {
+                this.history.relations = this.history.relations.slice(-this.config.historySize);
+            }
+
+            return anomalies;
+
+        } catch (error) {
+            console.error('❌ Erreur analyse relations:', error);
+            return [];
+        }
+    }
+
     async comprehensiveAnalysis() {
         try {
-            const analysis = {
-                timestamp: new Date(),
-                anomalies: [],
-                metrics: {
-                    totalAnomalies: this.anomalies.length,
-                    activeAlerts: this.getRecentAnomalies(24).length,
-                    detectionRate: this.calculateDetectionRate()
+            const comprehensiveAnomalies = [];
+
+            // Analyser les tendances combinées
+            const recentVolumeAnomalies = this.history.volume
+                .slice(-24)
+                .filter(item => item.anomalies > 0)
+                .length;
+
+            const recentSentimentAnomalies = this.history.sentiment
+                .slice(-24)
+                .filter(item => item.anomalies > 0)
+                .length;
+
+            // Détecter les patterns complexes
+            if (recentVolumeAnomalies > 5 && recentSentimentAnomalies > 3) {
+                comprehensiveAnomalies.push({
+                    type: 'complex_pattern',
+                    description: 'Pics de volume et sentiment détectés simultanément',
+                    volumeAnomalies: recentVolumeAnomalies,
+                    sentimentAnomalies: recentSentimentAnomalies,
+                    severity: 'high',
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Vérifier les tendances temporelles
+            if (this.history.volume.length >= 10) {
+                const recentVolumes = this.history.volume.slice(-10).map(v => v.totalArticles);
+                const trend = this.calculateTrend(recentVolumes);
+
+                if (Math.abs(trend) > 0.5) {
+                    comprehensiveAnomalies.push({
+                        type: 'volume_trend',
+                        description: trend > 0 ? 'Augmentation significative du volume' : 'Diminution significative du volume',
+                        trend: trend,
+                        severity: 'medium',
+                        timestamp: new Date().toISOString()
+                    });
                 }
-            };
+            }
 
-            // Ici on intégrera les appels aux données réelles
-            // Pour l'instant, retourne les anomalies récentes
-            analysis.anomalies = this.getRecentAnomalies(24);
+            return comprehensiveAnomalies;
 
-            return analysis;
         } catch (error) {
-            console.error('❌ Erreur analyse anomalies:', error);
-            return { timestamp: new Date(), anomalies: [], metrics: {} };
+            console.error('❌ Erreur analyse complète:', error);
+            return [];
         }
     }
 
-    /**
-     * Récupère les anomalies récentes
-     */
     getRecentAnomalies(hours = 24) {
-        const cutoff = new Date(Date.now() - (hours * 60 * 60 * 1000));
-        return this.anomalies.filter(anomaly => 
-            new Date(anomaly.timestamp) > cutoff
+        const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+        return this.anomalies.filter(anomaly =>
+            new Date(anomaly.timestamp) > cutoffTime
         );
     }
 
-    /**
-     * Calcule le taux de détection
-     */
-    calculateDetectionRate() {
-        const totalChecks = Array.from(this.history.values())
-            .reduce((sum, history) => sum + history.length, 0);
-        const anomalyRate = this.anomalies.length / Math.max(totalChecks, 1);
-        return Math.min(anomalyRate * 100, 100); // Pourcentage
-    }
-
-    /**
-     * Réinitialise l'historique
-     */
     resetHistory(metricType = null) {
         if (metricType) {
-            this.history.delete(metricType);
+            this.history[metricType] = [];
         } else {
-            this.history.clear();
+            this.history = {
+                volume: [],
+                sentiment: [],
+                relations: []
+            };
         }
-        console.log('🔄 Historique anomalies réinitialisé');
+        console.log('✅ Historique anomalies réinitialisé');
     }
 
-    generateId() {
-        return `anom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    }
-
-    /**
-     * Statistiques du détecteur
-     */
     getStats() {
+        const totalAnomalies = this.anomalies.length;
+        const recentAnomalies = this.getRecentAnomalies(24).length;
+
         return {
-            totalAnomalies: this.anomalies.length,
-            activeAlerts: this.getRecentAnomalies(24).length,
-            monitoredMetrics: this.history.size,
-            detectionRate: this.calculateDetectionRate(),
+            totalAnomalies: totalAnomalies,
+            recentAnomalies: recentAnomalies,
+            historySizes: {
+                volume: this.history.volume.length,
+                sentiment: this.history.sentiment.length,
+                relations: this.history.relations.length
+            },
             config: this.config
         };
+    }
+
+    // Méthodes utilitaires
+    groupArticlesByHour(articles) {
+        const hourlyCounts = {};
+
+        articles.forEach(article => {
+            const date = new Date(article.pubDate || Date.now());
+            const hourKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:00`;
+
+            hourlyCounts[hourKey] = (hourlyCounts[hourKey] || 0) + 1;
+        });
+
+        return hourlyCounts;
+    }
+
+    calculateTrend(data) {
+        if (data.length < 2) return 0;
+
+        const n = data.length;
+        const x = Array.from({ length: n }, (_, i) => i);
+        const y = data;
+
+        const sumX = x.reduce((a, b) => a + b, 0);
+        const sumY = y.reduce((a, b) => a + b, 0);
+        const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
+        const sumXX = x.reduce((a, b) => a + b * b, 0);
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        return slope;
     }
 }
 

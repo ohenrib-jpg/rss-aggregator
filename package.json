@@ -5,13 +5,20 @@
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "cross-env NODE_ENV=development nodemon server.js"
+    "dev": "concurrently \"npm run dev:flask\" \"npm run dev:node\"",
+    "dev:node": "cross-env NODE_ENV=development nodemon server.js",
+    "start": "concurrently \"npm run start:flask\" \"npm run start:node\"",
+    "dev:flask": "python app.py",
+    "start:flask": "python app.py", 
+    "start:node": "node server.js",
     "local": "cross-env NODE_ENV=development node server.js",
     "prod": "NODE_ENV=production node server.js",
+    "flask": "python app.py",
+    "node": "nodemon server.js",
     "test": "node test/health-check.js",
     "setup-local": "node scripts/setup-local.js",
     "install-deps": "npm install",
+    "install-all": "npm install && pip install -r requirements.txt",
     "setup-llama": "powershell -File setup-llama.ps1",
     "launch-all": "start-geopol.bat"
   },
@@ -25,10 +32,13 @@
   "author": "Olivier H. B.",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
+    "axios": "^1.12.2",
     "body-parser": "^1.20.2",
+    "concurrently": "^8.2.2",
     "cors": "^2.8.5",
+    "d3": "^7.9.0",
     "express": "^4.18.2",
+    "feedme": "^2.0.2",
     "nodemailer": "^6.9.7",
     "pg": "^8.11.3",
     "rss-parser": "^3.13.0"
