@@ -2,8 +2,18 @@
 
 Système complet d'analyse de flux RSS avec intégration IA pour la correction des scores de sentiment et génération de rapports.
 
-## 🚀 Fonctionnalités
+docs: 📚 Mise à jour du README avec correctifs thèmes
 
+- Ajout section problèmes résolus
+- Guide de dépannage pour la base de données
+- Documentation des correctifs appliqués
+- Instructions pour éviter les pièges courants
+
+## 🚀 Fonctionnalités
+- ✅ **Gestion robuste des thèmes** avec création/suppression
+- ✅ **Système de détection automatique** des thèmes dans les articles
+- ✅ **Base de données auto-réparable** en cas de corruption
+- 
 ### Analyse de Base
 - 📊 Agrégation de flux RSS multiples + Parsser reseaux sociaux
 - 🎨 Thèmes personnalisables avec couleurs
@@ -42,7 +52,14 @@ Et repo toujours public : ohenri-jpg
 
 MAJ 28/10
 ===========
+## 🛠️ Problèmes Résolus
 
+### Correction du Système de Thèmes
+- **Problème** : Les thèmes avaient des IDs NULL empêchant la suppression
+- **Solution** : Reconstruction complète de la base de données avec schéma corrigé
+- **Fichiers clés** : `db/schema_sqlite.sql`, `db/rebuild-database.js`
+
+|===========>
 
 ## 🎯 Gestion des Thèmes - IMPORTANT
 
