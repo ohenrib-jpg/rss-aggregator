@@ -38,3 +38,24 @@ npm install
 - Frontend adjusted to use `confidence` and display `bayesian_posterior`
 - Tests added in `Scripts/`
 Et repo toujours public : ohenri-jpg
+
+
+MAJ 28/10
+===========
+
+
+## 🎯 Gestion des Thèmes - IMPORTANT
+
+### Problème Résolu :
+- Les thèmes avaient des IDs NULL empêchant la suppression
+- Structure de table corrompue dans SQLite
+
+### Solution Implémentée :
+- Schéma SQLite corrigé avec `INTEGER PRIMARY KEY AUTOINCREMENT`
+- Script de reconstruction de base de données
+- Routes API robustes pour la gestion des thèmes
+
+### Si vous rencontrez des problèmes :
+```bash
+cd db
+node rebuild-database.js
