@@ -37,7 +37,4 @@ npm install
 - Bayesian fusion and improved confidence calculation
 - Frontend adjusted to use `confidence` and display `bayesian_posterior`
 - Tests added in `Scripts/`
-
--MAJ27/10 => Base Sql reparee et renforcee (api/analyze)
-
 Et repo toujours public : ohenri-jpg

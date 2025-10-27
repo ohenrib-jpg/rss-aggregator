@@ -114,6 +114,30 @@ app.use((req, res, next) => {
     next();
 });
 
+//=================================================================
+//   ATTENDRE LE DEM DE FLASK
+//=================================================================
+
+async function waitForFlask(maxAttempts = 10) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        console.log(`🔍 Tentative ${attempt}/${maxAttempts} de connexion à Flask...`);
+
+        const isHealthy = await checkFlaskHealth();
+        if (isHealthy) {
+            console.log('✅ Flask est prêt !');
+            return true;
+        }
+
+        if (attempt < maxAttempts) {
+            console.log(`⏳ Attente 3s avant prochaine tentative...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+    }
+
+    console.log('❌ Flask non disponible après plusieurs tentatives');
+    return false;
+}
+
 // =====================================================================
 // DATABASE INITIALIZATION
 // =====================================================================
@@ -547,6 +571,206 @@ class InfluenceEngine {
 const influenceEngine = new InfluenceEngine();
 
 // =====================================================================
+// ROUTES NODE.JS (PRIORITAIRES - même si Flask est enabled)
+// =====================================================================
+
+// === ROUTE GET /themes - VERSION CORRIGÉE ===
+app.get('/api/themes', async (req, res, next) => {
+    try {
+        console.log('🎯 GET /themes - Récupération depuis la base');
+
+        // REQUÊTE CORRECTE qui retourne TOUJOURS les IDs
+        const result = await query('SELECT id, name, keywords, color, description, created_at FROM themes ORDER BY name');
+
+        if (!result.rows) {
+            throw new Error('Erreur de requête database');
+        }
+
+        // LOG CRITIQUE pour vérifier les IDs
+        console.log(`📋 ${result.rows.length} thèmes trouvés dans la base:`);
+        result.rows.forEach(theme => {
+            console.log(`   - ID: ${theme.id}, Nom: ${theme.name}`);
+        });
+
+        // SI les IDs sont null, c'est un problème de structure de table
+        const themesWithNullIds = result.rows.filter(theme => !theme.id);
+        if (themesWithNullIds.length > 0) {
+            console.error('🚨 CRITIQUE: Thèmes sans ID dans la base!');
+            console.error('   Problème de structure de table themes');
+        }
+
+        res.json({
+            success: true,
+            themes: result.rows,
+            debug: {
+                total: result.rows.length,
+                hasIds: result.rows.every(t => t.id),
+                sample: result.rows.length > 0 ? result.rows[0] : null
+            }
+        });
+    } catch (error) {
+        console.error('❌ Erreur GET /themes:', error);
+        next(error);
+    }
+});
+
+// === ROUTE DIAGNOSTIC - AJOUTEZ-LA ===
+app.get('/api/debug/themes-structure', async (req, res) => {
+    try {
+        console.log('🔍 Diagnostic structure table themes');
+
+        // 1. Structure de la table
+        const structure = await query('PRAGMA table_info(themes)');
+
+        // 2. Données brutes
+        const rawData = await query('SELECT rowid, * FROM themes LIMIT 3');
+
+        // 3. Vérification AUTOINCREMENT
+        const sequenceCheck = await query('SELECT * FROM sqlite_sequence WHERE name="themes"');
+
+        res.json({
+            success: true,
+            structure: structure.rows,
+            rawData: rawData.rows,
+            sequence: sequenceCheck.rows,
+            diagnostics: {
+                hasIdColumn: structure.rows.some(col => col.name === 'id'),
+                idIsPrimary: structure.rows.some(col => col.name === 'id' && col.pk > 0),
+                hasAutoincrement: structure.rows.some(col => col.name === 'id' && col.pk > 0)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/alerts/triggered', async (req, res, next) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        console.log('📈 Alertes déclenchées, limit:', limit);
+        res.json({
+            success: true,
+            alerts: [],
+            stats: {
+                total_triggered: 0,
+                today_triggered: 0,
+                high_priority: 0
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.post('/api/themes', async (req, res, next) => {
+    try {
+        const { name, keywords, color, description } = req.body || {};
+        if (!name || !keywords || (Array.isArray(keywords) && keywords.length === 0)) {
+            throw new Error('Nom et mots-clés requis');
+        }
+        const keywordsJson = JSON.stringify(keywords);
+        const insertResult = await query('INSERT INTO themes (name, keywords, color, description) VALUES (?, ?, ?, ?)',
+            [name, keywordsJson, color || '#6366f1', description || '']);
+        const info = extractInsertInfo(insertResult);
+        if (!info.rowCount && !info.lastID) throw new Error('Failed to create theme in database');
+        console.log('✅ Thème créé:', name);
+        res.json({ success: true, message: 'Thème créé avec succès' });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.put('/api/themes/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { name, keywords, color, description } = req.body || {};
+
+        if (!name || !keywords) {
+            throw new Error('Nom et mots-clés requis');
+        }
+
+        const keywordsJson = JSON.stringify(keywords);
+        await query(
+            'UPDATE themes SET name = ?, keywords = ?, color = ?, description = ? WHERE id = ?',
+            [name, keywordsJson, color || '#6366f1', description || '', id]
+        );
+
+        console.log('✅ Thème modifié:', id, name);
+        res.json({ success: true, message: 'Thème modifié avec succès' });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.put('/api/themes/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { name, keywords, color, description } = req.body || {};
+
+        console.log(`✏️ Modification thème ${id}:`, { name, keywords });
+
+        if (!name || !keywords) {
+            throw new Error('Nom et mots-clés requis');
+        }
+
+        const keywordsJson = JSON.stringify(keywords);
+        const result = await query(
+            'UPDATE themes SET name = ?, keywords = ?, color = ?, description = ? WHERE id = ?',
+            [name, keywordsJson, color || '#6366f1', description || '', id]
+        );
+
+        console.log('✅ Thème modifié:', id, name);
+        res.json({ success: true, message: 'Thème modifié avec succès' });
+    } catch (error) {
+        console.error('❌ Erreur modification thème:', error);
+        next(error);
+    }
+});
+
+app.delete('/api/themes/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        console.log(`🗑️ Suppression thème ${id} demandée`);
+
+        // CORRECTION: Vérification plus souple
+        if (!id || id === 'undefined' || id === 'null') {
+            return res.status(400).json({
+                success: false,
+                error: 'ID de thème invalide'
+            });
+        }
+
+        // CORRECTION: Vérifier d'abord si le thème existe
+        const themeCheck = await query('SELECT id FROM themes WHERE id = ?', [id]);
+        if (!themeCheck.rows || themeCheck.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Thème non trouvé'
+            });
+        }
+
+        // Supprimer d'abord les analyses de thèmes liées
+        await query('DELETE FROM theme_analyses WHERE theme_id = ?', [id]);
+
+        // Puis supprimer le thème
+        const result = await query('DELETE FROM themes WHERE id = ?', [id]);
+
+        console.log(`✅ Thème ${id} supprimé, lignes affectées:`, result.rowCount || result.changes);
+        res.json({
+            success: true,
+            message: 'Thème supprimé',
+            deletedId: id
+        });
+    } catch (error) {
+        console.error('❌ Erreur suppression thème:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erreur serveur lors de la suppression'
+        });
+    }
+});
+
+// =====================================================================
 // FLASK PROXY ROUTES (FACTORISÉ)
 // =====================================================================
 
@@ -591,6 +815,8 @@ const flaskRoutes = [
     { method: "post", path: "/api/email/start-scheduler" },
     { method: "post", path: "/api/email/send-test-report" },
     { method: "get", path: "/api/alerts/:id" },
+    { method: "get", path: "/api/alerts/triggered" },
+    { method: "get", path: "/api/analysis/correlations/themes" }
 ];
 
 flaskRoutes.forEach(({ method, path }) => proxyFlaskRoute(method, path));
@@ -865,6 +1091,131 @@ app.delete('/api/alerts/:id', async (req, res, next) => {
     }
 });
 
+// ROUTE DE RÉPARATION DÉFINITIVE DES TABLES DEBUG
+app.post('/api/debug/recreate-themes-table', async (req, res) => {
+    try {
+        console.log('🏗️  RECRÉATION COMPLÈTE de la table themes...');
+
+        // Étape 1: Sauvegarder les données actuelles (si elles existent)
+        let existingThemes = [];
+        try {
+            const backup = await query('SELECT name, keywords, color, description, created_at FROM themes ORDER BY rowid');
+            existingThemes = backup.rows || [];
+            console.log(`📦 ${existingThemes.length} thèmes à sauvegarder`);
+        } catch (e) {
+            console.log('ℹ️  Aucune donnée à sauvegarder ou table corrompue');
+        }
+
+        // Étape 2: Supprimer la table corrompue
+        console.log('🗑️  Suppression de l\'ancienne table...');
+        try {
+            await query('DROP TABLE IF EXISTS themes');
+        } catch (e) {
+            console.log('⚠️  Impossible de supprimer la table:', e.message);
+        }
+
+        // Étape 3: Créer une nouvelle table avec la structure CORRECTE
+        console.log('🔄 Création de la nouvelle table...');
+        await query(`
+            CREATE TABLE themes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                keywords TEXT NOT NULL,
+                color TEXT DEFAULT '#6366f1',
+                description TEXT DEFAULT '',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        console.log('✅ Nouvelle table créée avec structure:');
+        console.log('   - id INTEGER PRIMARY KEY AUTOINCREMENT');
+        console.log('   - name TEXT NOT NULL UNIQUE');
+        console.log('   - keywords TEXT NOT NULL');
+        console.log('   - color TEXT DEFAULT #6366f1');
+        console.log('   - description TEXT DEFAULT ""');
+        console.log('   - created_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+
+        // Étape 4: Réinsérer les données sauvegardées
+        if (existingThemes.length > 0) {
+            console.log('📥 Réinsertion des données sauvegardées...');
+            for (const theme of existingThemes) {
+                try {
+                    await query(
+                        'INSERT INTO themes (name, keywords, color, description, created_at) VALUES (?, ?, ?, ?, ?)',
+                        [theme.name, theme.keywords, theme.color, theme.description, theme.created_at]
+                    );
+                    console.log(`   ✅ "${theme.name}" réinséré`);
+                } catch (e) {
+                    console.log(`   ⚠️  Erreur avec "${theme.name}":`, e.message);
+                }
+            }
+        } else {
+            // Étape 5: Insérer des thèmes par défaut si table vide
+            console.log('📝 Insertion des thèmes par défaut...');
+            const defaultThemes = [
+                {
+                    name: 'Politique',
+                    keywords: JSON.stringify(['président', 'gouvernement', 'élection', 'politique', 'ministre']),
+                    color: '#3b82f6',
+                    description: 'Actualités politiques nationales et internationales'
+                },
+                {
+                    name: 'Économie',
+                    keywords: JSON.stringify(['économie', 'inflation', 'croissance', 'marché', 'entreprise']),
+                    color: '#10b981',
+                    description: 'Actualités économiques et financières'
+                },
+                {
+                    name: 'International',
+                    keywords: JSON.stringify(['international', 'monde', 'europe', 'usa', 'chine', 'relations']),
+                    color: '#f59e0b',
+                    description: 'Actualités internationales et relations diplomatiques'
+                },
+                {
+                    name: 'Conflits',
+                    keywords: JSON.stringify(['guerre', 'conflit', 'ukraine', 'gaza', 'paix', 'négociation']),
+                    color: '#ef4444',
+                    description: 'Zones de conflits et crises internationales'
+                }
+            ];
+
+            for (const theme of defaultThemes) {
+                await query(
+                    'INSERT INTO themes (name, keywords, color, description) VALUES (?, ?, ?, ?)',
+                    [theme.name, theme.kewords, theme.color, theme.description]
+                );
+                console.log(`   ✅ "${theme.name}" créé`);
+            }
+        }
+
+        // Étape 6: Vérification finale
+        const finalCheck = await query('SELECT id, name FROM themes ORDER BY id');
+        console.log('🎉 RÉPARATION TERMINÉE:');
+        finalCheck.rows.forEach(theme => {
+            console.log(`   - id: ${theme.id}, name: ${theme.name}`);
+        });
+
+        res.json({
+            success: true,
+            message: `Table themes RECRÉÉE avec succès! ${finalCheck.rows.length} thèmes disponibles.`,
+            themes: finalCheck.rows,
+            nextSteps: [
+                '1. Redémarrez le serveur Node.js',
+                '2. Testez la création/suppression de thèmes',
+                '3. Les IDs devraient maintenant fonctionner correctement'
+            ]
+        });
+
+    } catch (error) {
+        console.error('❌ ERREUR CRITIQUE lors de la récréation:', error);
+        res.status(500).json({
+            success: false,
+            error: `Échec de la récréation: ${error.message}`,
+            details: 'La table themes est probablement gravement corrompue.'
+        });
+    }
+});
+
 // =====================================================================
 // ALERTS TRIGGERED ROUTE - AJOUTEZ CETTE ROUTE
 // =====================================================================
@@ -884,49 +1235,6 @@ app.post('/api/alerts/check', async (req, res, next) => {
         const article = req.body;
         console.log('🔍 Check alertes pour article:', article?.title?.substring(0, 50) || '<sans titre>');
         res.json({ success: true, triggered_alerts: [], message: "0 alerte(s) déclenchée(s)" });
-    } catch (error) {
-        next(error);
-    }
-});
-
-// =====================================================================
-// THEMES ROUTES
-// =====================================================================
-
-app.get('/api/themes', async (req, res, next) => {
-    try {
-        const result = await query('SELECT * FROM themes ORDER BY name');
-        res.json({ success: true, themes: result.rows || [] });
-    } catch (error) {
-        next(error);
-    }
-});
-
-app.post('/api/themes', async (req, res, next) => {
-    try {
-        const { name, keywords, color, description } = req.body || {};
-        if (!name || !keywords || (Array.isArray(keywords) && keywords.length === 0)) {
-            throw new Error('Nom et mots-clés requis');
-        }
-        const keywordsJson = JSON.stringify(keywords);
-        const insertResult = await query('INSERT INTO themes (name, keywords, color, description) VALUES (?, ?, ?, ?)',
-            [name, keywordsJson, color || '#6366f1', description || '']);
-        const info = extractInsertInfo(insertResult);
-        if (!info.rowCount && !info.lastID) throw new Error('Failed to create theme in database');
-        console.log('✅ Thème créé:', name);
-        res.json({ success: true, message: 'Thème créé avec succès' });
-    } catch (error) {
-        next(error);
-    }
-});
-
-app.delete('/api/themes/:id', async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        await query('DELETE FROM theme_analyses WHERE theme_id = ?', [id]);
-        await query('DELETE FROM themes WHERE id = ?', [id]);
-        console.log('✅ Thème supprimé:', id);
-        res.json({ success: true, message: 'Thème supprimé' });
     } catch (error) {
         next(error);
     }
@@ -1118,6 +1426,33 @@ app.get('/api/learning/stats', async (req, res, next) => {
         });
     } catch (error) {
         next(error);
+    }
+});
+
+// Debug tables serveur
+app.get('/api/debug/table-structure', async (req, res) => {
+    try {
+        console.log('🔍 Structure complète de la table themes');
+
+        // Structure détaillée
+        const structure = await query(`PRAGMA table_info(themes)`);
+
+        // Vérifier les contraintes
+        const constraints = await query(`PRAGMA index_list(themes)`);
+
+        res.json({
+            success: true,
+            tableStructure: structure.rows,
+            constraints: constraints.rows,
+            diagnostics: {
+                hasPrimaryKey: structure.rows.some(col => col.pk > 0),
+                autoincrement: structure.rows.some(col => col.pk > 0 && col.type.includes('AUTOINCREMENT'))
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur structure table:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -1783,6 +2118,129 @@ async function fetchFeedWithFallback(feedUrl) {
     return { items: [] };
 }
 
+// Dans server.js - Ajoutez cette route APRÈS toutes les autres routes API et AVANT les error handlers
+
+// =====================================================================
+// DEBUG ROUTES - DIAGNOSTIC DE LA BASE DE DONNÉES
+// =====================================================================
+
+app.get('/api/debug/themes-table', async (req, res) => {
+    try {
+        console.log('🔍 Diagnostic de la table themes');
+
+        // Vérifier si la table existe
+        const tableCheck = await query(`
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='themes'
+        `);
+
+        if (!tableCheck.rows || tableCheck.rows.length === 0) {
+            return res.json({
+                success: false,
+                error: 'Table themes non trouvée dans la base de données',
+                existingTables: await getExistingTables()
+            });
+        }
+
+        console.log('✅ Table themes trouvée');
+
+        // Vérifier les colonnes
+        const columns = await query(`PRAGMA table_info(themes)`);
+        console.log('📋 Colonnes de la table themes:');
+        const columnNames = [];
+        columns.rows.forEach(col => {
+            console.log(` - ${col.name} (${col.type})`);
+            columnNames.push(col.name);
+        });
+
+        // Compter les thèmes
+        const countResult = await query('SELECT COUNT(*) as count FROM themes');
+        const themeCount = countResult.rows[0].count;
+
+        // Afficher tous les thèmes avec leurs IDs
+        const allThemes = await query('SELECT * FROM themes ORDER BY name');
+
+        console.log('📝 Tous les thèmes dans la base:');
+        allThemes.rows.forEach(theme => {
+            console.log(` - ID: ${theme.id}, Nom: ${theme.name}`);
+        });
+
+        res.json({
+            success: true,
+            tableExists: true,
+            totalThemes: themeCount,
+            columns: columnNames,
+            allThemes: allThemes.rows,
+            sampleTheme: allThemes.rows.length > 0 ? allThemes.rows[0] : null
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur diagnostic:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Fonction utilitaire pour lister les tables
+async function getExistingTables() {
+    try {
+        const tables = await query(`
+            SELECT name FROM sqlite_master 
+            WHERE type='table' 
+            ORDER BY name
+        `);
+        return tables.rows ? tables.rows.map(row => row.name) : [];
+    } catch (error) {
+        return [`Erreur: ${error.message}`];
+    }
+}
+
+// Route pour vérifier la réponse actuelle de /api/themes
+app.get('/api/debug/current-themes-response', async (req, res) => {
+    try {
+        const result = await query('SELECT * FROM themes ORDER BY name');
+
+        console.log('🎯 Réponse brute de la requête themes:');
+        console.log(' - Type de result:', typeof result);
+        console.log(' - Type de result.rows:', typeof result.rows);
+        console.log(' - result.rows existe?:', !!result.rows);
+        console.log(' - Nombre de thèmes:', result.rows ? result.rows.length : 0);
+
+        if (result.rows && result.rows.length > 0) {
+            result.rows.forEach((theme, index) => {
+                console.log(` - Thème ${index}:`, {
+                    id: theme.id,
+                    name: theme.name,
+                    hasId: !!theme.id,
+                    idType: typeof theme.id
+                });
+            });
+        }
+
+        res.json({
+            success: true,
+            rawResult: result,
+            themes: result.rows || [],
+            diagnostics: {
+                resultType: typeof result,
+                rowsType: typeof result.rows,
+                rowsExists: !!result.rows,
+                themeCount: result.rows ? result.rows.length : 0,
+                firstTheme: result.rows && result.rows.length > 0 ? result.rows[0] : null
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur debug themes:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // =====================================================================
 // ERROR HANDLERS (DOIVENT ÊTRE À LA FIN)
 // =====================================================================
@@ -1815,8 +2273,9 @@ async function startServer() {
     try {
         console.log('🚀 Starting Geopolis Server...');
 
+        // ATTENDRE Flask si activé
         if (config.services?.flask?.enabled) {
-            await checkFlaskHealth();
+            await waitForFlask(8); // 8 tentatives max
         }
 
         while (!isDatabaseReady) {

@@ -256,12 +256,28 @@ window.app = (function () {
 
         try {
             const data = await apiGET("/themes");
+            console.log('🎯 Réponse API thèmes:', data);
 
             if (data && data.success && Array.isArray(data.themes)) {
-                state.themes = data.themes;
-                console.log(`✅ ${state.themes.length} thèmes chargés`);
+                // CORRECTION: S'assurer que tous les thèmes ont un ID
+                state.themes = data.themes.map(theme => {
+                    if (!theme.id) {
+                        console.warn('⚠️ Thème sans ID détecté:', theme.name);
+                        // Générer un ID temporaire basé sur le nom
+                        return {
+                            ...theme,
+                            id: 'temp_' + Math.random().toString(36).substring(2, 11)
+                        };
+                    }
+                    return theme;
+                });
+                console.log(`✅ ${state.themes.length} thèmes chargés avec IDs`);
             } else if (Array.isArray(data)) {
-                state.themes = data;
+                // Fallback pour format de réponse différent
+                state.themes = data.map(theme => ({
+                    ...theme,
+                    id: theme.id || 'temp_' + Math.random().toString(36).substring(2, 11)
+                }));
             } else {
                 state.themes = [];
             }
@@ -385,14 +401,28 @@ window.app = (function () {
             container.innerHTML = '<div class="loading">Chargement des thèmes...</div>';
             await loadThemes();
 
-            if (state.themes.length > 0) {
+            // DIAGNOSTIC FINAL
+            console.log('🔍 Diagnostic final des thèmes:');
+            state.themes.forEach((theme, index) => {
+                console.log(`Thème ${index}:`, {
+                    id: theme.id,
+                    name: theme.name,
+                    idValide: !!(theme.id && theme.id !== 'null' && theme.id !== 'undefined')
+                });
+            });
+
+            const themesValides = state.themes.filter(theme =>
+                theme.id && theme.id !== 'null' && theme.id !== 'undefined'
+            );
+
+            if (themesValides.length > 0) {
                 container.innerHTML = `
                 <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                    <div style="font-weight: 600;">Thèmes configurés</div>
+                    <div style="font-weight: 600;">Thèmes configurés (${themesValides.length})</div>
                     <button onclick="appCall('showAddThemeModal')" class="btn btn-success">➕ Ajouter</button>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
-                    ${state.themes.map(theme => {
+                    ${themesValides.map(theme => {
                     let keywords = [];
                     try {
                         if (typeof theme.keywords === 'string') {
@@ -439,7 +469,7 @@ window.app = (function () {
                 container.innerHTML = `
                 <div class="loading" style="text-align: center; padding: 60px;">
                     <div style="font-size: 3rem; margin-bottom: 20px;">🎨</div>
-                    <div style="font-size: 1.2rem; color: #64748b; margin-bottom: 20px;">Aucun thème configuré</div>
+                    <div style="font-size: 1.2rem; color: #64748b; margin-bottom: 20px;">Aucun thème valide configuré</div>
                     <button onclick="appCall('showAddThemeModal')" class="btn btn-success" style="padding: 15px 20px;">
                         ➕ Ajouter un thème
                     </button>
@@ -451,7 +481,6 @@ window.app = (function () {
             container.innerHTML = '<div class="loading" style="color: #ef4444;">Erreur de chargement</div>';
         }
     }
-
     function showAddThemeModal() {
         const modalHtml = `
             <div id="addThemeModal" class="modal" style="display: block;">
@@ -517,8 +546,11 @@ window.app = (function () {
                 description: ''
             });
 
+            console.log('📝 Réponse création thème:', data);
+
             if (data.success) {
                 closeModal('addThemeModal');
+                // Recharger les thèmes depuis le serveur
                 await loadThemes();
                 loadThemesManager();
                 setMessage("✅ Thème créé avec succès !", "success");
@@ -532,24 +564,50 @@ window.app = (function () {
     }
 
     async function deleteTheme(themeId) {
+        console.log('🗑️ Suppression thème appelée avec ID:', themeId, 'Type:', typeof themeId);
+
+        // CORRECTION: Validation robuste de l'ID
+        if (!themeId || themeId === 'null' || themeId === 'undefined' || themeId === '') {
+            setMessage('❌ ID de thème invalide - impossible de supprimer', 'error');
+            console.error('ID de thème invalide:', themeId);
+            return;
+        }
+
         if (!confirm('Êtes-vous sûr de vouloir supprimer ce thème ?')) {
             return;
         }
 
         setMessage("Suppression du thème...", "info");
+
         try {
             const data = await apiDELETE(`/themes/${themeId}`);
+
             if (data.success) {
                 await loadThemes();
                 loadThemesManager();
                 setMessage("✅ Thème supprimé avec succès", "success");
             } else {
-                throw new Error(data.error || "Erreur inconnue");
+                throw new Error(data.error || "Erreur inconnue lors de la suppression");
             }
         } catch (error) {
             console.error('❌ Erreur suppression thème:', error);
             setMessage('Erreur: ' + error.message, 'error');
         }
+    }
+
+    // Fonction de diagnostic temporaire
+    function diagnoseThemes() {
+        console.log('🔍 Diagnostic des thèmes:');
+        state.themes.forEach((theme, index) => {
+            console.log(`Thème ${index}:`, {
+                id: theme.id,
+                name: theme.name,
+                idType: typeof theme.id,
+                hasId: !!theme.id
+            });
+        });
+
+
     }
 
     // ========== GESTION DES FLUX ==========
@@ -591,7 +649,7 @@ window.app = (function () {
                                             <button onclick="appCall('toggleFeed', ${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 5px;">
                                                 ${feed.is_active ? '❌ Désactiver' : '✅ Activer'}
                                             </button>
-                                            <button onclick="appCall('deleteFeed', ${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
+                                            <button onclick="appCall('deleteTheme', ${typeof theme.id === 'string' ? `'${theme.id}'` : theme.id})" class="btn btn-danger">
                                         </td>
                                     </tr>
                                 `).join('')}
