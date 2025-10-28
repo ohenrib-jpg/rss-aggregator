@@ -12,52 +12,51 @@ DROP TABLE IF EXISTS articles;
 DROP TABLE IF EXISTS feeds;
 
 -- Table des flux RSS
-CREATE TABLE feeds (
+CREATE TABLE IF NOT EXISTS feeds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     url TEXT UNIQUE NOT NULL,
     title TEXT,
-    is_active INTEGER DEFAULT 1,
-    last_fetched TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Table des articles
-CREATE TABLE articles (
+CREATE TABLE IF NOT EXISTS articles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     content TEXT,
-    link TEXT UNIQUE NOT NULL,
-    pub_date TEXT,
+    link TEXT,
+    pub_date DATETIME,
     feed_url TEXT,
-    sentiment_score REAL DEFAULT 0,
-    sentiment_type TEXT DEFAULT 'neutral',
-    sentiment_confidence REAL DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now')),
-    confidence_score REAL DEFAULT 0.5,
-    importance_score REAL DEFAULT 0.5,
-    FOREIGN KEY (feed_url) REFERENCES feeds(url) ON DELETE SET NULL
+    sentiment_score REAL,
+    sentiment_type TEXT,
+    sentiment_confidence REAL,
+    confidence_score REAL,
+    importance_score REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(title, link)
 );
 
--- Table des thèmes - CORRIGÉE
-CREATE TABLE themes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    keywords TEXT NOT NULL,
-    color TEXT DEFAULT '#6366f1',
-    description TEXT DEFAULT '',
-    created_at TEXT DEFAULT (datetime('now'))
+-- Table des thèmes
+CREATE TABLE IF NOT EXISTS themes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    keywords TEXT,
+    color TEXT,
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table d'analyse thèmes-articles
-CREATE TABLE theme_analyses (
+-- Table d'analyse des thèmes par article
+CREATE TABLE IF NOT EXISTS theme_analyses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     article_id INTEGER,
-    theme_id INTEGER,
-    confidence REAL DEFAULT 1.0,
-    created_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(article_id, theme_id),
-    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
-    FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
+    theme_id TEXT,
+    confidence REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (article_id) REFERENCES articles(id),
+    FOREIGN KEY (theme_id) REFERENCES themes(id),
+    UNIQUE(article_id, theme_id)
 );
 
 -- Table lexique des sentiments
