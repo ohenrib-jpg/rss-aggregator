@@ -1,8 +1,11 @@
 # Agrégateur RSS Thématique avec IA v.5.*
 
 Système complet d'analyse de flux RSS avec intégration IA pour la correction des scores de sentiment et génération de rapports.
-
+MERCI DEEPSEEK ;-)
 ## 🚀 Fonctionnalités
+MAJ 28/10/2025
+Les routes "alertes" fonctionennt enfin
+Le parsser Axios est parfaitement operationnel avec l'analyse thematique
 
 ### Analyse de Base
 - 📊 Agrégation de flux RSS multiples + Parsser reseaux sociaux
