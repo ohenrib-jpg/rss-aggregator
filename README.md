@@ -38,6 +38,8 @@ N'OUBLIEZ PAS D'INSTALLER llama.cpp (et un modele gguf)
 - Node.js 16+
 - Python 3.8+
 - Clé API (OpenAI ou équivalent)
+- Llama.cpp et modele locale gguf
+- Le reste : npm install + requirements.txt
 
 ### Installation des dépendances
 
