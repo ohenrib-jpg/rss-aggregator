@@ -48,6 +48,9 @@ npm install
 ## EVO8NEXTLEVEL Updates Dev.
 - Corroboration module (rapidfuzz)
 - Bayesian fusion and improved confidence calculation
+- Big Data analysis (using TF-IDF method, for vectoriel analysis)
+- Mahalanobis distance
+- Shannon's entropy
 - Frontend adjusted to use `confidence` and display `bayesian_posterior`
 - Tests added in `Scripts/`
 Et repo toujours public : ohenri-jpg
