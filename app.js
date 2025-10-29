@@ -101,6 +101,114 @@ window.app = (function () {
         }
     }
 
+    // ===========================================================================
+    // ASSISTANT R1 - FRONTEND
+    // ===========================================================================
+
+    const frontendErrorHandler = {
+        init() {
+            // Capture des erreurs globales JavaScript
+            window.addEventListener('error', (event) => {
+                this.captureError(event.error, 'global');
+            });
+
+            // Capture des promesses rejetées
+            window.addEventListener('unhandledrejection', (event) => {
+                this.captureError(event.reason, 'promise');
+            });
+
+            console.log('🤖 Assistant R1 frontend activé');
+        },
+
+        async captureError(error, type) {
+            const errorData = {
+                message: error.message,
+                stack: error.stack,
+                type: type,
+                url: window.location.href,
+                timestamp: new Date().toISOString()
+            };
+
+            console.error('🔴 Erreur frontend:', errorData);
+
+            // Envoi au serveur pour analyse Llama
+            try {
+                const response = await fetch('/api/debug/capture-error', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(errorData)
+                });
+
+                const result = await response.json();
+                if (result.suggestion) {
+                    this.showSuggestion(result.suggestion, errorData);
+                }
+            } catch (e) {
+                console.warn('⚠️ Impossible de contacter R1:', e.message);
+            }
+        },
+
+        showSuggestion(suggestion, error) {
+            // Création du panel flottant
+            const panel = this.createSuggestionPanel(suggestion, error);
+            document.body.appendChild(panel);
+        },
+
+        createSuggestionPanel(suggestion, error) {
+            const panel = document.createElement('div');
+            panel.innerHTML = `
+      <div style="
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #fffbeb;
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 16px;
+        max-width: 500px;
+        z-index: 10000;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        font-family: system-ui;
+      ">
+        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+          <span style="font-size: 24px; margin-right: 10px;">🤖</span>
+          <strong style="color: #1e293b;">Assistant R1</strong>
+          <button onclick="this.parentElement.parentElement.remove()" 
+                  style="margin-left: auto; background: none; border: none; font-size: 20px; cursor: pointer;">
+            ×
+          </button>
+        </div>
+        
+        <div style="margin-bottom: 10px;">
+          <strong>Erreur:</strong> ${error.message.substring(0, 100)}...
+        </div>
+        
+        <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <strong>💡 Suggestion:</strong>
+          <pre style="white-space: pre-wrap; font-size: 12px; margin-top: 8px;">${suggestion}</pre>
+        </div>
+        
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+          <button onclick="this.closest('div').remove()" 
+                  style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+            Compris
+          </button>
+          <button onclick="console.log('Erreur détaillée:', ${JSON.stringify(error).replace(/"/g, '&quot;')})"
+                  style="padding: 6px 12px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
+            Détails console
+          </button>
+        </div>
+      </div>
+    `;
+            return panel;
+        }
+    };
+
+    // Initialisation au chargement
+    document.addEventListener('DOMContentLoaded', () => {
+        frontendErrorHandler.init();
+    });
+
     // ========== API CALLS ==========
     async function apiCall(method, path, body = null) {
         const controller = new AbortController();

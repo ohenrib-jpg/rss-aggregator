@@ -22,6 +22,37 @@ const parser = new Parser({
 const app = express();
 displayConfig();
 
+// ===========================================================================
+// ASSISTANT DE DÉBOGAGE DEEPSEEK R1 - Llama.cpp
+// ===========================================================================
+
+const LlamaAssistant = require('./server/llama-assistant');
+
+// Intercepteur global d'erreurs
+process.on('uncaughtException', async (error) => {
+    console.error('🔴 ERREUR NON CAPTURÉE:', error.message);
+
+    const suggestion = await LlamaAssistant.analyzeError(error, {
+        module: 'Server',
+        type: 'uncaughtException'
+    });
+
+    console.log('🤖 R1 SUGGÈRE:', suggestion);
+    console.log('📝 Stack complète:', error.stack);
+});
+
+// Intercepteur des rejets de promesses
+process.on('unhandledRejection', async (reason, promise) => {
+    console.error('🔴 PROMESSE NON GÉRÉE:', reason);
+
+    const suggestion = await LlamaAssistant.analyzeError(reason, {
+        module: 'Server',
+        type: 'unhandledRejection'
+    });
+
+    console.log('🤖 R1 SUGGÈRE:', suggestion);
+});
+
 // =====================================================================
 // INITIALISATION DES MODULES
 // =====================================================================
@@ -1021,6 +1052,28 @@ app.use(express.static('public'));
 app.use((req, res, next) => {
     console.log(`📡 ${req.method} ${req.path}`);
     next();
+});
+
+// Middleware de capture d'erreurs Express
+app.use((err, req, res, next) => {
+    console.error('🔴 Erreur Express:', err.message);
+
+    // Capture asynchrone (ne bloque pas la réponse)
+    LlamaAssistant.analyzeError(err, {
+        module: 'Express',
+        route: req.path,
+        method: req.method,
+        body: req.body ? JSON.stringify(req.body).substring(0, 200) : 'Aucun'
+    }).then(suggestion => {
+        console.log('🤖 R1 Route Error:', suggestion);
+    });
+
+    // Réponse immédiate au client
+    res.status(500).json({
+        success: false,
+        error: 'Erreur interne du serveur',
+        message: err.message
+    });
 });
 
 // =====================================================================
@@ -2630,6 +2683,31 @@ app.get('/api/analysis/network', async (req, res, next) => {
         });
     } catch (error) {
         next(error);
+    }
+});
+
+// Route pour recevoir les erreurs frontend
+app.post('/api/debug/capture-error', async (req, res) => {
+    try {
+        const { message, stack, type, url } = req.body;
+
+        console.log('🔴 Erreur frontend reçue:', message);
+
+        const error = new Error(message);
+        error.stack = stack;
+
+        const suggestion = await LlamaAssistant.analyzeError(error, {
+            module: 'Frontend',
+            type: type,
+            url: url,
+            userAgent: req.get('User-Agent')
+        });
+
+        res.json({ success: true, suggestion });
+
+    } catch (error) {
+        console.error('Erreur capture frontend:', error);
+        res.json({ success: false, suggestion: 'Erreur lors de l\'analyse' });
     }
 });
 
