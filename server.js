@@ -138,6 +138,52 @@ let alertStorage = {
     ]
 };
 
+// Persistence alerts to file (alerts.json) - ensures alerts persist across restarts
+const ALERTS_FILE = path.join(__dirname, 'data', 'alerts.json');
+
+async function loadAlertsFromFile() {
+    try {
+        const raw = await fs.readFile(ALERTS_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.alerts)) {
+            console.log('✅ Alerts loaded from file:', ALERTS_FILE);
+            return parsed.alerts;
+        }
+    } catch (e) {
+        console.warn('⚠️ No alerts file found or parse error, using defaults.');
+    }
+    return null;
+}
+
+async function saveAlertsToFile(alerts) {
+    try {
+        const dir = path.dirname(ALERTS_FILE);
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(ALERTS_FILE, JSON.stringify({ alerts: alerts }, null, 2), 'utf8');
+        console.log('✅ Alerts saved to file:', ALERTS_FILE);
+        return true;
+    } catch (e) {
+        console.error('❌ Failed to save alerts to file:', e.message);
+        return false;
+    }
+}
+
+// Try to load alerts from file at startup, otherwise keep defaults
+(async () => {
+    try {
+        const loaded = await loadAlertsFromFile();
+        if (loaded && Array.isArray(loaded)) {
+            alertStorage.alerts = loaded;
+        } else {
+            // save defaults to file for first run
+            await saveAlertsToFile(alertStorage.alerts);
+        }
+    } catch (e) {
+        console.warn('⚠️ Error initializing alerts persistence:', e.message);
+    }
+})();
+
+
 // =====================================================================
 // ROUTES THÈMES CORRIGÉES
 // =====================================================================
@@ -491,41 +537,71 @@ app.get('/api/alerts', async (req, res) => {
 
 // 2. DELETE /api/alerts/:id - VRAIE suppression
 app.delete('/api/alerts/:id', async (req, res) => {
-    const alertId = req.params.id;
-    console.log(`🗑️ DELETE /alerts/${alertId} - Avant: ${alertStorage.alerts.length} alertes`);
+    try {
+        const alertId = req.params.id;
+        console.log(`🗑️ DELETE /alerts/${alertId} - Avant: ${alertStorage.alerts.length} alertes`);
 
-    // FILTRER pour vraiment supprimer
-    const initialLength = alertStorage.alerts.length;
-    alertStorage.alerts = alertStorage.alerts.filter(alert => alert.id !== alertId);
+        // FILTRER pour vraiment supprimer
+        const initialLength = alertStorage.alerts.length;
+        alertStorage.alerts = alertStorage.alerts.filter(alert => alert.id !== alertId);
 
-    console.log(`✅ Après: ${alertStorage.alerts.length} alertes (supprimé: ${initialLength - alertStorage.alerts.length})`);
+        console.log(`✅ Après: ${alertStorage.alerts.length} alertes (supprimé: ${initialLength - alertStorage.alerts.length})`);
 
-    res.json({
-        success: true,
-        message: `Alerte ${alertId} supprimée avec succès`,
-        deleted_id: alertId
-    });
+        // Persister les changements
+        try {
+            await saveAlertsToFile(alertStorage.alerts);
+        } catch (e) {
+            console.warn('⚠️ Could not persist alerts:', e.message);
+        }
+
+        res.json({
+            success: true,
+            message: `Alerte ${alertId} supprimée avec succès`,
+            deleted_id: alertId
+        });
+    } catch (error) {
+        console.error('❌ Erreur DELETE /alerts:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erreur suppression alerte: ' + error.message
+        });
+    }
 });
 
 // 3. PUT /api/alerts/:id - VRAIE modification
 app.put('/api/alerts/:id', async (req, res) => {
-    const alertId = req.params.id;
-    const { enabled } = req.body;
+    try {
+        const alertId = req.params.id;
+        const { enabled } = req.body;
 
-    console.log(`✏️ PUT /alerts/${alertId} - enabled: ${enabled}`);
+        console.log(`✏️ PUT /alerts/${alertId} - enabled: ${enabled}`);
 
-    // TROUVER et MODIFIER l'alerte
-    const alertIndex = alertStorage.alerts.findIndex(alert => alert.id === alertId);
-    if (alertIndex !== -1) {
-        alertStorage.alerts[alertIndex].enabled = enabled;
-        console.log(`✅ Alerte ${alertId} ${enabled ? 'activée' : 'désactivée'}`);
+        // TROUVER et MODIFIER l'alerte
+        const alertIndex = alertStorage.alerts.findIndex(alert => alert.id === alertId);
+        if (alertIndex !== -1) {
+            alertStorage.alerts[alertIndex].enabled = enabled;
+            console.log(`✅ Alerte ${alertId} ${enabled ? 'activée' : 'désactivée'}`);
+        }
+
+        // Persister les changements
+        try {
+            await saveAlertsToFile(alertStorage.alerts);
+        } catch (e) {
+            console.warn('⚠️ Could not persist alerts:', e.message);
+        }
+
+        res.json({
+            success: true,
+            message: `Alerte ${enabled ? 'activée' : 'désactivée'}`,
+            alert_id: alertId
+        });
+    } catch (error) {
+        console.error('❌ Erreur PUT /alerts:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erreur modification alerte: ' + error.message
+        });
     }
-
-    res.json({
-        success: true,
-        message: `Alerte ${enabled ? 'activée' : 'désactivée'}`,
-        alert_id: alertId
-    });
 });
 
 // 4. POST /api/alerts - VRAIE création
@@ -552,6 +628,14 @@ app.post('/api/alerts', async (req, res) => {
 
         // AJOUTER à la mémoire
         alertStorage.alerts.push(newAlert);
+
+        // Persist alerts to disk
+        try {
+            await saveAlertsToFile(alertStorage.alerts);
+        } catch (e) {
+            console.warn('⚠️ Could not persist alerts:', e.message);
+        }
+
         console.log('✅ Nouvelle alerte créée. Total:', alertStorage.alerts.length);
 
         res.json({
@@ -958,6 +1042,25 @@ async function initializeDatabase() {
 }
 
 initializeDatabase();
+
+// Ensure database schema (tables/indexes) are created by calling DB manager initialize()
+// This guarantees the same schema for both SQLite and PostgreSQL modes and fixes issues
+// where previous migrations or mixed edits left the DB without required tables.
+(async function ensureDBSchema() {
+    try {
+        const dbManager = await getDatabaseManager();
+        if (typeof dbManager.initialize === 'function') {
+            console.log('🔧 Ensuring DB schema is initialized (migrations)...');
+            await dbManager.initialize();
+            console.log('✅ DB schema initialization completed.');
+        } else {
+            console.warn('⚠️ dbManager.initialize() not available');
+        }
+    } catch (e) {
+        console.warn('⚠️ Could not initialize DB schema:', e.message);
+    }
+})();
+
 
 app.use((req, res, next) => {
     if (!isDatabaseReady && req.path !== '/api/health' && req.path !== '/api/health/node') {
@@ -2136,42 +2239,387 @@ app.get('/api/export/json', async (req, res, next) => {
 // ROUTES ANALYSE AVANCÉE
 // =====================================================================
 
-app.get('/api/analysis/correlations', async (req, res, next) => {
-    try {
-        console.log('📈 API Correlations appelée');
+// ✅ ROUTES SPÉCIFIQUES D'ABORD (avant les routes génériques)
 
-        if (config.services?.flask?.enabled) {
-            try {
-                const flaskResponse = await axios.get(`${config.services.flask.url}/api/analysis/correlations`, {
-                    timeout: config.services.flask.timeout || 5000
-                });
-                return res.json(flaskResponse.data);
-            } catch (flaskError) {
-                console.warn('⚠️ Service Flask indisponible pour correlations');
+// Route : Corrélations entre thèmes
+app.get('/api/analysis/correlations/themes', async (req, res, next) => {
+    try {
+        const limit = parseInt(req.query.limit) || 150;
+        console.log('🔗 API Correlations Thèmes - Limite:', limit);
+
+        // Récupérer les articles récents avec leurs thèmes
+        const articlesResult = await query(`
+            SELECT a.id, a.title, a.content,
+                   GROUP_CONCAT(t.name) as theme_names
+            FROM articles a
+            LEFT JOIN theme_analyses ta ON a.id = ta.article_id
+            LEFT JOIN themes t ON ta.theme_id = t.id
+            GROUP BY a.id
+            ORDER BY a.pub_date DESC
+            LIMIT ?
+        `, [limit]);
+
+        const articles = articlesResult.rows || [];
+        console.log(`📊 ${articles.length} articles analysés pour corrélations`);
+
+        // Calculer les co-occurrences de thèmes
+        const coOccurrences = new Map();
+        const themeCounts = new Map();
+
+        articles.forEach(article => {
+            if (!article.theme_names) return;
+
+            const themes = article.theme_names.split(',').map(t => t.trim()).filter(Boolean);
+
+            // Compter les occurrences individuelles
+            themes.forEach(theme => {
+                themeCounts.set(theme, (themeCounts.get(theme) || 0) + 1);
+            });
+
+            // Compter les co-occurrences (paires de thèmes)
+            for (let i = 0; i < themes.length; i++) {
+                for (let j = i + 1; j < themes.length; j++) {
+                    const key = [themes[i], themes[j]].sort().join('|');
+                    coOccurrences.set(key, (coOccurrences.get(key) || 0) + 1);
+                }
             }
+        });
+
+        // Calculer les corrélations
+        const correlations = [];
+
+        coOccurrences.forEach((coCount, key) => {
+            const [theme1, theme2] = key.split('|');
+            const count1 = themeCounts.get(theme1) || 0;
+            const count2 = themeCounts.get(theme2) || 0;
+
+            if (count1 < 2 || count2 < 2) return;
+
+            const correlation = coCount / Math.min(count1, count2);
+
+            if (correlation > 0.1) {
+                correlations.push({
+                    theme1,
+                    theme2,
+                    correlation: parseFloat(correlation.toFixed(3)),
+                    coOccurrences: coCount,
+                    count1,
+                    count2,
+                    strength: correlation > 0.7 ? 'forte' :
+                        correlation > 0.4 ? 'moyenne' :
+                            correlation > 0.2 ? 'faible' : 'négligeable',
+                    interpretation: `${theme1} et ${theme2} apparaissent ensemble dans ${coCount} articles (${Math.round(correlation * 100)}% de corrélation)`
+                });
+            }
+        });
+
+        correlations.sort((a, b) => b.correlation - a.correlation);
+
+        console.log(`✅ ${correlations.length} corrélations calculées`);
+
+        res.json({
+            success: true,
+            correlations: correlations,
+            metadata: {
+                articlesAnalyzed: articles.length,
+                themesCount: themeCounts.size,
+                significantCorrelations: correlations.filter(c => c.correlation > 0.3).length
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur corrélations thèmes:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Route : Corrélation mot-clé / sentiment
+app.get('/api/analysis/correlations/keyword-sentiment', async (req, res, next) => {
+    try {
+        const keyword = req.query.keyword;
+        console.log('🔍 API Corrélation Keyword-Sentiment:', keyword);
+
+        if (!keyword || keyword.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Mot-clé requis'
+            });
         }
 
-        const fallbackCorrelations = {
+        const articlesResult = await query(`
+            SELECT 
+                a.id,
+                a.title,
+                a.content,
+                a.sentiment_score,
+                a.sentiment_type
+            FROM articles a
+            WHERE 
+                LOWER(a.title) LIKE ? OR 
+                LOWER(a.content) LIKE ?
+            ORDER BY a.pub_date DESC
+            LIMIT 200
+        `, [`%${keyword.toLowerCase()}%`, `%${keyword.toLowerCase()}%`]);
+
+        const articles = articlesResult.rows || [];
+
+        if (articles.length < 3) {
+            return res.json({
+                success: true,
+                analysis: {
+                    keyword: keyword,
+                    correlation: 0,
+                    sampleSize: articles.length,
+                    strength: 'insufficient_data',
+                    interpretation: `Données insuffisantes : ${articles.length} article(s) trouvé(s)`
+                }
+            });
+        }
+
+        const dataPoints = articles.map(article => {
+            const text = (article.title + ' ' + article.content).toLowerCase();
+            const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'gi');
+            const matches = text.match(regex);
+            const frequency = matches ? matches.length : 0;
+
+            return {
+                frequency: frequency,
+                sentiment: parseFloat(article.sentiment_score || 0)
+            };
+        }).filter(d => d.frequency > 0);
+
+        if (dataPoints.length < 3) {
+            return res.json({
+                success: true,
+                analysis: {
+                    keyword: keyword,
+                    correlation: 0,
+                    sampleSize: dataPoints.length,
+                    strength: 'insufficient_data',
+                    interpretation: `Trop peu d'occurrences significatives`
+                }
+            });
+        }
+
+        // Calcul de Pearson
+        const n = dataPoints.length;
+        const sumX = dataPoints.reduce((sum, d) => sum + d.frequency, 0);
+        const sumY = dataPoints.reduce((sum, d) => sum + d.sentiment, 0);
+        const sumXY = dataPoints.reduce((sum, d) => sum + (d.frequency * d.sentiment), 0);
+        const sumX2 = dataPoints.reduce((sum, d) => sum + (d.frequency ** 2), 0);
+        const sumY2 = dataPoints.reduce((sum, d) => sum + (d.sentiment ** 2), 0);
+
+        const numerator = (n * sumXY) - (sumX * sumY);
+        const denominator = Math.sqrt(((n * sumX2) - (sumX ** 2)) * ((n * sumY2) - (sumY ** 2)));
+
+        const correlation = denominator !== 0 ? numerator / denominator : 0;
+
+        const absCorr = Math.abs(correlation);
+        let strength;
+        if (absCorr > 0.7) strength = 'très_forte';
+        else if (absCorr > 0.5) strength = 'forte';
+        else if (absCorr > 0.3) strength = 'moyenne';
+        else if (absCorr > 0.1) strength = 'faible';
+        else strength = 'négligeable';
+
+        let interpretation;
+        if (correlation > 0.3) {
+            interpretation = `"${keyword}" est associé à des articles POSITIFS`;
+        } else if (correlation < -0.3) {
+            interpretation = `"${keyword}" est associé à des articles NÉGATIFS`;
+        } else {
+            interpretation = `"${keyword}" n'a pas de corrélation significative`;
+        }
+
+        res.json({
+            success: true,
+            analysis: {
+                keyword: keyword,
+                correlation: parseFloat(correlation.toFixed(3)),
+                sampleSize: n,
+                strength: strength,
+                interpretation: interpretation
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur keyword-sentiment:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Route générique pour corrélations (fallback)
+app.get('/api/analysis/correlations', async (req, res, next) => {
+    try {
+        console.log('📈 API Correlations (générique)');
+
+        res.json({
             success: true,
             correlations: {
                 theme_sentiment: [],
                 theme_importance: [],
                 sentiment_confidence: []
             }
-        };
-
-        res.json(fallbackCorrelations);
+        });
     } catch (error) {
+        next(error);
+    }
+});
+
+// Route analyse réseau
+app.get('/api/analysis/network', async (req, res, next) => {
+    try {
+        console.log('🌍 API Network Analysis');
+
+        const networkMetrics = influenceEngine.getNetworkMetrics();
+
+        res.json({
+            success: true,
+            network: {
+                metrics: networkMetrics,
+                countries: Array.from(influenceEngine.countries),
+                relations: Array.from(influenceEngine.relations.values())
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ✅ NOUVELLE ROUTE : Corrélation mot-clé / sentiment
+app.get('/api/analysis/correlations/keyword-sentiment', async (req, res, next) => {
+    try {
+        const keyword = req.query.keyword;
+        console.log('🔍 API Corrélation Keyword-Sentiment:', keyword);
+
+        if (!keyword || keyword.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Mot-clé requis'
+            });
+        }
+
+        // Récupérer les articles contenant le mot-clé
+        const articlesResult = await query(`
+            SELECT 
+                a.id,
+                a.title,
+                a.content,
+                a.sentiment_score,
+                a.sentiment_type,
+                LENGTH(a.content) as content_length
+            FROM articles a
+            WHERE 
+                LOWER(a.title) LIKE ? OR 
+                LOWER(a.content) LIKE ?
+            ORDER BY a.pub_date DESC
+            LIMIT 200
+        `, [`%${keyword.toLowerCase()}%`, `%${keyword.toLowerCase()}%`]);
+
+        const articles = articlesResult.rows || [];
+
+        if (articles.length < 3) {
+            return res.json({
+                success: true,
+                analysis: {
+                    keyword: keyword,
+                    correlation: 0,
+                    sampleSize: articles.length,
+                    strength: 'insufficient_data',
+                    interpretation: `Données insuffisantes : seulement ${articles.length} article(s) trouvé(s) contenant "${keyword}"`
+                }
+            });
+        }
+
+        // Calculer la fréquence du mot-clé et le sentiment moyen
+        const dataPoints = articles.map(article => {
+            const text = (article.title + ' ' + article.content).toLowerCase();
+            const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'gi');
+            const matches = text.match(regex);
+            const frequency = matches ? matches.length : 0;
+
+            return {
+                frequency: frequency,
+                sentiment: parseFloat(article.sentiment_score || 0)
+            };
+        }).filter(d => d.frequency > 0);
+
+        if (dataPoints.length < 3) {
+            return res.json({
+                success: true,
+                analysis: {
+                    keyword: keyword,
+                    correlation: 0,
+                    sampleSize: dataPoints.length,
+                    strength: 'insufficient_data',
+                    interpretation: `Trop peu d'occurrences significatives de "${keyword}"`
+                }
+            });
+        }
+
+        // Calcul du coefficient de Pearson
+        const n = dataPoints.length;
+        const sumX = dataPoints.reduce((sum, d) => sum + d.frequency, 0);
+        const sumY = dataPoints.reduce((sum, d) => sum + d.sentiment, 0);
+        const sumXY = dataPoints.reduce((sum, d) => sum + (d.frequency * d.sentiment), 0);
+        const sumX2 = dataPoints.reduce((sum, d) => sum + (d.frequency ** 2), 0);
+        const sumY2 = dataPoints.reduce((sum, d) => sum + (d.sentiment ** 2), 0);
+
+        const numerator = (n * sumXY) - (sumX * sumY);
+        const denominator = Math.sqrt(((n * sumX2) - (sumX ** 2)) * ((n * sumY2) - (sumY ** 2)));
+
+        const correlation = denominator !== 0 ? numerator / denominator : 0;
+
+        // Classification de la force
+        const absCorr = Math.abs(correlation);
+        let strength;
+        if (absCorr > 0.7) strength = 'très_forte';
+        else if (absCorr > 0.5) strength = 'forte';
+        else if (absCorr > 0.3) strength = 'moyenne';
+        else if (absCorr > 0.1) strength = 'faible';
+        else strength = 'négligeable';
+
+        // Interprétation
+        let interpretation;
+        if (correlation > 0.3) {
+            interpretation = `Le mot-clé "${keyword}" est associé à des articles plutôt POSITIFS`;
+        } else if (correlation < -0.3) {
+            interpretation = `Le mot-clé "${keyword}" est associé à des articles plutôt NÉGATIFS`;
+        } else {
+            interpretation = `Le mot-clé "${keyword}" n'a pas de corrélation significative avec le sentiment`;
+        }
+
+        res.json({
+            success: true,
+            analysis: {
+                keyword: keyword,
+                correlation: parseFloat(correlation.toFixed(3)),
+                sampleSize: n,
+                strength: strength,
+                interpretation: interpretation,
+                details: {
+                    avgFrequency: (sumX / n).toFixed(2),
+                    avgSentiment: (sumY / n).toFixed(2)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur corrélation keyword-sentiment:', error);
         next(error);
     }
 });
 
 app.get('/api/analysis/network', async (req, res, next) => {
     try {
-        console.log('🌐 API Network Analysis appelée');
-
+        console.log('🌍 API Network Analysis appelée');
         const networkMetrics = influenceEngine.getNetworkMetrics();
-
         res.json({
             success: true,
             network: {
@@ -2189,19 +2637,24 @@ app.get('/api/analysis/network', async (req, res, next) => {
 // ERROR HANDLING
 // =====================================================================
 
+// ✅ ROUTE 404 EN PREMIER (avant le gestionnaire 500)
+app.use((req, res) => {
+    console.warn(`⚠️ Route non trouvée: ${req.method} ${req.path}`);
+    res.status(404).json({
+        success: false,
+        code: 404,
+        error: 'Route IA non trouvée',
+        path: req.path
+    });
+});
+
+// ✅ GESTIONNAIRE 500 EN DERNIER (4 paramètres obligatoires)
 app.use((error, req, res, next) => {
     console.error('❌ Unhandled error:', error);
     res.status(500).json({
         success: false,
         error: 'Internal server error',
         message: error.message
-    });
-});
-
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        error: 'Route not found'
     });
 });
 
