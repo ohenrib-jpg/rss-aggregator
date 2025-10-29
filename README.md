@@ -1,6 +1,6 @@
 # Agrégateur RSS Thématique avec IA v.5.*
 
-Système complet d'analyse de flux RSS avec intégration IA pour la correction des scores de sentiment et génération de rapports.
+Système complet d'analyse de flux RSS (detection de "l'inconscient mediatique") et commentaires reseaux sociaux ("l'inconscient ppopulaire")=> Analyse du facteur_Z (ecart entre discours public, et ressenti populaire). Intégration IA pour la correction des scores de sentiment, l'analyse en temps reel des flux d'information, les calculs scientifiques, les recherches de corroboration,....et génération de rapports.
 MERCI DEEPSEEK ;-)
 ## 🚀 Fonctionnalités
 MAJ 28/10/2025
@@ -9,7 +9,7 @@ Le parsser Axios est parfaitement operationnel avec l'analyse thematique
 Reste a resoudre la resilience des flux rss
 MAJ 29/10/2025
 DEBUT D'INTEGRATION DU DEBOGGEUR IA => PROPOSE DES CORRECTIONS DU CODE EN TEMPS REEL EN CAS D'ERREURS (console ou silencieuses)
-
+Debut de l'integration de la carte interactive des relations internationales et des alertes silencieuses predictives
 Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2
 
 ### Analyse de Base
