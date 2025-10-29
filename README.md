@@ -1,6 +1,6 @@
 # Agrégateur RSS Thématique avec IA v.5.*
 
-Système complet d'analyse de flux RSS (detection de "l'inconscient mediatique") et commentaires reseaux sociaux ("l'inconscient populaire")=> Analyse du facteur_Z (ecart entre discours public, et ressenti populaire). Intégration IA pour la correction des scores de sentiment, l'analyse en temps reel des flux d'information, les calculs scientifiques, les recherches de corroboration,....et génération de rapports.
+Système complet d'analyse de flux RSS (detection de "l'inconscient mediatique") et commentaires reseaux sociaux ("l'inconscient populaire")=> Analyse du facteur_Z (ecart entre discours public, et ressenti populaire). Intégration IA pour la correction des scores de sentiment, l'analyse en temps reel des flux d'informations, les calculs scientifiques, les recherches de corroboration,....et génération de rapports.
 MERCI DEEPSEEK ;-)
 ## 🚀 Fonctionnalités
 MAJ 28/10/2025
