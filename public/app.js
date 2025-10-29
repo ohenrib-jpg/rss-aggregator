@@ -1,4 +1,4 @@
-// public/app.js - VERSION COMPLÈTEMENT RECOMPOSÉE
+// public/app.js - VERSION CORRIGÉE 
 
 // Configuration API
 const API_BASE = window.location.origin;
@@ -100,6 +100,7 @@ window.app = (function () {
             setTimeout(() => setMessage(""), 5000);
         }
     }
+
     // ========== API CALLS ==========
     async function apiCall(method, path, body = null) {
         const controller = new AbortController();
@@ -126,7 +127,7 @@ window.app = (function () {
                 let errorMsg = `HTTP ${res.status}`;
                 try {
                     const errorText = await res.text();
-                    errorMsg = errorText.substring(0, 100); // ← CHANGEMENT ICI
+                    errorMsg = errorText.substring(0, 100);
                 } catch (e) {
                     // Ignorer les erreurs de parsing
                 }
@@ -180,7 +181,6 @@ window.app = (function () {
                 break;
             case "metrics":
                 loadMetrics();
-                loadMetrics();
                 loadSentimentOverview();    
                 loadLearningStats();    
                 break;
@@ -201,7 +201,7 @@ window.app = (function () {
         if (!a || typeof a !== "object") return null;
 
         return {
-            id: a.id || Math.random().toString(36).substring(2, 11), // ← CHANGEMENT ICI
+            id: a.id || Math.random().toString(36).substring(2, 11),
             title: a.title || "Sans titre",
             link: a.link || "#",
             date: a.date || a.pubDate || new Date().toISOString(),
@@ -256,12 +256,11 @@ window.app = (function () {
 
         try {
             const data = await apiGET("/themes");
+            console.log('🎯 Réponse API thèmes:', data);
 
             if (data && data.success && Array.isArray(data.themes)) {
                 state.themes = data.themes;
                 console.log(`✅ ${state.themes.length} thèmes chargés`);
-            } else if (Array.isArray(data)) {
-                state.themes = data;
             } else {
                 state.themes = [];
             }
@@ -307,15 +306,24 @@ window.app = (function () {
     async function refreshArticles() {
         setMessage("🔄 Récupération des nouveaux articles RSS...", "info");
 
-        try {
-            const refreshResult = await apiPOST("/refresh");
-            await loadArticles(true);
-            setMessage(`✅ Actualisation terminée avec succès`, "success");
-            return refreshResult;
-        } catch (error) {
-            console.error("❌ Erreur rafraîchissement:", error);
-            setMessage("❌ Erreur: " + error.message, "error");
-            throw error;
+        // Tentative avec réessai
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const refreshResult = await apiPOST("/refresh");
+                await loadArticles(true);
+                setMessage(`✅ Actualisation terminée avec succès`, "success");
+                return refreshResult;
+            } catch (error) {
+                console.error(`❌ Tentative ${attempt} échouée:`, error);
+
+                if (attempt < 3) {
+                    setMessage(`🔄 Nouvelle tentative dans 3 secondes... (${attempt}/3)`, "warning");
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                } else {
+                    setMessage("❌ Échec après 3 tentatives. Vérifiez que le serveur est démarré.", "error");
+                    throw error;
+                }
+            }
         }
     }
 
@@ -388,43 +396,40 @@ window.app = (function () {
             if (state.themes.length > 0) {
                 container.innerHTML = `
                 <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                    <div style="font-weight: 600;">Thèmes configurés</div>
+                    <div style="font-weight: 600;">Thèmes configurés (${state.themes.length})</div>
                     <button onclick="appCall('showAddThemeModal')" class="btn btn-success">➕ Ajouter</button>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
                     ${state.themes.map(theme => {
-                    let keywords = [];
-                    try {
-                        if (typeof theme.keywords === 'string') {
-                            keywords = JSON.parse(theme.keywords);
-                        } else if (Array.isArray(theme.keywords)) {
-                            keywords = theme.keywords;
-                        }
-                    } catch (e) {
-                        console.warn('Erreur parsing keywords:', e);
-                        keywords = [];
-                    }
-
+                    const keywords = Array.isArray(theme.keywords) ? theme.keywords : [];
+                    
                     return `
                             <div class="theme-card" style="border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; background: white;">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
                                     <div style="width: 20px; height: 20px; border-radius: 50%; background: ${theme.color || '#6366f1'};"></div>
                                     <h4 style="margin: 0; flex: 1;">${escapeHtml(theme.name)}</h4>
                                     <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 12px; font-size: 0.8rem;">
-                                        ${theme.count || 0} articles
+                                        ${keywords.length} mots-clés
                                     </span>
                                 </div>
                                 <div style="margin-bottom: 15px;">
                                     <strong>Mots-clés:</strong>
                                     <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px;">
                                         ${keywords.length > 0
-                            ? keywords.map(kw =>
+                            ? keywords.slice(0, 8).map(kw =>
                                 `<span style="background: #e2e8f0; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem;">${escapeHtml(kw)}</span>`
                             ).join('')
                             : '<span style="color: #94a3b8; font-style: italic;">Aucun mot-clé</span>'
                         }
+                                        ${keywords.length > 8 ? `<span style="color: #64748b; font-size: 0.75rem;">+ ${keywords.length - 8} autres</span>` : ''}
                                     </div>
                                 </div>
+                                ${theme.description ? `
+                                <div style="margin-bottom: 15px;">
+                                    <strong>Description:</strong>
+                                    <div style="color: #64748b; font-size: 0.9rem; margin-top: 5px;">${escapeHtml(theme.description)}</div>
+                                </div>
+                                ` : ''}
                                 <div style="display: flex; gap: 8px; margin-top: 15px;">
                                     <button onclick="appCall('deleteTheme', '${theme.id}')" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85rem;">
                                         🗑️ Supprimer
@@ -474,6 +479,11 @@ window.app = (function () {
                         <input type="color" id="newThemeColor" value="#6366f1" style="width: 100%; height: 40px; border: 1px solid #e2e8f0; border-radius: 8px;">
                     </div>
 
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Description (optionnelle):</label>
+                        <textarea id="newThemeDescription" style="width: 100%; height: 80px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;"></textarea>
+                    </div>
+
                     <div style="display: flex; gap: 10px;">
                         <button class="btn btn-success" onclick="appCall('createTheme')">✅ Créer</button>
                         <button class="btn btn-secondary" onclick="appCall('closeModal', 'addThemeModal')">❌ Annuler</button>
@@ -492,6 +502,7 @@ window.app = (function () {
         const name = qs('#newThemeName').value;
         const keywordsText = qs('#newThemeKeywords').value;
         const color = qs('#newThemeColor').value;
+        const description = qs('#newThemeDescription').value;
 
         if (!name || name.trim().length === 0) {
             alert('Veuillez entrer un nom de thème valide');
@@ -511,11 +522,13 @@ window.app = (function () {
 
         try {
             const data = await apiPOST("/themes", {
-                name,
-                keywords,
-                color,
-                description: ''
+                name: name,
+                keywords: keywords,
+                color: color,
+                description: description || ''
             });
+
+            console.log('📝 Réponse création thème:', data);
 
             if (data.success) {
                 closeModal('addThemeModal');
@@ -532,19 +545,28 @@ window.app = (function () {
     }
 
     async function deleteTheme(themeId) {
+        console.log('🗑️ Suppression thème appelée avec ID:', themeId);
+
+        if (!themeId) {
+            setMessage('❌ ID de thème invalide - impossible de supprimer', 'error');
+            return;
+        }
+
         if (!confirm('Êtes-vous sûr de vouloir supprimer ce thème ?')) {
             return;
         }
 
         setMessage("Suppression du thème...", "info");
+
         try {
             const data = await apiDELETE(`/themes/${themeId}`);
+
             if (data.success) {
                 await loadThemes();
                 loadThemesManager();
                 setMessage("✅ Thème supprimé avec succès", "success");
             } else {
-                throw new Error(data.error || "Erreur inconnue");
+                throw new Error(data.error || "Erreur inconnue lors de la suppression");
             }
         } catch (error) {
             console.error('❌ Erreur suppression thème:', error);
@@ -591,7 +613,9 @@ window.app = (function () {
                                             <button onclick="appCall('toggleFeed', ${feed.id}, ${!feed.is_active})" class="btn ${feed.is_active ? 'btn-secondary' : 'btn-success'}" style="padding: 6px 12px; font-size: 0.8rem; margin-right: 5px;">
                                                 ${feed.is_active ? '❌ Désactiver' : '✅ Activer'}
                                             </button>
-                                            <button onclick="appCall('deleteFeed', ${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">🗑️ Supprimer</button>
+                                            <button onclick="appCall('deleteFeed', ${feed.id})" class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">
+                                                🗑️ Supprimer
+                                            </button>
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -727,14 +751,33 @@ window.app = (function () {
     function createThemeChart() {
         const container = qs("#themeChart");
         if (!container) {
-            console.log('❌ Canvas themeChart non trouvé');
-            return;
+            console.log('❌ Canvas themeChart non trouvé - création du canvas');
+            // Créer le canvas dynamiquement si nécessaire
+            const analysisTab = qs("#analysisTab");
+            if (analysisTab) {
+                analysisTab.innerHTML += `
+                <div class="chart-container">
+                    <h3>📊 Répartition par Thème</h3>
+                    <canvas id="themeChart"></canvas>
+                </div>
+            `;
+            } else {
+                console.log('❌ Onglet analysis non trouvé');
+                return;
+            }
         }
 
         // Détruire l'ancien graphique
         if (state.charts.themeChart) {
             state.charts.themeChart.destroy();
             state.charts.themeChart = null;
+        }
+
+        // Récupérer le canvas après création
+        const canvas = qs("#themeChart");
+        if (!canvas) {
+            console.log('❌ Canvas toujours non trouvé après création');
+            return;
         }
 
         // Calculer les données des thèmes
@@ -751,13 +794,13 @@ window.app = (function () {
             .slice(0, 10);
 
         if (themeData.length === 0) {
-            container.parentElement.innerHTML = `
-                <h3>📊 Répartition par Thème</h3>
-                <div style="text-align: center; padding: 60px; color: #64748b;">
-                    Aucune donnée de thème disponible
-                    <br><small>Les thèmes apparaîtront après analyse des articles</small>
-                </div>
-            `;
+            canvas.parentElement.innerHTML = `
+            <h3>📊 Répartition par Thème</h3>
+            <div style="text-align: center; padding: 60px; color: #64748b;">
+                Aucune donnée de thème disponible
+                <br><small>Les thèmes apparaîtront après analyse des articles</small>
+            </div>
+        `;
             return;
         }
 
@@ -767,7 +810,7 @@ window.app = (function () {
         ];
 
         try {
-            state.charts.themeChart = new Chart(container, {
+            state.charts.themeChart = new Chart(canvas, {
                 type: 'doughnut',
                 data: {
                     labels: themeData.map(t => t.name),
@@ -1020,6 +1063,7 @@ window.app = (function () {
             console.error('❌ Erreur création graphique sentiment:', error);
         }
     }
+
     function updateAllCharts() {
         console.log('📊 Mise à jour de tous les graphiques...');
 
@@ -1096,7 +1140,7 @@ window.app = (function () {
                 if (response.top_themes && response.top_themes.length > 0) {
                     const themesHtml = response.top_themes.map(theme => {
                         const themeName = theme.name;
-                        const themeCount = theme.total;  // ← CORRECTION: 'total' au lieu de 'count'
+                        const themeCount = theme.total;
 
                         return `<li style="margin-bottom: 8px; padding: 8px; background: #f8fafc; border-radius: 6px;">
             <strong>${themeName}</strong>: ${themeCount} articles
@@ -1113,7 +1157,7 @@ window.app = (function () {
         }
     }
 
-    // ==========Aperçu des Sentiments =======
+    // ========== APERÇU DES SENTIMENTS ==========
     async function loadSentimentOverview() {
         console.log('😊 loadSentimentOverview() appelée');
         try {
@@ -1123,7 +1167,7 @@ window.app = (function () {
             const container = qs("#sentimentOverview");
             if (!container) return;
 
-            if (response && response.stats) {  // ← CHANGEMENT: response.stats au lieu de response.success
+            if (response && response.stats) {
                 const stats = response.stats;
                 const total = stats.positive + stats.neutral + stats.negative;
 
@@ -1162,8 +1206,7 @@ window.app = (function () {
         }
     }
 
-    // ========= =Statistiques d'Apprentissage =================
-
+    // ========== STATISTIQUES D'APPRENTISSAGE ==========
     async function loadLearningStats() {
         console.log('🧠 loadLearningStats() appelée');
         try {
@@ -1173,7 +1216,7 @@ window.app = (function () {
             const container = qs("#learningStats");
             if (!container) return;
 
-            if (response) {  // ← CHANGEMENT: juste response au lieu de response.success
+            if (response) {
                 const stats = response;
                 const html = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
@@ -1266,7 +1309,6 @@ window.app = (function () {
                     </div>
                 </div>
                 
-                <!-- LES DIV DOIVENT ÊTRE EN DEHORS DES LABEL -->
                 <div style="display: flex; flex-wrap: wrap; gap: 5px;">
                     ${(alert.keywords || []).map(keyword => `
                         <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 15px; font-size: 0.8rem; color: #475569;">
@@ -2065,17 +2107,18 @@ window.app = (function () {
     }
 
     // ========== FONCTIONS CORRÉLATION PEARSON ==========
-
     async function analyzeKeywordCorrelation() {
         const keyword = prompt('Entrez un mot-clé à analyser:');
-        if (!keyword) return;
+        if (!keyword || keyword.trim().length === 0) return;
 
         setMessage(`🔍 Analyse de corrélation pour "${keyword}"...`, 'info');
 
         try {
             const response = await apiGET(`/api/analysis/correlations/keyword-sentiment?keyword=${encodeURIComponent(keyword)}`);
 
-            if (response.success) {
+            console.log('📊 Réponse analyse keyword:', response);
+
+            if (response.success && response.analysis) {
                 const analysis = response.analysis;
 
                 // ✅ AJOUTER L'AFFICHAGE DANS L'INTERFACE
@@ -2085,55 +2128,54 @@ window.app = (function () {
                         analysis.correlation < -0.3 ? '#ef4444' : '#f59e0b';
 
                     resultsContainer.innerHTML = `
-                    <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid ${correlationColor}; margin-bottom: 15px;">
-                        <h4 style="margin-top: 0; color: #1e293b;">📊 Résultat de l'analyse : "${keyword}"</h4>
-                        
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
-                            <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
-                                <div style="font-size: 2rem; font-weight: bold; color: ${correlationColor};">
-                                    ${analysis.correlation}
-                                </div>
-                                <div style="color: #64748b; font-size: 0.9rem;">Coefficient Pearson</div>
+                <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid ${correlationColor}; margin-bottom: 15px;">
+                    <h4 style="margin-top: 0; color: #1e293b;">📊 Résultat de l'analyse : "${keyword}"</h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <div style="font-size: 2rem; font-weight: bold; color: ${correlationColor};">
+                                ${analysis.correlation}
                             </div>
-                            
-                            <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
-                                <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">
-                                    ${analysis.sampleSize}
-                                </div>
-                                <div style="color: #64748b; font-size: 0.9rem;">Articles analysés</div>
-                            </div>
-                            
-                            <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
-                                <div style="font-size: 1.2rem; font-weight: bold; color: #8b5cf6;">
-                                    ${analysis.strength.replace('_', ' ')}
-                                </div>
-                                <div style="color: #64748b; font-size: 0.9rem;">Force de corrélation</div>
-                            </div>
+                            <div style="color: #64748b; font-size: 0.9rem;">Coefficient Pearson</div>
                         </div>
                         
-                        <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 10px;">
-                            <strong>📝 Interprétation :</strong>
-                            <p style="margin: 8px 0 0 0; color: #475569;">${analysis.interpretation}</p>
+                        <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">
+                                ${analysis.sampleSize}
+                            </div>
+                            <div style="color: #64748b; font-size: 0.9rem;">Articles analysés</div>
                         </div>
                         
-                        <div style="margin-top: 15px; font-size: 0.8rem; color: #64748b;">
-                            <strong>🧮 Méthodologie :</strong> 
-                            Corrélation de Pearson entre la fréquence du mot-clé "${keyword}" et le score de sentiment des articles.
-                            Une valeur proche de +1 indique une forte relation positive, -1 une forte relation négative.
+                        <div style="text-align: center; padding: 15px; background: #f8fafc; border-radius: 8px;">
+                            <div style="font-size: 1.2rem; font-weight: bold; color: #8b5cf6;">
+                                ${analysis.strength.replace('_', ' ')}
+                            </div>
+                            <div style="color: #64748b; font-size: 0.9rem;">Force de corrélation</div>
                         </div>
                     </div>
-                `;
+                    
+                    <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                        <strong>🔍 Interprétation :</strong>
+                        <p style="margin: 8px 0 0 0; color: #475569;">${analysis.interpretation}</p>
+                    </div>
+                    
+                    <div style="margin-top: 15px; font-size: 0.8rem; color: #64748b;">
+                        <strong>🧮 Méthodologie :</strong> 
+                        Corrélation de Pearson entre la fréquence du mot-clé "${keyword}" et le score de sentiment des articles.
+                        Une valeur proche de +1 indique une forte relation positive, -1 une forte relation négative.
+                    </div>
+                </div>
+            `;
                 }
 
-                // Garder aussi le message traditionnel
                 let message = `📊 Corrélation "${keyword}" ↔ Sentiment: ${analysis.correlation}\n`;
                 message += `📈 Force: ${analysis.strength}\n`;
-                message += `📝 ${analysis.interpretation}\n`;
+                message += `🔍 ${analysis.interpretation}\n`;
                 message += `📋 Échantillon: ${analysis.sampleSize} articles`;
 
                 setMessage(message, analysis.correlation > 0.3 ? 'success' : 'info');
-
-                console.log('🔍 Analyse Pearson:', analysis);
+            } else {
+                throw new Error('Format de réponse invalide');
             }
         } catch (error) {
             console.error('❌ Erreur analyse corrélation:', error);
@@ -2311,4 +2353,4 @@ function appCall(functionName, ...args) {
     }
 }
 
-console.log('✅ app.js chargé et complètement recomposé');
+console.log('✅ app.js chargé et corrigé');

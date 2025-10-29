@@ -1,0 +1,19 @@
+{
+  "alerts": [
+    {
+      "id": "alert_1",
+      "name": "Crise Ukraine",
+      "keywords": [
+        "Ukraine",
+        "conflit",
+        "Zelensky",
+        "guerre",
+        "Russie"
+      ],
+      "severity": "high",
+      "enabled": true,
+      "cooldown": 1800,
+      "created_at": "2025-10-28T19:10:45.167Z"
+    }
+  ]
+}
