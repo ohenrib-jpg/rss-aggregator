@@ -7,6 +7,7 @@ MAJ 28/10/2025
 Les routes "alertes" fonctionent enfin
 Le parsser Axios est parfaitement operationnel avec l'analyse thematique
 Reste a resoudre la resilience des flux rss
+MAJ 29/10/2025
 DEBUT D'INTEGRATION DU DEBOGGEUR IA => PROPOSE DES CORRECTIONS DU CODE EN TEMPS REEL EN CAS D'ERREURS (console ou silencieuses)
 
 Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2
