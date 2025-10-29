@@ -4,8 +4,9 @@ Système complet d'analyse de flux RSS avec intégration IA pour la correction d
 MERCI DEEPSEEK ;-)
 ## 🚀 Fonctionnalités
 MAJ 28/10/2025
-Les routes "alertes" fonctionennt enfin
+Les routes "alertes" fonctionent enfin
 Le parsser Axios est parfaitement operationnel avec l'analyse thematique
+Reste a resoudre la resilience des flux rss
 DEBUT D'INTEGRATION DU DEBOGGEUR IA => PROPOSE DES CORRECTIONS DU CODE EN TEMPS REEL EN CAS D'ERREURS (console ou silencieuses)
 
 Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2
