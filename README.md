@@ -6,6 +6,9 @@ MERCI DEEPSEEK ;-)
 MAJ 28/10/2025
 Les routes "alertes" fonctionennt enfin
 Le parsser Axios est parfaitement operationnel avec l'analyse thematique
+DEBUT D'INTEGRATION DU DEBOGGEUR IA => PROPOSE DES CORRECTIONS DU CODE EN TEMPS REEL EN CAS D'ERREURS (console ou silencieuses)
+
+Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2
 
 ### Analyse de Base
 - 📊 Agrégation de flux RSS multiples + Parsser reseaux sociaux
