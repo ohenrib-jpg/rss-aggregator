@@ -15,6 +15,8 @@ DEBUT D'INTEGRATION DU DEBOGGEUR IA => PROPOSE DES CORRECTIONS DU CODE EN TEMPS 
 Debut de l'integration de la carte interactive des relations internationales et des alertes silencieuses predictives
 Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2
 
+N'OUBLIEZ PAS D'INSTALLER llama.cpp (et un modele gguf)
+
 ### Analyse de Base
 - 📊 Agrégation de flux RSS multiples + Parsser reseaux sociaux
 - 🎨 Thèmes personnalisables avec couleurs
