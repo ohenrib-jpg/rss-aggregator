@@ -13,7 +13,7 @@ Reste a resoudre la resilience des flux rss
 MAJ 29/10/2025
 DEBUT D'INTEGRATION DU DEBOGGEUR IA => PROPOSE DES CORRECTIONS DU CODE EN TEMPS REEL EN CAS D'ERREURS (console ou silencieuses)
 Debut de l'integration de la carte interactive des relations internationales et des alertes silencieuses predictives
-Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2
+Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2 3B Q4_K_M quantized depuis F16
 
 N'OUBLIEZ PAS D'INSTALLER llama.cpp (et un modele gguf)
 
