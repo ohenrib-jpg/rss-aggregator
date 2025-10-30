@@ -1,4 +1,5 @@
 # Agrégateur RSS Thématique avec IA v.5.*
+contact : ohenri.b@gmail.com
 
 Système complet d'analyse de flux RSS (detection de "l'inconscient mediatique") et commentaires reseaux sociaux ("l'inconscient populaire")=> Analyse du facteur_Z (ecart entre discours public, et ressenti populaire). Intégration IA pour la correction des scores de sentiment, l'analyse en temps reel des flux d'informations, les calculs scientifiques (bayesien, corroboration, formule de Shannon, de Pearson), les modules de fonctions a venir (+ quelques gouttes de potion speciale)....et génération de rapports.
 MERCI DEEPSEEK ;-)
@@ -55,4 +56,4 @@ npm install
 - Shannon's entropy
 - Frontend adjusted to use `confidence` and display `bayesian_posterior`
 - Tests added in `Scripts/`
-Et repo toujours public : ohenri-jpg
+Et repo toujours public : ohenrib-jpg
