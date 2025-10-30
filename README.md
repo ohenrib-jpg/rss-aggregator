@@ -32,6 +32,7 @@ N'OUBLIEZ PAS D'INSTALLER llama.cpp (et un modele gguf => RAPPEL : utilisez la f
 - 🌐 Vérification contextuelle par scraping
 - 📄 Génération de rapports PDF professionnels
 - 🔄 Apprentissage automatique
+- 🤖 Prediction des points de ruptures (fonction "Pythie", utilisant un filtre de bruits et de signaux faibles "fait-maison"=>pas dispo sur le repo)
 
 ## 🛠 Installation
 
