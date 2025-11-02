@@ -34,18 +34,20 @@
   "dependencies": {
     "axios": "^1.12.2",
     "body-parser": "^1.20.2",
+    "cheerio": "^1.1.2",
     "concurrently": "^8.2.2",
     "cors": "^2.8.5",
     "d3": "^7.9.0",
     "express": "^4.18.2",
     "feedme": "^2.0.2",
+    "jsdom": "^27.1.0",
     "nodemailer": "^6.9.7",
     "pg": "^8.11.3",
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
     "cross-env": "^10.1.0",
-    "eslint": "^9.38.0",
+    "eslint": "^9.39.0",
     "nodemon": "^3.0.1",
     "sqlite3": "^5.1.7"
   },

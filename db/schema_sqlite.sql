@@ -92,6 +92,24 @@ CREATE TABLE bayes_priors (
     PRIMARY KEY (entity_type, entity_id)
 );
 
+CREATE TABLE IF NOT EXISTS social_posts (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT,
+    link TEXT,
+    pub_date DATETIME,
+    source TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    author TEXT,
+    sentiment_score REAL,
+    sentiment_type TEXT,
+    confidence REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
+
 -- ===========================================================================
 -- INDEXES
 -- ===========================================================================
@@ -104,6 +122,8 @@ CREATE INDEX idx_theme_analyses_article ON theme_analyses(article_id);
 CREATE INDEX idx_theme_analyses_theme ON theme_analyses(theme_id);
 CREATE INDEX idx_bayes_evidence_entity ON bayes_evidence(entity_type, entity_id);
 CREATE INDEX idx_bayes_evidence_processed ON bayes_evidence(processed);
+CREATE INDEX IF NOT EXISTS idx_social_posts_date ON social_posts(pub_date);
+CREATE INDEX IF NOT EXISTS idx_social_posts_source ON social_posts(source_type);
 
 -- ===========================================================================
 -- DONNÉES PAR DÉFAUT

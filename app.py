@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Flask IA Service - Backend d'analyse pure (appelé par Node.js)
-Version optimisée pour architecture hybride
+Version optimisée avec routes factorisées et nouvelles fonctionnalités
 """
 
 import os
@@ -16,6 +16,7 @@ from flask_cors import CORS
 
 from modules.email_sender import email_sender
 from modules.scheduler import report_scheduler
+from modules.alert_system import alert_system
 
 # Modules internes
 from modules.db_manager import init_db, get_database_url, get_connection, put_connection
@@ -23,6 +24,7 @@ from modules.storage_manager import save_analysis_batch, load_recent_analyses, s
 from modules.corroboration import find_corroborations
 from modules.analysis_utils import enrich_analysis, simple_bayesian_fusion, compute_confidence_from_features
 from modules.metrics import compute_metrics
+from modules.bayesienappre import bayesian_fusion
 from functools import wraps
 
 def require_database(f):
@@ -70,7 +72,6 @@ except Exception as e:
     logger.exception("❌ Erreur init_db: %s", e)
 
 # ------- Helpers -------
-# ------- Helpers -------
 def json_ok(payload: Dict[str, Any], status=200):
     """Retourne une réponse JSON standardisée avec success: true"""
     if isinstance(payload, dict) and 'success' not in payload:
@@ -114,14 +115,12 @@ def normalize_article_row(row: Dict[str, Any]) -> Dict[str, Any]:
     
     return out
 
-# ========== ROUTES API PRINCIPALES ==========
+# ========== ROUTES SANTÉ ET INFOS ==========
 
-# Route health
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Route de santé minimaliste pour vérification service"""
     try:
-        # Vérification basique de la base de données
         db_status = "ready" if DB_CONFIGURED else "configuring"
         
         return jsonify({
@@ -156,48 +155,18 @@ def root():
             "/api/geopolitical/report",
             "/api/geopolitical/crisis-zones",
             "/api/geopolitical/relations",
-            "/api/learning/stats"
+            "/api/learning/stats",
+            "/api/corroboration/find",
+            "/api/bayesian/fusion",
+            "/api/anomalies/detect",
+            "/api/reports/generate"
         ]
     })
 
-@app.route("/api/health", methods=["GET"])
-@app.route("/health", methods=["GET"])
-def api_health():
-    """Vérification de l'état du service IA"""
-    try:
-        db_ok = False
-        try:
-            conn = get_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT 1")
-            cur.close()
-            put_connection(conn)
-            db_ok = True
-        except Exception as e:
-            logger.warning(f"Health check DB failed: {e}")
-            db_ok = False
-        
-        return jsonify({
-            "ok": True, 
-            "service": "Flask IA",
-            "status": "healthy",
-            "database": "connected" if db_ok else "disconnected",
-            "database_url_configured": DB_CONFIGURED,
-            "modules": {
-                "analysis_utils": True,
-                "corroboration": True,
-                "metrics": True,
-                "storage_manager": True
-            },
-            "timestamp": datetime.utcnow().isoformat()
-        })
-    except Exception as e:
-        logger.exception("Health check failed")
-        return json_error("health check failed: " + str(e))
-
-# ========== ROUTES ANALYSE IA ==========
+# ========== ROUTES ANALYSE IA (FACTORISÉES) ==========
 
 @app.route("/api/analyze", methods=["POST"])
+@require_database
 def api_analyze():
     """
     Analyse approfondie d'un article avec :
@@ -256,6 +225,7 @@ def api_analyze():
         return json_error("analyse échouée: " + str(e))
 
 @app.route("/api/analyze/sentiment", methods=["POST"])
+@require_database
 def api_analyze_sentiment():
     """
     Analyse de sentiment simple d'un texte
@@ -317,6 +287,7 @@ def api_analyze_sentiment():
         return json_error("analyse de sentiment échouée: " + str(e))
 
 @app.route("/api/analyze/themes", methods=["POST"])
+@require_database
 def api_analyze_themes():
     """
     Analyse thématique d'un texte
@@ -388,9 +359,10 @@ def api_analyze_themes():
         logger.exception("Erreur api_analyze_themes")
         return json_error("analyse thématique échouée: " + str(e))
 
-# ========== ROUTES MÉTRIQUES ==========
+# ========== ROUTES MÉTRIQUES (FACTORISÉES) ==========
 
 @app.route("/api/metrics", methods=["GET"])
+@require_database
 def api_metrics():
     """Calcule et renvoie les métriques d'analyse avancées"""
     try:
@@ -409,6 +381,7 @@ def api_metrics():
         return json_error("impossible de générer metrics: " + str(e))
 
 @app.route("/api/summaries", methods=["GET"])
+@require_database
 def api_summaries():
     """Résumé global des analyses"""
     try:
@@ -427,9 +400,10 @@ def api_summaries():
         logger.exception("Erreur api_summaries")
         return json_error("impossible de générer résumé: " + str(e))
 
-# ========== ROUTES SENTIMENT ==========
+# ========== ROUTES SENTIMENT (FACTORISÉES) ==========
 
 @app.route("/api/sentiment/stats", methods=["GET"])
+@require_database
 def api_sentiment_stats():
     """Statistiques de sentiment avec analyse IA"""
     try:
@@ -475,10 +449,10 @@ def api_sentiment_stats():
         logger.exception("Erreur api_sentiment_stats")
         return json_error("sentiment stats error: " + str(e))
 
-
-# ========== ROUTES GÉOPOLITIQUE ==========
+# ========== ROUTES GÉOPOLITIQUE (FACTORISÉES) ==========
 
 @app.route("/api/geopolitical/report", methods=["GET"])
+@require_database
 def api_geopolitical_report():
     """Rapport géopolitique avec analyse IA des tendances"""
     try:
@@ -550,6 +524,7 @@ def api_geopolitical_report():
         return json_error("geopolitical report error: " + str(e))
 
 @app.route("/api/geopolitical/crisis-zones", methods=["GET"])
+@require_database
 def api_geopolitical_crisis_zones():
     """Zones de crise géopolitique avec analyse IA"""
     try:
@@ -577,6 +552,7 @@ def api_geopolitical_crisis_zones():
         return json_error("crisis zones error: " + str(e))
 
 @app.route("/api/geopolitical/relations", methods=["GET"])
+@require_database
 def api_geopolitical_relations():
     """Relations géopolitiques détectées par IA"""
     try:
@@ -597,9 +573,10 @@ def api_geopolitical_relations():
         logger.exception("Erreur api_geopolitical_relations")
         return json_error("relations error: " + str(e))
 
-# ========== ROUTES APPRENTISSAGE ==========
+# ========== ROUTES APPRENTISSAGE (FACTORISÉES) ==========
 
 @app.route("/api/learning/stats", methods=["GET"])
+@require_database
 def api_learning_stats():
     """Statistiques d'apprentissage de l'IA"""
     try:
@@ -669,7 +646,327 @@ def api_learning_stats():
         logger.exception("Erreur api_learning_stats")
         return json_error("learning stats error: " + str(e))
 
-# ========== ROUTE COURRIEL FONC. =========
+# ========== NOUVELLES ROUTES : CORROBORATION ==========
+
+@app.route("/api/corroboration/find", methods=["POST"])
+@require_database
+def api_corroboration_find():
+    """Recherche d'articles corroborants pour un article donné"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        article = payload.get("article")
+        if not article:
+            return json_error("Article manquant dans la requête", 400)
+        
+        threshold = payload.get("threshold", 0.65)
+        top_n = payload.get("top_n", 10)
+        
+        logger.info(f"🔍 Recherche de corroborations pour: {article.get('title', 'Unknown')[:50]}...")
+        
+        # Charger les articles récents pour la recherche
+        recent_articles = load_recent_analyses(days=3) or []
+        
+        # Rechercher les corroborations
+        corroborations = find_corroborations(
+            article, 
+            recent_articles, 
+            threshold=threshold, 
+            top_n=top_n
+        )
+        
+        logger.info(f"✅ {len(corroborations)} corroborations trouvées")
+        
+        return json_ok({
+            "success": True,
+            "corroborations": corroborations,
+            "article_id": article.get("id"),
+            "threshold": threshold,
+            "count": len(corroborations)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_corroboration_find")
+        return json_error("recherche de corroborations échouée: " + str(e))
+
+@app.route("/api/corroboration/stats", methods=["GET"])
+@require_database
+def api_corroboration_stats():
+    """Statistiques sur les corroborations"""
+    try:
+        rows = load_recent_analyses(days=30) or []
+        
+        # Calculer les statistiques de corroboration
+        articles_with_corroboration = [r for r in rows if r.get("corroboration_strength", 0) > 0]
+        avg_strength = sum(r.get("corroboration_strength", 0) for r in articles_with_corroboration) / len(articles_with_corroboration) if articles_with_corroboration else 0
+        
+        stats = {
+            "total_articles": len(rows),
+            "articles_with_corroboration": len(articles_with_corroboration),
+            "coverage_rate": len(articles_with_corroboration) / len(rows) if rows else 0,
+            "avg_corroboration_strength": round(avg_strength, 3),
+            "strong_corroborations": len([r for r in articles_with_corroboration if r.get("corroboration_strength", 0) > 0.7]),
+            "weak_corroborations": len([r for r in articles_with_corroboration if r.get("corroboration_strength", 0) < 0.3])
+        }
+        
+        return json_ok({
+            "success": True,
+            "stats": stats
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_corroboration_stats")
+        return json_error("statistiques corroboration échouées: " + str(e))
+
+# ========== NOUVELLES ROUTES : FUSION BAYÉSIENNE ==========
+
+@app.route("/api/bayesian/fusion", methods=["POST"])
+@require_database
+def api_bayesian_fusion():
+    """Application de la fusion bayésienne à des preuves multiples"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        evidences = payload.get("evidences", [])
+        prior = payload.get("prior", 0.5)
+        
+        if not evidences:
+            return json_error("Aucune preuve fournie", 400)
+        
+        logger.info(f"🧮 Fusion bayésienne avec {len(evidences)} preuve(s)")
+        
+        # Utiliser la fusion bayésienne avancée
+        result = bayesian_fusion(evidences)
+        
+        logger.info(f"✅ Fusion bayésienne terminée: posterior={result.get('posterior'):.4f}")
+        
+        return json_ok({
+            "success": True,
+            "result": result,
+            "prior": prior,
+            "evidence_count": len(evidences)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_bayesian_fusion")
+        return json_error("fusion bayésienne échouée: " + str(e))
+
+@app.route("/api/bayesian/update", methods=["POST"])
+@require_database
+def api_bayesian_update():
+    """Mise à jour bayésienne simple"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        from modules.bayesienappre import BayesianLearningSystem
+        
+        prior = payload.get("prior", 0.5)
+        likelihood = payload.get("likelihood", 0.5)
+        evidence_weight = payload.get("evidence_weight", 1.0)
+        
+        bayesian_system = BayesianLearningSystem()
+        result = bayesian_system.bayesian_update(prior, likelihood, evidence_weight)
+        
+        return json_ok({
+            "success": True,
+            "prior": prior,
+            "likelihood": likelihood,
+            "result": result
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_bayesian_update")
+        return json_error("mise à jour bayésienne échouée: " + str(e))
+
+# ========== NOUVELLES ROUTES : DÉTECTION D'ANOMALIES ==========
+
+@app.route("/api/anomalies/detect", methods=["POST"])
+@require_database
+def api_anomalies_detect():
+    """Détection d'anomalies dans les données d'articles"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        articles = payload.get("articles", [])
+        anomaly_type = payload.get("type", "volume")  # volume, sentiment, relations
+        
+        if not articles:
+            # Charger les articles récents si non fournis
+            articles = load_recent_analyses(days=7) or []
+        
+        logger.info(f"🚨 Détection d'anomalies ({anomaly_type}) sur {len(articles)} articles")
+        
+        # Simuler la détection d'anomalies (à intégrer avec le module JS)
+        anomalies = []
+        
+        if anomaly_type == "volume" and len(articles) > 10:
+            # Détection simple de pics de volume
+            articles_per_hour = {}
+            for article in articles:
+                date = article.get("date") or article.get("pubDate")
+                if date:
+                    hour_key = date[:13] + ":00:00"  # Regroupement par heure
+                    articles_per_hour[hour_key] = articles_per_hour.get(hour_key, 0) + 1
+            
+            avg_volume = sum(articles_per_hour.values()) / len(articles_per_hour) if articles_per_hour else 0
+            for hour, count in articles_per_hour.items():
+                if count > avg_volume * 2:  # Pic de volume (2x la moyenne)
+                    anomalies.append({
+                        "type": "volume_spike",
+                        "hour": hour,
+                        "count": count,
+                        "avg_volume": avg_volume,
+                        "severity": "high" if count > avg_volume * 3 else "medium"
+                    })
+        
+        elif anomaly_type == "sentiment":
+            # Détection de sentiments extrêmes
+            sentiments = [a.get("sentiment", {}).get("score", 0) for a in articles if a.get("sentiment")]
+            if sentiments:
+                avg_sentiment = sum(sentiments) / len(sentiments)
+                std_dev = (sum((s - avg_sentiment) ** 2 for s in sentiments) / len(sentiments)) ** 0.5
+                
+                for article in articles:
+                    sentiment = article.get("sentiment", {}).get("score", 0)
+                    if std_dev > 0 and abs(sentiment - avg_sentiment) > 2 * std_dev:
+                        anomalies.append({
+                            "type": "sentiment_extreme",
+                            "article_id": article.get("id"),
+                            "sentiment": sentiment,
+                            "avg_sentiment": avg_sentiment,
+                            "z_score": (sentiment - avg_sentiment) / std_dev,
+                            "severity": "high"
+                        })
+        
+        logger.info(f"✅ {len(anomalies)} anomalies détectées")
+        
+        return json_ok({
+            "success": True,
+            "anomalies": anomalies,
+            "type": anomaly_type,
+            "articles_analyzed": len(articles)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_anomalies_detect")
+        return json_error("détection d'anomalies échouée: " + str(e))
+
+# ========== NOUVELLES ROUTES : RAPPORTS AVANCÉS ==========
+
+@app.route("/api/reports/generate", methods=["POST"])
+@require_database
+def api_reports_generate():
+    """Génération de rapports d'analyse avancés"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        report_type = payload.get("type", "comprehensive")
+        days = payload.get("days", 30)
+        
+        logger.info(f"📊 Génération de rapport {report_type} sur {days} jours")
+        
+        # Charger les données
+        articles = load_recent_analyses(days=days) or []
+        
+        if report_type == "comprehensive":
+            # Rapport complet avec toutes les métriques
+            report = generate_comprehensive_report(articles, days)
+        elif report_type == "geopolitical":
+            # Rapport géopolitique focalisé
+            report = generate_geopolitical_report(articles, days)
+        elif report_type == "sentiment":
+            # Rapport d'analyse de sentiment
+            report = generate_sentiment_report(articles, days)
+        else:
+            return json_error(f"Type de rapport inconnu: {report_type}", 400)
+        
+        logger.info(f"✅ Rapport {report_type} généré avec succès")
+        
+        return json_ok({
+            "success": True,
+            "report": report,
+            "type": report_type,
+            "period_days": days,
+            "articles_analyzed": len(articles)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_reports_generate")
+        return json_error("génération de rapport échouée: " + str(e))
+
+def generate_comprehensive_report(articles, days):
+    """Génère un rapport d'analyse complet"""
+    # Métriques de base
+    total_articles = len(articles)
+    avg_confidence = sum(a.get("confidence", 0) for a in articles) / total_articles if articles else 0
+    
+    # Analyse des thèmes
+    theme_counts = {}
+    for article in articles:
+        for theme in article.get("themes", []):
+            theme_counts[theme] = theme_counts.get(theme, 0) + 1
+    top_themes = sorted(theme_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    # Analyse de sentiment
+    sentiments = [a.get("sentiment", {}).get("score", 0) for a in articles if a.get("sentiment")]
+    avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+    
+    return {
+        "summary": {
+            "total_articles": total_articles,
+            "period_days": days,
+            "avg_confidence": round(avg_confidence, 3),
+            "avg_sentiment": round(avg_sentiment, 3),
+            "analysis_date": datetime.utcnow().isoformat()
+        },
+        "themes": {
+            "top_themes": [{"theme": theme, "count": count} for theme, count in top_themes],
+            "total_unique_themes": len(theme_counts)
+        },
+        "sentiment_analysis": {
+            "positive_articles": len([a for a in articles if a.get("sentiment", {}).get("score", 0) > 0.1]),
+            "negative_articles": len([a for a in articles if a.get("sentiment", {}).get("score", 0) < -0.1]),
+            "neutral_articles": len([a for a in articles if abs(a.get("sentiment", {}).get("score", 0)) <= 0.1]),
+            "avg_sentiment_score": round(avg_sentiment, 3)
+        },
+        "corroboration_analysis": {
+            "articles_with_corroboration": len([a for a in articles if a.get("corroboration_strength", 0) > 0]),
+            "avg_corroboration_strength": round(sum(a.get("corroboration_strength", 0) for a in articles) / total_articles if articles else 0, 3)
+        }
+    }
+
+def generate_geopolitical_report(articles, days):
+    """Génère un rapport géopolitique focalisé"""
+    # Implémentation simplifiée - à enrichir
+    return {
+        "type": "geopolitical",
+        "period_days": days,
+        "articles_analyzed": len(articles),
+        "analysis_date": datetime.utcnow().isoformat()
+    }
+
+def generate_sentiment_report(articles, days):
+    """Génère un rapport d'analyse de sentiment"""
+    # Implémentation simplifiée - à enrichir
+    return {
+        "type": "sentiment",
+        "period_days": days,
+        "articles_analyzed": len(articles),
+        "analysis_date": datetime.utcnow().isoformat()
+    }
+
+# ========== ROUTES COURRIEL (EXISTANTES) ==========
+
 @app.route('/api/email/config', methods=['POST'])
 def api_email_config():
     """Sauvegarde la configuration email"""
@@ -712,11 +1009,8 @@ def api_send_test_report():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+# ========== ROUTES ALERTES (EXISTANTES) ==========
 
-# ==========Sys d'alerte active ===========
-from modules.alert_system import alert_system
-
-# Routes pour les alertes
 @app.route('/api/alerts', methods=['GET'])
 def api_get_alerts():
     """Récupère toutes les alertes"""
@@ -810,7 +1104,7 @@ if __name__ == "__main__":
     logger.info(f"📡 Port: {port}")
     logger.info(f"🔧 Debug: {debug}")
     logger.info(f"🗄️ Database: {'Configured' if DB_CONFIGURED else 'Not configured'}")
-    logger.info(f"🤖 Modules: analysis_utils, corroboration, metrics, bayesian")
+    logger.info(f"🤖 Modules: analysis_utils, corroboration, metrics, bayesian, anomalies")
     logger.info("=" * 70)
     
     app.run(host="0.0.0.0", port=port, debug=debug)

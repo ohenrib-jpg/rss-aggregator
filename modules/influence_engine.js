@@ -1,110 +1,85 @@
+// ===========================================================================
+// MOTEUR D'INFLUENCE GÉOPOLITIQUE
+// ===========================================================================
 
 class InfluenceEngine {
     constructor() {
         this.relations = new Map();
         this.countries = new Set();
-        this.evidence = [];
+        console.log('✅ InfluenceEngine intégré avec succès');
     }
 
-    // 🎯 Détection des relations dans un article
     async analyzeArticle(article) {
-        const countries = await this.extractCountries(article);
-        const relations = this.detectBilateralRelations(countries, article);
-        this.updateNetwork(relations, article);
-        return relations;
-    }
-
-    // 🌍 Extraction des entités pays
-    async extractCountries(article) {
-        // Utilisation combine : regex + ML Flask
-        const text = article.title + ' ' + article.content;
-
-        if (config.services?.flask?.enabled) {
-            try {
-                const flaskResponse = await axios.post(
-                    `${config.services.flask.url}/api/analyze/entities`,
-                    { text }
-                );
-                return flaskResponse.data.countries || [];
-            } catch (error) {
-                console.warn('Flask indisponible, fallback regex');
-            }
+        try {
+            const countries = await this.extractCountries(article);
+            const relations = this.detectBilateralRelations(countries, article);
+            this.updateNetwork(relations, article);
+            return relations;
+        } catch (error) {
+            console.error('Error analyzing article:', error);
+            return [];
         }
-
-        // Fallback : détection par regex
-        return this.extractCountriesRegex(text);
     }
 
-    extractCountriesRegex(text) {
-        const countryPatterns = {
-            'france': /\b(france|français|française|paris)\b/gi,
-            'usa': /\b(usa|états-unis|amérique|washington)\b/gi,
-            'china': /\b(chine|chinois|pékin|beijing)\b/gi,
-            'russia': /\b(russie|russe|moscou|poutine)\b/gi,
-            'germany': /\b(allemagne|allemand|berlin)\b/gi,
-            // ... à compléter avec tous les pays
-        };
-
+    async extractCountries(article) {
+        const text = (article.title || '') + ' ' + (article.content || '');
+        const countryList = ['france', 'usa', 'china', 'russia', 'germany', 'uk', 'japan', 'india', 'brazil', 'canada', 'ukraine', 'israel', 'palestine', 'iran'];
         const detected = [];
-        for (const [country, pattern] of Object.entries(countryPatterns)) {
-            if (text.match(pattern)) {
+
+        for (const country of countryList) {
+            const regex = new RegExp('\\b' + country + '\\b', 'gi');
+            if (text.match(regex)) {
                 detected.push(country);
             }
         }
-        return [...new Set(detected)]; // Déduplication
+
+        return detected;
     }
-}
 
     detectBilateralRelations(countries, article) {
         const relations = [];
-        
-        // Analyse chaque paire de pays mentionnés
+
         for (let i = 0; i < countries.length; i++) {
             for (let j = i + 1; j < countries.length; j++) {
-                const relation = this.analyzeCountryPair(
-                    countries[i], 
-                    countries[j], 
-                    article
-                );
+                const relation = this.analyzeCountryPair(countries[i], countries[j], article);
                 if (relation.strength !== 0) {
                     relations.push(relation);
                 }
             }
         }
+
         return relations;
     }
 
     analyzeCountryPair(countryA, countryB, article) {
-        const context = article.content.toLowerCase();
-        const title = article.title.toLowerCase();
-        const fullText = title + ' ' + context;
+        const text = ((article.title || '') + ' ' + (article.content || '')).toLowerCase();
 
-        // Mots-clés indicateurs de relations
-        const cooperativeKeywords = [
-            'accord', 'coopération', 'partenariat', 'alliance', 'sommet',
-            'entente', 'dialogue', 'commerce', 'investissement', 'visite'
-        ];
+        const positiveWords = ['accord', 'cooperation', 'partenariat', 'alliance', 'sommet', 'entente', 'dialogue', 'paix'];
+        const negativeWords = ['conflit', 'tension', 'sanction', 'crise', 'hostilité', 'menace', 'protestation', 'guerre'];
 
-        const conflictKeywords = [
-            'conflit', 'tension', 'sanction', 'crise', 'hostilité',
-            'affrontement', 'menace', 'protestation', 'condamnation'
-        ];
+        let positiveCount = 0;
+        let negativeCount = 0;
 
-        // Calcul du score de relation
-        let cooperativeScore = this.countKeywords(fullText, cooperativeKeywords);
-        let conflictScore = this.countKeywords(fullText, conflictKeywords);
-
-        // Normalisation et pondération
-        const totalKeywords = cooperativeScore + conflictScore;
-        let strength = 0;
-
-        if (totalKeywords > 0) {
-            strength = (cooperativeScore - conflictScore) / totalKeywords;
-            // Pondération par la confiance de l'article
-            strength *= (article.confidence_score || 0.5);
+        for (const word of positiveWords) {
+            const regex = new RegExp('\\b' + word + '\\b', 'gi');
+            const matches = text.match(regex);
+            if (matches) positiveCount += matches.length;
         }
 
-        // Classification du type de relation
+        for (const word of negativeWords) {
+            const regex = new RegExp('\\b' + word + '\\b', 'gi');
+            const matches = text.match(regex);
+            if (matches) negativeCount += matches.length;
+        }
+
+        const total = positiveCount + negativeCount;
+        let strength = 0;
+
+        if (total > 0) {
+            strength = (positiveCount - negativeCount) / total;
+            strength = Math.max(Math.min(strength, 1), -1);
+        }
+
         let type = 'neutral';
         if (strength > 0.3) type = 'cooperative';
         else if (strength < -0.3) type = 'conflict';
@@ -112,91 +87,85 @@ class InfluenceEngine {
 
         return {
             countries: [countryA, countryB],
-            strength: Math.max(Math.min(strength, 1), -1), // Clamp [-1, 1]
+            strength: strength,
             type: type,
-            confidence: this.calculateConfidence(article, totalKeywords),
+            confidence: Math.min((positiveCount + negativeCount) / 10, 0.9),
             evidence: {
                 articleId: article.id,
-                excerpt: article.title,
-                timestamp: article.pubDate || new Date()
+                excerpt: (article.title || '').substring(0, 50)
             }
         };
     }
 
-    countKeywords(text, keywords) {
-        return keywords.reduce((count, keyword) => {
-            const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-            const matches = text.match(regex);
-            return count + (matches ? matches.length : 0);
-        }, 0);
-    }
-
-    calculateConfidence(article, keywordCount) {
-        // Confiance basée sur la qualité de l'article + preuves trouvées
-        const baseConfidence = article.confidence_score || 0.5;
-        const keywordConfidence = Math.min(keywordCount / 5, 1); // Max 1.0
-        return (baseConfidence * 0.6 + keywordConfidence * 0.4);
-    }
-
     updateNetwork(newRelations, article) {
-        newRelations.forEach(relation => {
-            const key = this.getRelationKey(relation.countries[0], relation.countries[1]);
-            
+        for (const relation of newRelations) {
+            const key = relation.countries.sort().join('|');
+
             if (!this.relations.has(key)) {
-                // Nouvelle relation
                 this.relations.set(key, {
                     countries: relation.countries,
                     currentStrength: relation.strength,
-                    confidence: relation.confidence,
                     type: relation.type,
+                    confidence: relation.confidence,
                     evidence: [relation.evidence],
                     evolution: [{
                         timestamp: new Date(),
-                        strength: relation.strength,
-                        source: article.id
+                        strength: relation.strength
                     }],
                     lastUpdated: new Date()
                 });
             } else {
-                // Mise à jour relation existante
                 const existing = this.relations.get(key);
-                
-                // Moyenne pondérée avec décroissance temporelle
-                const timeFactor = this.calculateTimeFactor(existing.lastUpdated);
-                const newStrength = (existing.currentStrength * timeFactor + relation.strength) / (timeFactor + 1);
-                
-                existing.currentStrength = newStrength;
-                existing.confidence = Math.max(existing.confidence, relation.confidence);
+                existing.currentStrength = (existing.currentStrength + relation.strength) / 2;
                 existing.evidence.push(relation.evidence);
                 existing.evolution.push({
                     timestamp: new Date(),
-                    strength: newStrength,
-                    source: article.id
+                    strength: existing.currentStrength
                 });
                 existing.lastUpdated = new Date();
-                
-                // Mise à jour du type
-                existing.type = this.classifyRelationType(newStrength);
             }
-        });
+
+            for (const country of relation.countries) {
+                this.countries.add(country);
+            }
+        }
     }
 
-    getRelationKey(countryA, countryB) {
-        return [countryA, countryB].sort().join('|');
+    calculateInfluenceScore(country) {
+        const countryRelations = Array.from(this.relations.values())
+            .filter(rel => rel.countries.includes(country));
+
+        if (countryRelations.length === 0) return 0;
+
+        const totalStrength = countryRelations.reduce((sum, rel) => {
+            return sum + Math.abs(rel.currentStrength);
+        }, 0);
+
+        return totalStrength / countryRelations.length;
     }
 
-    calculateTimeFactor(lastUpdate) {
-        const hoursDiff = (new Date() - new Date(lastUpdate)) / (1000 * 60 * 60);
-        return Math.max(1, 24 / (hoursDiff + 1)); // Décroissance sur 24h
-    }
+    getNetworkMetrics() {
+        const relations = Array.from(this.relations.values());
+        const totalRelations = relations.length;
 
-    classifyRelationType(strength) {
-        if (strength > 0.6) return 'alliance';
-        if (strength > 0.3) return 'cooperative';
-        if (strength > 0.1) return 'positive';
-        if (strength > -0.1) return 'neutral';
-        if (strength > -0.3) return 'tense';
-        if (strength > -0.6) return 'conflict';
-        return 'hostile';
-    }
+        if (totalRelations === 0) {
+            return {
+                totalCountries: 0,
+                totalRelations: 0,
+                avgStrength: 0,
+                lastAnalysis: new Date()
+            };
+        }
 
+        const avgStrength = relations.reduce((sum, rel) => sum + Math.abs(rel.currentStrength), 0) / totalRelations;
+
+        return {
+            totalCountries: this.countries.size,
+            totalRelations: totalRelations,
+            avgStrength: avgStrength,
+            lastAnalysis: new Date()
+        };
+    }
+}
+
+module.exports = new InfluenceEngine();

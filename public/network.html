@@ -6,6 +6,173 @@
     <title>Réseau d'Influence Géopolitique - GEOPOLIS</title>
     <link rel="stylesheet" href="css/network.css">
     <script src="lib/d3.v7.min.js"></script>
+    <style>
+        /* Styles de base pour le réseau */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: #1e40af;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .metrics-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .label {
+            font-weight: bold;
+            color: #475569;
+        }
+
+        .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1e40af;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 20px;
+        }
+
+        .network-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+
+        .cooperative {
+            background: #10b981;
+        }
+
+        .conflict {
+            background: #ef4444;
+        }
+
+        .neutral {
+            background: #94a3b8;
+        }
+
+        .network-graph {
+            height: 500px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .search-section input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+        }
+
+        .country-details {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .recent-relations {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .relations-list {
+            margin-top: 10px;
+        }
+
+        .relation-item {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+            .relation-item.cooperative {
+                background: #dcfce7;
+                border-left: 4px solid #10b981;
+            }
+
+            .relation-item.conflict {
+                background: #fee2e2;
+                border-left: 4px solid #ef4444;
+            }
+
+            .relation-item.tense {
+                background: #fef3c7;
+                border-left: 4px solid #f59e0b;
+            }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #64748b;
+        }
+
+        .status {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -100,6 +267,469 @@
         </footer>
     </div>
 
-    <script src="js/network.js"></script>
+    <script>
+        class NetworkVisualization {
+            constructor() {
+                this.networkData = null;
+                this.selectedCountry = null;
+                this.autoRefresh = false;
+                this.init();
+            }
+
+            async init() {
+                await this.loadD3();
+                this.setupEventListeners();
+                await this.loadNetworkData();
+                this.startAutoRefresh();
+            }
+
+            async loadD3() {
+                if (typeof d3 === 'undefined') {
+                    console.error('D3.js non chargé');
+                    return;
+                }
+            }
+
+            setupEventListeners() {
+                // Boutons de contrôle
+                document.getElementById('refreshBtn').addEventListener('click', () => {
+                    this.loadNetworkData();
+                });
+
+                document.getElementById('autoRefreshBtn').addEventListener('click', () => {
+                    this.toggleAutoRefresh();
+                });
+
+                document.getElementById('viewSelect').addEventListener('change', (e) => {
+                    this.changeView(e.target.value);
+                });
+
+                // Recherche
+                document.getElementById('countrySearch').addEventListener('input', (e) => {
+                    this.searchCountries(e.target.value);
+                });
+
+                // Redimensionnement
+                window.addEventListener('resize', () => {
+                    this.debounce(this.renderNetwork.bind(this), 250);
+                });
+            }
+
+            async loadNetworkData() {
+                try {
+                    this.setLoadingState(true);
+
+                    // Simulation de données pour le développement
+                    this.networkData = {
+                        success: true,
+                        metrics: {
+                            totalCountries: 12,
+                            totalRelations: 28,
+                            cooperationRatio: 0.65,
+                            lastAnalysis: new Date().toISOString()
+                        },
+                        network: [
+                            { countries: ['france', 'germany'], currentStrength: 0.8, type: 'cooperative', confidence: 0.9, lastUpdated: new Date().toISOString() },
+                            { countries: ['usa', 'china'], currentStrength: -0.7, type: 'conflict', confidence: 0.85, lastUpdated: new Date().toISOString() },
+                            { countries: ['russia', 'ukraine'], currentStrength: -0.9, type: 'conflict', confidence: 0.95, lastUpdated: new Date().toISOString() },
+                            { countries: ['india', 'china'], currentStrength: 0.3, type: 'tense', confidence: 0.7, lastUpdated: new Date().toISOString() },
+                            { countries: ['brazil', 'argentina'], currentStrength: 0.6, type: 'cooperative', confidence: 0.8, lastUpdated: new Date().toISOString() }
+                        ],
+                        countries: ['france', 'germany', 'usa', 'china', 'russia', 'ukraine', 'india', 'brazil', 'argentina', 'japan', 'canada', 'uk']
+                    };
+
+                    this.updateMetrics();
+                    this.renderNetwork();
+                    this.updateRecentRelations();
+                    this.setLoadingState(false);
+                } catch (error) {
+                    console.error('Erreur chargement réseau:', error);
+                    this.showError('Erreur de connexion au serveur');
+                    this.setLoadingState(false);
+                }
+            }
+
+            updateMetrics() {
+                const metrics = this.networkData.metrics;
+
+                document.getElementById('countriesCount').textContent = metrics.totalCountries;
+                document.getElementById('relationsCount').textContent = metrics.totalRelations;
+                document.getElementById('cooperationRatio').textContent =
+                    Math.round(metrics.cooperationRatio * 100) + '%';
+                document.getElementById('lastUpdate').textContent =
+                    new Date(metrics.lastAnalysis).toLocaleTimeString();
+            }
+
+            renderNetwork() {
+                const container = document.getElementById('networkGraph');
+                container.innerHTML = '';
+
+                if (!this.networkData || this.networkData.network.length === 0) {
+                    container.innerHTML = `
+                            <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #888;">
+                                <div style="text-align: center;">
+                                    <h3>🌍 Aucune donnée de réseau</h3>
+                                    <p>Les relations géopolitiques apparaîtront ici après analyse des articles</p>
+                                    <button onclick="networkVisualization.loadNetworkData()"
+                                            style="margin-top: 1rem; padding: 0.5rem 1rem; background: #4facfe; border: none; border-radius: 5px; color: white; cursor: pointer;">
+                                        Actualiser
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    return;
+                }
+
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                const svg = d3.select('#networkGraph')
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height);
+
+                // Simulation de forces
+                const simulation = d3.forceSimulation()
+                    .force('link', d3.forceLink().id(d => d.id).distance(100))
+                    .force('charge', d3.forceManyBody().strength(-300))
+                    .force('center', d3.forceCenter(width / 2, height / 2));
+
+                // Création des données pour D3
+                const nodes = this.createNodes();
+                const links = this.createLinks();
+
+                // Dessin des liens
+                const link = svg.append('g')
+                    .selectAll('line')
+                    .data(links)
+                    .enter().append('line')
+                    .attr('stroke', d => this.getLinkColor(d.type))
+                    .attr('stroke-width', d => Math.abs(d.strength) * 3 + 1)
+                    .attr('stroke-opacity', 0.6);
+
+                // Dessin des nœuds
+                const node = svg.append('g')
+                    .selectAll('circle')
+                    .data(nodes)
+                    .enter().append('circle')
+                    .attr('r', d => this.getNodeSize(d.influence))
+                    .attr('fill', d => this.getNodeColor(d.influence))
+                    .attr('stroke', '#fff')
+                    .attr('stroke-width', 1.5)
+                    .call(d3.drag()
+                        .on('start', dragstarted)
+                        .on('drag', dragged)
+                        .on('end', dragended))
+                    .on('click', (event, d) => this.selectCountry(d))
+                    .on('mouseover', (event, d) => this.showTooltip(event, d))
+                    .on('mouseout', () => this.hideTooltip());
+
+                // Étiquettes des pays
+                const label = svg.append('g')
+                    .selectAll('text')
+                    .data(nodes)
+                    .enter().append('text')
+                    .text(d => d.name)
+                    .attr('font-size', '10px')
+                    .attr('fill', '#fff')
+                    .attr('text-anchor', 'middle')
+                    .attr('dy', 3);
+
+                // Simulation
+                simulation.nodes(nodes).on('tick', ticked);
+                simulation.force('link').links(links);
+
+                function ticked() {
+                    link
+                        .attr('x1', d => d.source.x)
+                        .attr('y1', d => d.source.y)
+                        .attr('x2', d => d.target.x)
+                        .attr('y2', d => d.target.y);
+
+                    node
+                        .attr('cx', d => d.x)
+                        .attr('cy', d => d.y);
+
+                    label
+                        .attr('x', d => d.x)
+                        .attr('y', d => d.y);
+                }
+
+                function dragstarted(event, d) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                }
+
+                function dragged(event, d) {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                }
+
+                function dragended(event, d) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                }
+            }
+
+            createNodes() {
+                const countries = new Set();
+                this.networkData.network.forEach(relation => {
+                    countries.add(relation.countries[0]);
+                    countries.add(relation.countries[1]);
+                });
+
+                return Array.from(countries).map(country => ({
+                    id: country,
+                    name: this.formatCountryName(country),
+                    influence: this.networkData.metrics.avgStrength || 0.5
+                }));
+            }
+
+            createLinks() {
+                return this.networkData.network.map(relation => ({
+                    source: relation.countries[0],
+                    target: relation.countries[1],
+                    strength: relation.currentStrength,
+                    type: relation.type
+                }));
+            }
+
+            getLinkColor(relationType) {
+                const colors = {
+                    'cooperative': '#00ff88',
+                    'alliance': '#00cc66',
+                    'conflict': '#ff4444',
+                    'hostile': '#cc0000',
+                    'tense': '#ffaa00',
+                    'neutral': '#8884d8'
+                };
+                return colors[relationType] || '#8884d8';
+            }
+
+            getNodeColor(influence) {
+                if (influence > 0.7) return '#4facfe';
+                if (influence > 0.4) return '#00f2fe';
+                return '#8884d8';
+            }
+
+            getNodeSize(influence) {
+                return Math.max(influence * 20, 8);
+            }
+
+            formatCountryName(countryCode) {
+                const names = {
+                    'france': 'France',
+                    'germany': 'Allemagne',
+                    'usa': 'USA',
+                    'china': 'Chine',
+                    'russia': 'Russie',
+                    'ukraine': 'Ukraine',
+                    'india': 'Inde',
+                    'brazil': 'Brésil',
+                    'argentina': 'Argentine',
+                    'japan': 'Japon',
+                    'canada': 'Canada',
+                    'uk': 'Royaume-Uni'
+                };
+                return names[countryCode] || countryCode;
+            }
+
+            selectCountry(countryData) {
+                this.selectedCountry = countryData.id;
+                this.showCountryDetails(countryData.id);
+            }
+
+            async showCountryDetails(countryCode) {
+                try {
+                    // Simulation de données détaillées
+                    const countryData = {
+                        success: true,
+                        country: countryCode,
+                        influenceScore: 0.75,
+                        relationCount: 5,
+                        relations: this.networkData.network.filter(rel =>
+                            rel.countries.includes(countryCode)
+                        )
+                    };
+
+                    this.renderCountryDetails(countryData);
+                } catch (error) {
+                    console.error('Erreur détails pays:', error);
+                }
+            }
+
+            renderCountryDetails(countryData) {
+                const container = document.getElementById('countryDetails');
+                const influenceScore = (countryData.influenceScore * 100).toFixed(1);
+
+                container.innerHTML = `
+                        <div class="country-header">
+                            <h3>${this.formatCountryName(countryData.country)}</h3>
+                            <div class="influence-score">
+                                Score d'influence: <span class="score-value">${influenceScore}%</span>
+                            </div>
+                        </div>
+                        <div class="relations-count">
+                            ${countryData.relationCount} relation(s) géopolitique(s)
+                        </div>
+                        <div class="relations-list">
+                            ${countryData.relations.map(rel => {
+                    const otherCountry = rel.countries.find(c => c !== countryData.country);
+                    const strengthPercent = Math.abs(rel.currentStrength * 100).toFixed(1);
+                    return `
+                                    <div class="relation-item ${rel.type}">
+                                        <div class="relation-countries">
+                                            ${this.formatCountryName(countryData.country)} - ${this.formatCountryName(otherCountry)}
+                                        </div>
+                                        <div class="relation-type">
+                                            ${this.getRelationLabel(rel.type)} • Force: ${strengthPercent}%
+                                        </div>
+                                        <div class="relation-confidence">
+                                            Confiance: ${Math.round(rel.confidence * 100)}%
+                                        </div>
+                                    </div>
+                                `;
+                }).join('')}
+                        </div>
+                    `;
+            }
+
+            getRelationLabel(type) {
+                const labels = {
+                    'cooperative': '🤝 Coopération',
+                    'alliance': '⚔️ Alliance',
+                    'conflict': '⚡ Conflit',
+                    'hostile': '💥 Hostilité',
+                    'tense': '⚠️ Tension',
+                    'neutral': '⚖️ Neutre'
+                };
+                return labels[type] || type;
+            }
+
+            updateRecentRelations() {
+                const container = document.getElementById('recentRelationsList');
+                const recentRelations = this.networkData.network
+                    .slice(0, 5)
+                    .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated));
+
+                container.innerHTML = recentRelations.map(rel => `
+                        <div class="relation-item ${rel.type}">
+                            <div class="relation-countries">
+                                ${this.formatCountryName(rel.countries[0])} - ${this.formatCountryName(rel.countries[1])}
+                            </div>
+                            <div class="relation-type">
+                                ${this.getRelationLabel(rel.type)}
+                            </div>
+                            <div class="relation-strength">
+                                Force: ${Math.abs(rel.currentStrength * 100).toFixed(1)}%
+                            </div>
+                        </div>
+                    `).join('');
+            }
+
+            searchCountries(query) {
+                // Implémentation simplifiée de la recherche
+                const resultsContainer = document.getElementById('searchResults');
+
+                if (query.length < 2) {
+                    resultsContainer.innerHTML = '';
+                    return;
+                }
+
+                const filtered = Array.from(this.networkData?.countries || [])
+                    .filter(country =>
+                        this.formatCountryName(country).toLowerCase().includes(query.toLowerCase())
+                    )
+                    .slice(0, 5);
+
+                resultsContainer.innerHTML = filtered.map(country => `
+                        <div class="search-result-item" onclick="networkVisualization.selectCountry({id: '${country}'})">
+                            ${this.formatCountryName(country)}
+                        </div>
+                    `).join('');
+            }
+
+            changeView(viewType) {
+                // Implémentation des différentes vues
+                console.log('Changement de vue:', viewType);
+                // À compléter avec les différentes visualisations
+            }
+
+            toggleAutoRefresh() {
+                this.autoRefresh = !this.autoRefresh;
+                const button = document.getElementById('autoRefreshBtn');
+
+                if (this.autoRefresh) {
+                    button.textContent = '⏹️ Arrêter auto-actualisation';
+                    button.style.background = '#ff4444';
+                    this.autoRefreshInterval = setInterval(() => {
+                        this.loadNetworkData();
+                    }, 30000); // 30 secondes
+                } else {
+                    button.textContent = '🔄 Auto-actualisation';
+                    button.style.background = '';
+                    clearInterval(this.autoRefreshInterval);
+                }
+            }
+
+            startAutoRefresh() {
+                // Auto-actualisation toutes les 2 minutes
+                setInterval(() => {
+                    if (this.autoRefresh) {
+                        this.loadNetworkData();
+                    }
+                }, 120000);
+            }
+
+            setLoadingState(loading) {
+                const elements = document.querySelectorAll('.metric .value, #networkGraph');
+                elements.forEach(el => {
+                    el.classList.toggle('updating', loading);
+                });
+            }
+
+            showError(message) {
+                // Afficher une erreur élégante
+                const container = document.getElementById('networkGraph');
+                container.innerHTML = `
+                        <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #ff4444;">
+                            <div style="text-align: center;">
+                                <h3>❌ Erreur</h3>
+                                <p>${message}</p>
+                            </div>
+                        </div>
+                    `;
+            }
+
+            debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            showTooltip(event, data) {
+                // À implémenter - tooltip avec infos détaillées
+            }
+
+            hideTooltip() {
+                // À implémenter - cacher tooltip
+            }
+        }
+
+        // Initialisation au chargement de la page
+        let networkVisualization;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            networkVisualization = new NetworkVisualization();
+        });
+    </script>
 </body>
 </html>
