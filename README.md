@@ -8,7 +8,7 @@ MERCI DEEPSEEK ;-)
 
 ## 🚀 Fonctionnalités
 MAJ 28/10/2025
-Les routes "alertes" fonctionent enfin
+Les routes "alertes" fonctionnent enfin
 Le parsser Axios est parfaitement operationnel avec l'analyse thematique
 Reste a resoudre la resilience des flux rss
 MAJ 29/10/2025
