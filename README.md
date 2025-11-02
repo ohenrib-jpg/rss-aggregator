@@ -1,4 +1,4 @@
-# Agrégateur RSS Thématique avec IA v.5.*
+# Agrégateur RSS Thématique avec IA v.5.* En developpement =>n'utiliser qu'a but d'etude/formation
 contact : ohenri.b@gmail.com
 
 Système complet d'analyse de flux RSS (detection de "l'inconscient mediatique") et commentaires reseaux sociaux ("l'inconscient populaire")=> Analyse du facteur_Z (ecart entre discours public, et ressenti populaire). Intégration IA pour la correction des scores de sentiment, l'analyse en temps reel des flux d'informations, les calculs scientifiques (bayesien, corroboration, formule de Shannon, de Pearson), les modules de fonctions a venir (+ quelques gouttes de potion speciale)....et génération de rapports.
@@ -15,6 +15,9 @@ MAJ 29/10/2025
 DEBUT D'INTEGRATION DU DEBOGGEUR IA => PROPOSE DES CORRECTIONS DU CODE EN TEMPS REEL EN CAS D'ERREURS (console ou silencieuses)
 Debut de l'integration de la carte interactive des relations internationales et des alertes silencieuses predictives
 Pas moyen d'utiliser DeepSeek R1 avec ma petite configuration(ce que je regrette), donc, on se rabat sur Llama 3.2 3B Q4_K_M quantized depuis F16 pour le dev.
+MAJ 02/10/2025
+IA integree, graphiques chart.js pour chaques flux (mediatiques/sociaux) et integration de "social_prediction.js"
+Les routes du frontend doivent etres refaites dans *.html
 
 N'OUBLIEZ PAS D'INSTALLER llama.cpp (et un modele gguf => RAPPEL : utilisez la fonction de quantification du build llama.cpp (apres compil.) pour adapter a votre config.)
 
@@ -24,7 +27,8 @@ N'OUBLIEZ PAS D'INSTALLER llama.cpp (et un modele gguf => RAPPEL : utilisez la f
 - 📈 Analyse de tendances temporelles
 - 😊 Analyse de sentiment automatique
 - 🔍 Détection d'ironie et de contexte
-- 📊 Comparaison des ecarts entre "l'inconscient mediatique" et "l'inconscient populaire" 
+- 📊 Comparaison des ecarts entre "l'inconscient mediatique" et "l'inconscient populaire"
+- 📈 Calcul de l'indice_Z => dissonances  
 
 ### Module IA Avancé
 - 🤖 Correction automatique des scores de sentiment
