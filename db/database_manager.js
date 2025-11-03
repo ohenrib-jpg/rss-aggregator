@@ -88,6 +88,21 @@ class PostgreSQLManager extends DatabaseManager {
 
         console.log('✅ PostgreSQL schema initialized');
     }
+
+    // ✅ CORRECTION : Méthode resetDatabase DANS la classe
+    async resetDatabase() {
+        try {
+            console.log('🔄 Resetting PostgreSQL database...');
+            const schemaPath = path.join(__dirname, 'schema_postgresql.sql');
+            const schema = await fs.readFile(schemaPath, 'utf8');
+            
+            await this.query(schema);
+            console.log('✅ PostgreSQL database reset completed');
+        } catch (error) {
+            console.error('❌ Error resetting PostgreSQL database:', error);
+            throw error;
+        }
+    }
 }
 
 // ========== SQLITE (LOCAL) ==========
@@ -221,6 +236,22 @@ class SQLiteManager extends DatabaseManager {
         await this.createIndexes();
         console.log('✅ SQLite schema initialized');
     }
+
+    // ✅ CORRECTION : Méthode resetDatabase DANS la classe
+    async resetDatabase() {
+        try {
+            console.log('🔄 Resetting SQLite database...');
+            const schemaPath = path.join(__dirname, 'schema_sqlite.sql');
+            const schema = await fs.readFile(schemaPath, 'utf8');
+            
+            // Exécuter tout le schéma (y compris les DROP TABLE)
+            await this.query(schema);
+            console.log('✅ SQLite database reset completed');
+        } catch (error) {
+            console.error('❌ Error resetting SQLite database:', error);
+            throw error;
+        }
+    }
 }
 
 // ========== FACTORY ==========
@@ -261,8 +292,15 @@ async function query(sql, params = []) {
     return await db.query(sql, params);
 }
 
+// ✅ CORRECTION : Fonction exportée pour reset
+async function resetDatabase() {
+    const db = await getDatabaseManager();
+    return await db.resetDatabase();
+}
+
 module.exports = {
     getDatabaseManager,
     closeDatabaseConnection,
-    query
+    query,
+    resetDatabase  // ✅ Export de la fonction reset
 };

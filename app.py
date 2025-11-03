@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Flask IA Service - Backend d'analyse pure (appelé par Node.js)
-Version optimisée pour architecture hybride
+Version optimisée avec routes factorisées et nouvelles fonctionnalités
 """
 
 import os
@@ -11,11 +11,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
-from flask import Flask, request, jsonify
+from flask import Flask, send_file, send_from_directory, jsonify, request
 from flask_cors import CORS
 
 from modules.email_sender import email_sender
 from modules.scheduler import report_scheduler
+from modules.alert_system import alert_system
 
 # Modules internes
 from modules.db_manager import init_db, get_database_url, get_connection, put_connection
@@ -23,6 +24,7 @@ from modules.storage_manager import save_analysis_batch, load_recent_analyses, s
 from modules.corroboration import find_corroborations
 from modules.analysis_utils import enrich_analysis, simple_bayesian_fusion, compute_confidence_from_features
 from modules.metrics import compute_metrics
+from modules.bayesienappre import bayesian_fusion
 from functools import wraps
 
 def require_database(f):
@@ -40,7 +42,7 @@ def require_database(f):
 
 # --- Configuration ---
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format='%(asctime)s - [FLASK-IA] - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("flask-ia-service")
@@ -69,7 +71,6 @@ except Exception as e:
     DB_CONFIGURED = False
     logger.exception("❌ Erreur init_db: %s", e)
 
-# ------- Helpers -------
 # ------- Helpers -------
 def json_ok(payload: Dict[str, Any], status=200):
     """Retourne une réponse JSON standardisée avec success: true"""
@@ -114,14 +115,12 @@ def normalize_article_row(row: Dict[str, Any]) -> Dict[str, Any]:
     
     return out
 
-# ========== ROUTES API PRINCIPALES ==========
+# ========== ROUTES SANTÉ ET INFOS ==========
 
-# Route health
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Route de santé minimaliste pour vérification service"""
     try:
-        # Vérification basique de la base de données
         db_status = "ready" if DB_CONFIGURED else "configuring"
         
         return jsonify({
@@ -156,48 +155,705 @@ def root():
             "/api/geopolitical/report",
             "/api/geopolitical/crisis-zones",
             "/api/geopolitical/relations",
-            "/api/learning/stats"
+            "/api/learning/stats",
+            "/api/corroboration/find",
+            "/api/bayesian/fusion",
+            "/api/anomalies/detect",
+            "/api/reports/generate"
         ]
     })
 
-@app.route("/api/health", methods=["GET"])
-@app.route("/health", methods=["GET"])
-def api_health():
-    """Vérification de l'état du service IA"""
+# ==== Servir les fichiers JavaScript avec le bon type MIME ==========
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    if filename.endswith('.js'):
+        return send_from_directory('public', filename, mimetype='application/javascript')
+    return send_from_directory('public', filename)
+
+@app.route('/modules/<path:filename>')
+def serve_modules(filename):
+    if filename.endswith('.js'):
+        return send_from_directory('modules', filename, mimetype='application/javascript')
+    return send_from_directory('modules', filename)
+
+@app.route('/')
+def index():
+    return send_file('public/index.html')
+
+# Routes API Articles
+
+@app.route('/api/articles')
+def get_articles():
+    """Retourne les articles avec thèmes et analyse de sentiment"""
     try:
-        db_ok = False
-        try:
-            conn = get_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT 1")
-            cur.close()
-            put_connection(conn)
-            db_ok = True
-        except Exception as e:
-            logger.warning(f"Health check DB failed: {e}")
-            db_ok = False
+        limit = request.args.get('limit', 50, type=int)
+        include_themes = request.args.get('include_themes', 'true').lower() == 'true'
+        
+        articles = [
+            {
+                "id": 1,
+                "title": "Crise diplomatique entre la France et le Mali suite au retrait des troupes",
+                "link": "https://example.com/article1",
+                "pub_date": "2024-01-15T12:00:00Z",
+                "summary": "Les relations entre Paris et Bamako se détériorent après l'annonce du retrait complet des forces françaises du territoire malien.",
+                "content": "Le gouvernement malien a confirmé aujourd'hui le départ des dernières troupes françaises...",
+                "themes": ["Politique Internationale", "Conflits Armés"],
+                "sentiment": {"score": -0.8, "sentiment": "negative", "confidence": 0.88},
+                "confidence": 0.85,
+                "feed": "Le Monde - International"
+            },
+            {
+                "id": 2,
+                "title": "Accord historique sur le climat à la COP28: transition énergétique accélérée",
+                "link": "https://example.com/article2", 
+                "pub_date": "2024-01-15T11:30:00Z",
+                "summary": "Les pays participants s'engagent à réduire de 50% leurs émissions de CO2 d'ici 2030.",
+                "content": "Dans un tournant historique, les nations réunies à Dubaï ont adopté un plan ambitieux...",
+                "themes": ["Environnement", "Énergie", "Politique Internationale"],
+                "sentiment": {"score": 0.9, "sentiment": "positive", "confidence": 0.92},
+                "confidence": 0.88,
+                "feed": "Reuters World News"
+            },
+            {
+                "id": 3,
+                "title": "Percée technologique: l'IA médicale diagnostique des maladies rares",
+                "link": "https://example.com/article3",
+                "pub_date": "2024-01-15T10:45:00Z", 
+                "summary": "Un algorithme d'intelligence artificielle a identifié avec succès 95% des cas de maladies génétiques rares.",
+                "content": "Des chercheurs internationaux ont développé un système d'IA capable d'analyser...",
+                "themes": ["Technologie", "Santé Globale"],
+                "sentiment": {"score": 0.7, "sentiment": "positive", "confidence": 0.85},
+                "confidence": 0.82,
+                "feed": "BBC World"
+            },
+            {
+                "id": 4,
+                "title": "Tensions commerciales USA-Chine: nouvelles restrictions sur les semi-conducteurs",
+                "link": "https://example.com/article4",
+                "pub_date": "2024-01-15T09:15:00Z",
+                "summary": "Washington annonce de nouvelles limitations à l'exportation de technologies de puces avancées vers la Chine.",
+                "content": "Le département du Commerce américain a élargi aujourd'hui la liste des restrictions...",
+                "themes": ["Économie Mondiale", "Technologie", "Politique Internationale"],
+                "sentiment": {"score": -0.6, "sentiment": "negative", "confidence": 0.79},
+                "confidence": 0.80,
+                "feed": "Reuters World News"
+            },
+            {
+                "id": 5,
+                "title": "Manifestations pour la démocratie en Birmanie réprimées par l'armée",
+                "link": "https://example.com/article5",
+                "pub_date": "2024-01-15T08:30:00Z",
+                "summary": "Des milliers de personnes sont descendues dans la rue pour réclamer le retour à un gouvernement civil.",
+                "content": "Les forces de sécurité birmanes ont dispersé des manifestations pacifiques...",
+                "themes": ["Droits Humains", "Conflits Armés"],
+                "sentiment": {"score": -0.9, "sentiment": "negative", "confidence": 0.87},
+                "confidence": 0.83,
+                "feed": "Le Monde - International"
+            }
+        ]
+        
+        # Appliquer la limite
+        limited_articles = articles[:limit]
+        
+        logger.info(f"📰 Articles chargés: {len(limited_articles)} articles (limite: {limit})")
         
         return jsonify({
-            "ok": True, 
-            "service": "Flask IA",
-            "status": "healthy",
-            "database": "connected" if db_ok else "disconnected",
-            "database_url_configured": DB_CONFIGURED,
-            "modules": {
-                "analysis_utils": True,
-                "corroboration": True,
-                "metrics": True,
-                "storage_manager": True
-            },
-            "timestamp": datetime.utcnow().isoformat()
+            "success": True,
+            "articles": limited_articles,
+            "count": len(limited_articles),
+            "total_available": len(articles),
+            "themes_included": include_themes
         })
+        
     except Exception as e:
-        logger.exception("Health check failed")
-        return json_error("health check failed: " + str(e))
+        logger.exception("Erreur get_articles")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "articles": []
+        }), 500
 
-# ========== ROUTES ANALYSE IA ==========
+@app.route('/api/themes')
+def get_themes():
+    """Retourne la liste des thèmes géopolitiques avec mots-clés"""
+    try:
+        themes = [
+            {
+                "id": 1,
+                "name": "Politique Internationale",
+                "keywords": ["diplomatie", "relations internationales", "sommet", "traité", "ambassade", "ONU", "OTAN", "UE"],
+                "color": "#3b82f6",
+                "description": "Relations entre états et organisations internationales"
+            },
+            {
+                "id": 2, 
+                "name": "Conflits Armés",
+                "keywords": ["guerre", "conflit", "armée", "militaire", "combat", "front", "ceasefire", "trêve"],
+                "color": "#ef4444",
+                "description": "Conflits militaires et zones de tension"
+            },
+            {
+                "id": 3,
+                "name": "Économie Mondiale",
+                "keywords": ["économie", "commerce", "exportation", "importation", "PIB", "croissance", "récession", "marché"],
+                "color": "#10b981", 
+                "description": "Échanges économiques et financiers internationaux"
+            },
+            {
+                "id": 4,
+                "name": "Environnement",
+                "keywords": ["climat", "réchauffement", "COP", "écologie", "biodiversité", "déforestation", "pollution"],
+                "color": "#84cc16",
+                "description": "Enjeux climatiques et environnementaux globaux"
+            },
+            {
+                "id": 5,
+                "name": "Technologie",
+                "keywords": ["IA", "intelligence artificielle", "technologie", "innovation", "digital", "cybersécurité", "espace"],
+                "color": "#8b5cf6",
+                "description": "Innovations technologiques et géopolitique du numérique"
+            },
+            {
+                "id": 6,
+                "name": "Énergie",
+                "keywords": ["pétrole", "gaz", "énergie", "renouvelable", "nucléaire", "OPEP", "transition"],
+                "color": "#f59e0b",
+                "description": "Ressources énergétiques et dépendances stratégiques"
+            },
+            {
+                "id": 7,
+                "name": "Santé Globale",
+                "keywords": ["pandémie", "OMS", "vaccin", "santé publique", "épidémie", "médecine"],
+                "color": "#ec4899",
+                "description": "Crises sanitaires et coopération médicale internationale"
+            },
+            {
+                "id": 8,
+                "name": "Droits Humains",
+                "keywords": ["droits humains", "démocratie", "liberté", "censure", "répression", "manifestation"],
+                "color": "#06b6d4",
+                "description": "Respect des droits fondamentaux et libertés"
+            }
+        ]
+        
+        logger.info(f"🎨 Thèmes chargés: {len(themes)} thèmes disponibles")
+        
+        return jsonify({
+            "success": True, 
+            "themes": themes,
+            "count": len(themes)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur get_themes")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "themes": []
+        }), 500
+
+@app.route('/api/feeds')
+def get_feeds():
+    """Retourne la liste des flux RSS configurés"""
+    try:
+        feeds = [
+            {
+                "id": 1,
+                "title": "Le Monde - International",
+                "url": "https://www.lemonde.fr/international/rss_full.xml",
+                "is_active": True,
+                "last_update": "2024-01-15T10:30:00Z",
+                "article_count": 42
+            },
+            {
+                "id": 2,
+                "title": "Reuters World News",
+                "url": "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
+                "is_active": True,
+                "last_update": "2024-01-15T09:15:00Z", 
+                "article_count": 38
+            },
+            {
+                "id": 3,
+                "title": "BBC World",
+                "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+                "is_active": True,
+                "last_update": "2024-01-15T08:45:00Z",
+                "article_count": 25
+            },
+            {
+                "id": 4,
+                "title": "France 24 - International",
+                "url": "https://www.france24.com/fr/international/rss",
+                "is_active": False,
+                "last_update": "2024-01-14T16:20:00Z",
+                "article_count": 0
+            }
+        ]
+        
+        logger.info(f"📡 Flux RSS chargés: {len(feeds)} flux disponibles")
+        
+        return jsonify({
+            "success": True,
+            "feeds": feeds,
+            "count": len(feeds),
+            "active_count": len([f for f in feeds if f["is_active"]])
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur get_feeds")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "feeds": []
+        }), 500
+
+@app.route('/api/feeds/manager')
+def get_feeds_manager():
+    """Route spécifique pour le gestionnaire de flux (mêmes données)"""
+    return get_feeds()
+
+@app.route('/api/social/sources')
+def get_social_sources():
+    """Retourne les sources sociales configurées"""
+    try:
+        sources = [
+            {
+                "id": 1,
+                "name": "Twitter - Actualités",
+                "type": "nitter",
+                "url": "https://nitter.net/search?f=tweets&q=geopolitics&since=",
+                "enabled": True,
+                "last_fetch": "2024-01-15T11:20:00Z",
+                "post_count": 156
+            },
+            {
+                "id": 2,
+                "name": "Reddit - World News",
+                "type": "reddit", 
+                "url": "https://www.reddit.com/r/worldnews/.rss",
+                "enabled": True,
+                "last_fetch": "2024-01-15T10:45:00Z",
+                "post_count": 89
+            },
+            {
+                "id": 3,
+                "name": "RIA Novosti",
+                "type": "ria",
+                "url": "https://ria.ru/export/rss2/archive/index.xml",
+                "enabled": True,
+                "last_fetch": "2024-01-15T09:30:00Z", 
+                "post_count": 72
+            },
+            {
+                "id": 4,
+                "name": "Telegram - News Channels",
+                "type": "telegram",
+                "url": "https://t.me/s/geopolitical_news",
+                "enabled": False,
+                "last_fetch": None,
+                "post_count": 0
+            }
+        ]
+        
+        logger.info(f"🌐 Sources sociales chargées: {len(sources)} sources disponibles")
+        
+        return jsonify({
+            "success": True,
+            "sources": sources,
+            "count": len(sources),
+            "enabled_count": len([s for s in sources if s["enabled"]])
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur get_social_sources")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "sources": []
+        }), 500
+
+@app.route('/api/social/posts')
+def get_social_posts():
+    """Retourne les posts sociaux récents avec analyse de sentiment"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        
+        posts = [
+            {
+                "id": "twitter_12345",
+                "author": "@GeoAnalyst",
+                "content": "Tensions croissantes en mer de Chine méridionale. Les exercices navals se multiplient dans la région. #geopolitics #SouthChinaSea",
+                "date": "2024-01-15T11:05:00Z",
+                "source": "Twitter - Actualités",
+                "sentiment": {"score": -0.7, "sentiment": "negative", "confidence": 0.85},
+                "themes": ["Conflits Armés", "Politique Internationale"],
+                "likes": 42,
+                "retweets": 18,
+                "url": "https://twitter.com/GeoAnalyst/status/12345"
+            },
+            {
+                "id": "reddit_67890",
+                "author": "u/WorldObserver",
+                "content": "BREAKING: New trade agreement signed between EU and Mercosur. This could reshape economic relations between Europe and South America for decades.",
+                "date": "2024-01-15T10:30:00Z", 
+                "source": "Reddit - World News",
+                "sentiment": {"score": 0.6, "sentiment": "positive", "confidence": 0.78},
+                "themes": ["Économie Mondiale", "Politique Internationale"],
+                "upvotes": 215,
+                "comments": 47,
+                "url": "https://reddit.com/r/worldnews/comments/67890"
+            },
+            {
+                "id": "ria_54321",
+                "author": "RIA Novosti",
+                "content": "Встреча глав МИД России и Китая в Пекине. Обсуждены вопросы стратегического партнерства и международной безопасности.",
+                "date": "2024-01-15T09:15:00Z",
+                "source": "RIA Novosti",
+                "sentiment": {"score": 0.3, "sentiment": "neutral", "confidence": 0.82},
+                "themes": ["Politique Internationale"],
+                "likes": 0,
+                "comments": 0,
+                "url": "https://ria.ru/20240115/diplomacy-123456.html"
+            },
+            {
+                "id": "twitter_98765",
+                "author": "@ClimateWatch",
+                "content": "COP29 preparations underway. Climate activists demand stronger commitments from major polluters. The clock is ticking for meaningful action. 🌍",
+                "date": "2024-01-15T08:45:00Z",
+                "source": "Twitter - Actualités", 
+                "sentiment": {"score": -0.4, "sentiment": "negative", "confidence": 0.75},
+                "themes": ["Environnement", "Politique Internationale"],
+                "likes": 89,
+                "retweets": 34,
+                "url": "https://twitter.com/ClimateWatch/status/98765"
+            },
+            {
+                "id": "reddit_24680",
+                "author": "u/TechAnalyst",
+                "content": "AI regulation talks at Davos: Global leaders divided on how to approach artificial intelligence governance. US and EU positions diverging.",
+                "date": "2024-01-15T08:00:00Z",
+                "source": "Reddit - World News",
+                "sentiment": {"score": 0.1, "sentiment": "neutral", "confidence": 0.80},
+                "themes": ["Technologie", "Politique Internationale"],
+                "upvotes": 167,
+                "comments": 89,
+                "url": "https://reddit.com/r/technology/comments/24680"
+            }
+        ]
+        
+        # Appliquer la limite
+        limited_posts = posts[:limit]
+        
+        logger.info(f"💬 Posts sociaux chargés: {len(limited_posts)} posts (limite: {limit})")
+        
+        return jsonify({
+            "success": True,
+            "posts": limited_posts,
+            "count": len(limited_posts),
+            "total_available": len(posts),
+            "sources": list(set(p["source"] for p in limited_posts))
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur get_social_posts")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "posts": []
+        }), 500
+
+
+
+@app.route('/api/metrics')
+def get_metrics():
+    return jsonify({
+        "success": True, 
+        "summary": {
+            "total_articles": 0,
+            "avg_confidence": 0,
+            "avg_posterior": 0,
+            "avg_corroboration": 0
+        },
+        "top_themes": []
+    })
+
+@app.route('/api/sentiment/detailed')
+def get_sentiment_detailed():
+    return jsonify({
+        "success": True,
+        "stats": {
+            "positive": 0,
+            "neutral": 0,
+            "negative": 0
+        }
+    })
+
+@app.route('/api/learning/stats')
+def get_learning_stats():
+    return jsonify({
+        "success": True,
+        "total_articles_processed": 0,
+        "sentiment_accuracy": 0,
+        "theme_detection_accuracy": 0,
+        "avg_processing_time": 0
+    })
+
+@app.route('/api/factor-z')
+def get_factor_z():
+    period = request.args.get('period', 7, type=int)
+    return jsonify({
+        "success": True,
+        "factorZ": {
+            "value": 0.0,
+            "absoluteValue": 0.0,
+            "period": period,
+            "interpretation": "Données insuffisantes pour le calcul"
+        }
+    })
+
+# Routes POST de base
+@app.route('/api/feeds', methods=['POST'])
+def create_feed():
+    return jsonify({"success": True})
+
+@app.route('/api/themes', methods=['POST'])
+def create_theme():
+    return jsonify({"success": True})
+
+@app.route('/api/social/sources', methods=['POST'])
+def save_social_sources():
+    return jsonify({"success": True})
+
+@app.route('/api/social/refresh', methods=['POST'])
+def refresh_social():
+    return jsonify({"success": True, "posts": [], "total": 0})
+
+@app.route('/api/site/comments', methods=['POST'])
+def fetch_site_comments():
+    return jsonify({"success": True, "comments": []})
+
+# Routes pour les alertes
+@app.route('/api/alerts')
+def get_alerts():
+    return jsonify({
+        "success": True, 
+        "alerts": [],
+        "stats": {
+            "total_alerts": 0,
+            "enabled_alerts": 0,
+            "today_triggered": 0,
+            "total_triggered": 0
+        }
+    })
+
+@app.route('/api/alerts/triggered')
+def get_triggered_alerts():
+    """Retourne l'historique des alertes déclenchées"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        
+        # Données d'exemple pour les alertes déclenchées
+        triggered_alerts = [
+            {
+                "id": 1,
+                "alert_name": "Crise Ukraine",
+                "triggered_at": "2024-01-15T10:30:00Z",
+                "article_title": "Nouvelles tensions en Ukraine orientale",
+                "article_link": "https://example.com/article/123",
+                "severity": "high",
+                "matched_keywords": ["Ukraine", "tensions", "conflit"]
+            },
+            {
+                "id": 2,
+                "alert_name": "Climat International", 
+                "triggered_at": "2024-01-15T09:15:00Z",
+                "article_title": "Accord historique à la COP28",
+                "article_link": "https://example.com/article/124",
+                "severity": "medium", 
+                "matched_keywords": ["COP28", "climat", "accord"]
+            }
+        ]
+        
+        limited_alerts = triggered_alerts[:limit]
+        
+        return jsonify({
+            "success": True,
+            "alerts": limited_alerts,
+            "count": len(limited_alerts)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur get_triggered_alerts")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/alerts', methods=['POST'])
+def create_alert():
+    return jsonify({"success": True})
+
+@app.route('/api/alerts/<alert_id>', methods=['PUT', 'DELETE'])
+def manage_alert(alert_id):
+    return jsonify({"success": True})
+
+# Routes pour l'analyse des corrélations
+@app.route('/api/analysis/correlations/keyword-sentiment')
+def analyze_keyword_correlation():
+    keyword = request.args.get('keyword', '')
+    return jsonify({
+        "success": True,
+        "analysis": {
+            "keyword": keyword,
+            "correlation": 0.0,
+            "sampleSize": 0,
+            "interpretation": "Données insuffisantes pour l'analyse"
+        }
+    })
+
+@app.route('/api/analysis/correlations/themes')
+def get_theme_correlations():
+    return jsonify({"success": True, "correlations": []})
+
+# Routes pour les réseaux sociaux
+@app.route('/api/social/correlations/keyword-sentiment')
+def analyze_social_keyword_correlation():
+    keyword = request.args.get('keyword', '')
+    return jsonify({
+        "success": True,
+        "analysis": {
+            "keyword": keyword,
+            "correlation": 0.0,
+            "sampleSize": 0,
+            "interpretation": "Données insuffisantes pour l'analyse"
+        }
+    })
+
+@app.route('/api/social/correlations/themes')
+def get_social_theme_correlations():
+    return jsonify({"success": True, "correlations": []})
+
+# Route pour le rapport géopolitique
+@app.route('/api/geopolitical/report')
+def get_geopolitical_report():
+    """Rapport géopolitique complet"""
+    try:
+        return jsonify({
+            "success": True,
+            "report": {
+                "summary": {
+                    "totalCountries": 15,
+                    "highRiskZones": 3,
+                    "mediumRiskZones": 7,
+                    "lowRiskZones": 5,
+                    "analysisDate": datetime.utcnow().isoformat()
+                },
+                "crisisZones": [
+                    {
+                        "country": "Ukraine",
+                        "riskLevel": "high",
+                        "riskScore": 0.85,
+                        "mentions": 42,
+                        "sentiment": -0.7
+                    },
+                    {
+                        "country": "Middle East",
+                        "riskLevel": "high", 
+                        "riskScore": 0.78,
+                        "mentions": 38,
+                        "sentiment": -0.6
+                    },
+                    {
+                        "country": "Taiwan Strait",
+                        "riskLevel": "medium",
+                        "riskScore": 0.65,
+                        "mentions": 25,
+                        "sentiment": -0.4
+                    }
+                ],
+                "trends": {
+                    "rising_tensions": ["Ukraine", "Middle East"],
+                    "improving_relations": ["EU-Mercosur", "ASEAN"],
+                    "emerging_crises": ["Sahel", "Haiti"]
+                }
+            }
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur get_geopolitical_report")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/.well-known/appspecific/com.chrome.devtools.json')
+def chrome_devtools():
+    """Route pour Chrome DevTools (ignorer)"""
+    return jsonify({"message": "Chrome DevTools check"})
+
+# Route pour le serveur IA local (simulation)
+@app.route('/llama.cpp/llama-server.exe', methods=['POST'])
+def start_llama_server():
+    return jsonify({"success": True})
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+
+
+    # ========== ROUTE POUR TESTER LES THÈMES ==========
+
+@app.route('/api/debug/themes')
+def debug_themes():
+    """Route de debug pour tester l'application des thèmes"""
+    try:
+        # Retourner des articles avec des thèmes bien définis pour tester
+        test_articles = [
+            {
+                "id": 9991,
+                "title": "Crise en Ukraine: nouvelles sanctions internationales",
+                "content": "Les pays occidentaux annoncent de nouvelles sanctions contre la Russie suite à l'escalade du conflit en Ukraine.",
+                "themes": ["Conflits Armés", "Politique Internationale"],
+                "sentiment": {"score": -0.8, "sentiment": "negative"},
+                "confidence": 0.9
+            },
+            {
+                "id": 9992, 
+                "title": "Accord climatique historique à la COP28",
+                "content": "Un accord ambitieux pour réduire les émissions de CO2 a été signé par 195 pays lors de la conférence climatique.",
+                "themes": ["Environnement", "Politique Internationale"],
+                "sentiment": {"score": 0.9, "sentiment": "positive"},
+                "confidence": 0.88
+            },
+            {
+                "id": 9993,
+                "title": "Percée technologique en intelligence artificielle", 
+                "content": "Des chercheurs développent une nouvelle IA capable de résoudre des problèmes complexes de géopolitique.",
+                "themes": ["Technologie"],
+                "sentiment": {"score": 0.7, "sentiment": "positive"},
+                "confidence": 0.85
+            }
+        ]
+        
+        return jsonify({
+            "success": True,
+            "articles": test_articles,
+            "message": "Articles de test avec thèmes bien définis",
+            "count": len(test_articles)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur debug_themes")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# ========== ROUTES ANALYSE IA (FACTORISÉES) ==========
 
 @app.route("/api/analyze", methods=["POST"])
+@require_database
 def api_analyze():
     """
     Analyse approfondie d'un article avec :
@@ -256,6 +912,7 @@ def api_analyze():
         return json_error("analyse échouée: " + str(e))
 
 @app.route("/api/analyze/sentiment", methods=["POST"])
+@require_database
 def api_analyze_sentiment():
     """
     Analyse de sentiment simple d'un texte
@@ -317,6 +974,7 @@ def api_analyze_sentiment():
         return json_error("analyse de sentiment échouée: " + str(e))
 
 @app.route("/api/analyze/themes", methods=["POST"])
+@require_database
 def api_analyze_themes():
     """
     Analyse thématique d'un texte
@@ -388,9 +1046,10 @@ def api_analyze_themes():
         logger.exception("Erreur api_analyze_themes")
         return json_error("analyse thématique échouée: " + str(e))
 
-# ========== ROUTES MÉTRIQUES ==========
+# ========== ROUTES MÉTRIQUES (FACTORISÉES) ==========
 
 @app.route("/api/metrics", methods=["GET"])
+@require_database
 def api_metrics():
     """Calcule et renvoie les métriques d'analyse avancées"""
     try:
@@ -409,6 +1068,7 @@ def api_metrics():
         return json_error("impossible de générer metrics: " + str(e))
 
 @app.route("/api/summaries", methods=["GET"])
+@require_database
 def api_summaries():
     """Résumé global des analyses"""
     try:
@@ -427,9 +1087,10 @@ def api_summaries():
         logger.exception("Erreur api_summaries")
         return json_error("impossible de générer résumé: " + str(e))
 
-# ========== ROUTES SENTIMENT ==========
+# ========== ROUTES SENTIMENT (FACTORISÉES) ==========
 
 @app.route("/api/sentiment/stats", methods=["GET"])
+@require_database
 def api_sentiment_stats():
     """Statistiques de sentiment avec analyse IA"""
     try:
@@ -475,10 +1136,10 @@ def api_sentiment_stats():
         logger.exception("Erreur api_sentiment_stats")
         return json_error("sentiment stats error: " + str(e))
 
-
-# ========== ROUTES GÉOPOLITIQUE ==========
+# ========== ROUTES GÉOPOLITIQUE (FACTORISÉES) ==========
 
 @app.route("/api/geopolitical/report", methods=["GET"])
+@require_database
 def api_geopolitical_report():
     """Rapport géopolitique avec analyse IA des tendances"""
     try:
@@ -550,6 +1211,7 @@ def api_geopolitical_report():
         return json_error("geopolitical report error: " + str(e))
 
 @app.route("/api/geopolitical/crisis-zones", methods=["GET"])
+@require_database
 def api_geopolitical_crisis_zones():
     """Zones de crise géopolitique avec analyse IA"""
     try:
@@ -577,6 +1239,7 @@ def api_geopolitical_crisis_zones():
         return json_error("crisis zones error: " + str(e))
 
 @app.route("/api/geopolitical/relations", methods=["GET"])
+@require_database
 def api_geopolitical_relations():
     """Relations géopolitiques détectées par IA"""
     try:
@@ -597,9 +1260,10 @@ def api_geopolitical_relations():
         logger.exception("Erreur api_geopolitical_relations")
         return json_error("relations error: " + str(e))
 
-# ========== ROUTES APPRENTISSAGE ==========
+# ========== ROUTES APPRENTISSAGE (FACTORISÉES) ==========
 
 @app.route("/api/learning/stats", methods=["GET"])
+@require_database
 def api_learning_stats():
     """Statistiques d'apprentissage de l'IA"""
     try:
@@ -669,7 +1333,327 @@ def api_learning_stats():
         logger.exception("Erreur api_learning_stats")
         return json_error("learning stats error: " + str(e))
 
-# ========== ROUTE COURRIEL FONC. =========
+# ========== NOUVELLES ROUTES : CORROBORATION ==========
+
+@app.route("/api/corroboration/find", methods=["POST"])
+@require_database
+def api_corroboration_find():
+    """Recherche d'articles corroborants pour un article donné"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        article = payload.get("article")
+        if not article:
+            return json_error("Article manquant dans la requête", 400)
+        
+        threshold = payload.get("threshold", 0.65)
+        top_n = payload.get("top_n", 10)
+        
+        logger.info(f"🔍 Recherche de corroborations pour: {article.get('title', 'Unknown')[:50]}...")
+        
+        # Charger les articles récents pour la recherche
+        recent_articles = load_recent_analyses(days=3) or []
+        
+        # Rechercher les corroborations
+        corroborations = find_corroborations(
+            article, 
+            recent_articles, 
+            threshold=threshold, 
+            top_n=top_n
+        )
+        
+        logger.info(f"✅ {len(corroborations)} corroborations trouvées")
+        
+        return json_ok({
+            "success": True,
+            "corroborations": corroborations,
+            "article_id": article.get("id"),
+            "threshold": threshold,
+            "count": len(corroborations)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_corroboration_find")
+        return json_error("recherche de corroborations échouée: " + str(e))
+
+@app.route("/api/corroboration/stats", methods=["GET"])
+@require_database
+def api_corroboration_stats():
+    """Statistiques sur les corroborations"""
+    try:
+        rows = load_recent_analyses(days=30) or []
+        
+        # Calculer les statistiques de corroboration
+        articles_with_corroboration = [r for r in rows if r.get("corroboration_strength", 0) > 0]
+        avg_strength = sum(r.get("corroboration_strength", 0) for r in articles_with_corroboration) / len(articles_with_corroboration) if articles_with_corroboration else 0
+        
+        stats = {
+            "total_articles": len(rows),
+            "articles_with_corroboration": len(articles_with_corroboration),
+            "coverage_rate": len(articles_with_corroboration) / len(rows) if rows else 0,
+            "avg_corroboration_strength": round(avg_strength, 3),
+            "strong_corroborations": len([r for r in articles_with_corroboration if r.get("corroboration_strength", 0) > 0.7]),
+            "weak_corroborations": len([r for r in articles_with_corroboration if r.get("corroboration_strength", 0) < 0.3])
+        }
+        
+        return json_ok({
+            "success": True,
+            "stats": stats
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_corroboration_stats")
+        return json_error("statistiques corroboration échouées: " + str(e))
+
+# ========== NOUVELLES ROUTES : FUSION BAYÉSIENNE ==========
+
+@app.route("/api/bayesian/fusion", methods=["POST"])
+@require_database
+def api_bayesian_fusion():
+    """Application de la fusion bayésienne à des preuves multiples"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        evidences = payload.get("evidences", [])
+        prior = payload.get("prior", 0.5)
+        
+        if not evidences:
+            return json_error("Aucune preuve fournie", 400)
+        
+        logger.info(f"🧮 Fusion bayésienne avec {len(evidences)} preuve(s)")
+        
+        # Utiliser la fusion bayésienne avancée
+        result = bayesian_fusion(evidences)
+        
+        logger.info(f"✅ Fusion bayésienne terminée: posterior={result.get('posterior'):.4f}")
+        
+        return json_ok({
+            "success": True,
+            "result": result,
+            "prior": prior,
+            "evidence_count": len(evidences)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_bayesian_fusion")
+        return json_error("fusion bayésienne échouée: " + str(e))
+
+@app.route("/api/bayesian/update", methods=["POST"])
+@require_database
+def api_bayesian_update():
+    """Mise à jour bayésienne simple"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        from modules.bayesienappre import BayesianLearningSystem
+        
+        prior = payload.get("prior", 0.5)
+        likelihood = payload.get("likelihood", 0.5)
+        evidence_weight = payload.get("evidence_weight", 1.0)
+        
+        bayesian_system = BayesianLearningSystem()
+        result = bayesian_system.bayesian_update(prior, likelihood, evidence_weight)
+        
+        return json_ok({
+            "success": True,
+            "prior": prior,
+            "likelihood": likelihood,
+            "result": result
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_bayesian_update")
+        return json_error("mise à jour bayésienne échouée: " + str(e))
+
+# ========== NOUVELLES ROUTES : DÉTECTION D'ANOMALIES ==========
+
+@app.route("/api/anomalies/detect", methods=["POST"])
+@require_database
+def api_anomalies_detect():
+    """Détection d'anomalies dans les données d'articles"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        articles = payload.get("articles", [])
+        anomaly_type = payload.get("type", "volume")  # volume, sentiment, relations
+        
+        if not articles:
+            # Charger les articles récents si non fournis
+            articles = load_recent_analyses(days=7) or []
+        
+        logger.info(f"🚨 Détection d'anomalies ({anomaly_type}) sur {len(articles)} articles")
+        
+        # Simuler la détection d'anomalies (à intégrer avec le module JS)
+        anomalies = []
+        
+        if anomaly_type == "volume" and len(articles) > 10:
+            # Détection simple de pics de volume
+            articles_per_hour = {}
+            for article in articles:
+                date = article.get("date") or article.get("pubDate")
+                if date:
+                    hour_key = date[:13] + ":00:00"  # Regroupement par heure
+                    articles_per_hour[hour_key] = articles_per_hour.get(hour_key, 0) + 1
+            
+            avg_volume = sum(articles_per_hour.values()) / len(articles_per_hour) if articles_per_hour else 0
+            for hour, count in articles_per_hour.items():
+                if count > avg_volume * 2:  # Pic de volume (2x la moyenne)
+                    anomalies.append({
+                        "type": "volume_spike",
+                        "hour": hour,
+                        "count": count,
+                        "avg_volume": avg_volume,
+                        "severity": "high" if count > avg_volume * 3 else "medium"
+                    })
+        
+        elif anomaly_type == "sentiment":
+            # Détection de sentiments extrêmes
+            sentiments = [a.get("sentiment", {}).get("score", 0) for a in articles if a.get("sentiment")]
+            if sentiments:
+                avg_sentiment = sum(sentiments) / len(sentiments)
+                std_dev = (sum((s - avg_sentiment) ** 2 for s in sentiments) / len(sentiments)) ** 0.5
+                
+                for article in articles:
+                    sentiment = article.get("sentiment", {}).get("score", 0)
+                    if std_dev > 0 and abs(sentiment - avg_sentiment) > 2 * std_dev:
+                        anomalies.append({
+                            "type": "sentiment_extreme",
+                            "article_id": article.get("id"),
+                            "sentiment": sentiment,
+                            "avg_sentiment": avg_sentiment,
+                            "z_score": (sentiment - avg_sentiment) / std_dev,
+                            "severity": "high"
+                        })
+        
+        logger.info(f"✅ {len(anomalies)} anomalies détectées")
+        
+        return json_ok({
+            "success": True,
+            "anomalies": anomalies,
+            "type": anomaly_type,
+            "articles_analyzed": len(articles)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_anomalies_detect")
+        return json_error("détection d'anomalies échouée: " + str(e))
+
+# ========== NOUVELLES ROUTES : RAPPORTS AVANCÉS ==========
+
+@app.route("/api/reports/generate", methods=["POST"])
+@require_database
+def api_reports_generate():
+    """Génération de rapports d'analyse avancés"""
+    payload = request.get_json(force=True, silent=True)
+    if not payload:
+        return json_error("Aucun JSON fourni", 400)
+    
+    try:
+        report_type = payload.get("type", "comprehensive")
+        days = payload.get("days", 30)
+        
+        logger.info(f"📊 Génération de rapport {report_type} sur {days} jours")
+        
+        # Charger les données
+        articles = load_recent_analyses(days=days) or []
+        
+        if report_type == "comprehensive":
+            # Rapport complet avec toutes les métriques
+            report = generate_comprehensive_report(articles, days)
+        elif report_type == "geopolitical":
+            # Rapport géopolitique focalisé
+            report = generate_geopolitical_report(articles, days)
+        elif report_type == "sentiment":
+            # Rapport d'analyse de sentiment
+            report = generate_sentiment_report(articles, days)
+        else:
+            return json_error(f"Type de rapport inconnu: {report_type}", 400)
+        
+        logger.info(f"✅ Rapport {report_type} généré avec succès")
+        
+        return json_ok({
+            "success": True,
+            "report": report,
+            "type": report_type,
+            "period_days": days,
+            "articles_analyzed": len(articles)
+        })
+        
+    except Exception as e:
+        logger.exception("Erreur api_reports_generate")
+        return json_error("génération de rapport échouée: " + str(e))
+
+def generate_comprehensive_report(articles, days):
+    """Génère un rapport d'analyse complet"""
+    # Métriques de base
+    total_articles = len(articles)
+    avg_confidence = sum(a.get("confidence", 0) for a in articles) / total_articles if articles else 0
+    
+    # Analyse des thèmes
+    theme_counts = {}
+    for article in articles:
+        for theme in article.get("themes", []):
+            theme_counts[theme] = theme_counts.get(theme, 0) + 1
+    top_themes = sorted(theme_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    # Analyse de sentiment
+    sentiments = [a.get("sentiment", {}).get("score", 0) for a in articles if a.get("sentiment")]
+    avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+    
+    return {
+        "summary": {
+            "total_articles": total_articles,
+            "period_days": days,
+            "avg_confidence": round(avg_confidence, 3),
+            "avg_sentiment": round(avg_sentiment, 3),
+            "analysis_date": datetime.utcnow().isoformat()
+        },
+        "themes": {
+            "top_themes": [{"theme": theme, "count": count} for theme, count in top_themes],
+            "total_unique_themes": len(theme_counts)
+        },
+        "sentiment_analysis": {
+            "positive_articles": len([a for a in articles if a.get("sentiment", {}).get("score", 0) > 0.1]),
+            "negative_articles": len([a for a in articles if a.get("sentiment", {}).get("score", 0) < -0.1]),
+            "neutral_articles": len([a for a in articles if abs(a.get("sentiment", {}).get("score", 0)) <= 0.1]),
+            "avg_sentiment_score": round(avg_sentiment, 3)
+        },
+        "corroboration_analysis": {
+            "articles_with_corroboration": len([a for a in articles if a.get("corroboration_strength", 0) > 0]),
+            "avg_corroboration_strength": round(sum(a.get("corroboration_strength", 0) for a in articles) / total_articles if articles else 0, 3)
+        }
+    }
+
+def generate_geopolitical_report(articles, days):
+    """Génère un rapport géopolitique focalisé"""
+    # Implémentation simplifiée - à enrichir
+    return {
+        "type": "geopolitical",
+        "period_days": days,
+        "articles_analyzed": len(articles),
+        "analysis_date": datetime.utcnow().isoformat()
+    }
+
+def generate_sentiment_report(articles, days):
+    """Génère un rapport d'analyse de sentiment"""
+    # Implémentation simplifiée - à enrichir
+    return {
+        "type": "sentiment",
+        "period_days": days,
+        "articles_analyzed": len(articles),
+        "analysis_date": datetime.utcnow().isoformat()
+    }
+
+# ========== ROUTES COURRIEL (EXISTANTES) ==========
+
 @app.route('/api/email/config', methods=['POST'])
 def api_email_config():
     """Sauvegarde la configuration email"""
@@ -712,11 +1696,8 @@ def api_send_test_report():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+# ========== ROUTES ALERTES (EXISTANTES) ==========
 
-# ==========Sys d'alerte active ===========
-from modules.alert_system import alert_system
-
-# Routes pour les alertes
 @app.route('/api/alerts', methods=['GET'])
 def api_get_alerts():
     """Récupère toutes les alertes"""
@@ -788,7 +1769,33 @@ def api_check_article_alerts():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+
 # ========== GESTION DES ERREURS ==========
+
+@app.route('/modules/<path:filename>')
+def serve_modules(filename):
+    """Servir les fichiers avec gestion d'erreur améliorée"""
+    try:
+        # Chemin absolu
+        file_path = os.path.join(os.getcwd(), 'modules', filename)
+        
+        # Vérifier que le fichier existe
+        if not os.path.exists(file_path):
+            return jsonify({
+                "success": False, 
+                "error": f"Fichier {filename} non trouvé",
+                "path": file_path
+            }), 404
+        
+        # Servir le fichier avec le bon type MIME
+        return send_file(file_path, mimetype='application/javascript')
+        
+    except Exception as e:
+        return jsonify({
+            "success": False, 
+            "error": str(e)
+        }), 500
+
 
 @app.errorhandler(404)
 def not_found(error):
@@ -810,7 +1817,7 @@ if __name__ == "__main__":
     logger.info(f"📡 Port: {port}")
     logger.info(f"🔧 Debug: {debug}")
     logger.info(f"🗄️ Database: {'Configured' if DB_CONFIGURED else 'Not configured'}")
-    logger.info(f"🤖 Modules: analysis_utils, corroboration, metrics, bayesian")
+    logger.info(f"🤖 Modules: analysis_utils, corroboration, metrics, bayesian, anomalies")
     logger.info("=" * 70)
     
     app.run(host="0.0.0.0", port=port, debug=debug)

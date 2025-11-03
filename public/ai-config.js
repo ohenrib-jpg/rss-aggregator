@@ -73,3 +73,23 @@ window.aiConfigManager = (function() {
         testOpenAIConnection
     };
 })();
+function saveAIConfig() {
+    const key = document.getElementById('openai-key').value.trim();
+    if (key) {
+        localStorage.setItem('OPENAI_KEY', key);
+        alert('Clé OpenAI sauvegardée localement.');
+    }
+}
+function loadAIConfig() {
+    const key = localStorage.getItem('OPENAI_KEY');
+    if (key) {
+        document.getElementById('openai-key').value = key;
+    }
+}
+document.addEventListener('DOMContentLoaded', loadAIConfig);
+
+async function testOpenAI() {
+    const res = await fetch('/api/debug/test-openai');
+    const data = await res.json();
+    alert('Test OpenAI: ' + (data.status || JSON.stringify(data)));
+}

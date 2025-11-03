@@ -10,8 +10,8 @@ echo ========================================================
 echo.
 
 set "LLAMA_DIR=llama.cpp"
-set "SERVER_EXE=rcc-server.exe"
-set "MODEL_FILE=phi-2.Q4_K_M.gguf"
+set "SERVER_EXE=llama-server.exe"
+set "MODEL_FILE=Llama-3.2-3B-Q4_K_M.gguf"
 set "NODE_PORT=3000"
 set "FLASK_PORT=5000"
 set "LLAMA_PORT=8080"
