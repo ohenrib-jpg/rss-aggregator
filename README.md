@@ -4,7 +4,8 @@ contact : ohenri.b@gmail.com
 Système complet d'analyse de flux RSS (detection de "l'inconscient mediatique") et commentaires reseaux sociaux ("l'inconscient populaire")=> Analyse du facteur_Z (ecart entre discours public, et ressenti populaire). Intégration IA pour la correction des scores de sentiment, l'analyse en temps reel des flux d'informations, les calculs scientifiques (bayesien, corroboration, formule de Shannon, de Pearson), les modules de fonctions a venir (+ quelques gouttes de potion speciale)....et génération de rapports.
 MERCI DEEPSEEK ;-)
 
-
+MAJ 03/11/2025 => jusqu'a suppression de cette MAJ, le dernier repo est dans EVO8NEXTLEVEL => l'amelioration du parsser axios, et la gestion des nouveaux graphiques
+sont incompatibles avec certaines fonctions de l'IA gguf (pas moyen de l'utiliser comme debug F12 locale ET comme analyste)
 
 ## 🚀 Fonctionnalités
 MAJ 28/10/2025
