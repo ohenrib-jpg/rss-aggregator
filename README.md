@@ -6,6 +6,8 @@ MERCI DEEPSEEK ;-)
 
 MAJ 03/11/2025 => jusqu'a suppression de cette MAJ, le dernier repo est dans EVO8NEXTLEVEL => l'amelioration du parsser axios, et la gestion des nouveaux graphiques
 sont incompatibles avec certaines fonctions de l'IA gguf (pas moyen de l'utiliser comme debug F12 locale ET comme analyste)
+EVO8NEXTLEVEL = repo MAJ pour fonction analytiques + Deeplearning
+EVO9 = sera pour le debug avant re-integration IA. 
 
 ## 🚀 Fonctionnalités
 MAJ 28/10/2025
